@@ -1,6 +1,6 @@
 {
   "name": "betvision-ai",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Plataforma de Inteligência Artificial para análise de apostas esportivas.",
   "type": "module",
   "main": "server.js",
@@ -28,7 +28,7 @@
     "helmet": "^8.1.0",
     "morgan": "^1.10.0",
     "node-cron": "^4.2.1",
-    "sqlite3": "^5.1.7",
+    "pg": "^8.16.3",
     "ws": "^8.18.3"
   }
 }
