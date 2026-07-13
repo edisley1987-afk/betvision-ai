@@ -107,3 +107,24 @@ background:#1f2937;
 border-radius:12px;
 
 }
+.jogo{
+
+background:#111827;
+
+margin-top:15px;
+
+padding:20px;
+
+border-radius:10px;
+
+transition:.3s;
+
+}
+
+.jogo:hover{
+
+transform:scale(1.02);
+
+background:#374151;
+
+}
