@@ -1,1 +1,32 @@
-{"name":"betvision-ai","version":"1.0.0","type":"module","scripts":{"start":"node server.js"},"dependencies":{"express":"^4.21.2","cors":"^2.8.5","compression":"^1.8.1"}}
+{
+  "name": "betvision-ai",
+  "version": "2.0.0",
+  "description": "Plataforma de Inteligência Artificial para análise de apostas esportivas.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node tests/prediction.test.js"
+  },
+  "keywords": [
+    "betvision",
+    "ai",
+    "football",
+    "odds",
+    "sports",
+    "prediction"
+  ],
+  "author": "BetVision AI",
+  "license": "MIT",
+  "dependencies": {
+    "compression": "^1.8.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "helmet": "^8.1.0",
+    "morgan": "^1.10.0",
+    "node-cron": "^4.2.1",
+    "ws": "^8.18.3"
+  }
+}
