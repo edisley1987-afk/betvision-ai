@@ -1,1 +1,22 @@
-{"football":"provider","odds":"provider"}
+{
+    "futebolApi": {
+
+        "ativo": true,
+
+        "baseUrl": "https://v3.football.api-sports.io",
+
+        "apiKey": "",
+
+        "timeout":10000
+
+    },
+
+    "atualizacao": {
+
+        "sincronizarCampeonatos": true,
+
+        "intervaloHoras":24
+
+    }
+
+}
