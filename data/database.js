@@ -10,7 +10,9 @@ const pool = new Pool({
 });
 
 export async function conectarBanco() {
+
     try {
+
         const client = await pool.connect();
 
         console.log("🐘 PostgreSQL conectado");
@@ -19,11 +21,10 @@ export async function conectarBanco() {
 
     } catch (erro) {
 
-        console.error("Erro ao conectar PostgreSQL");
-
         console.error(erro);
 
     }
+
 }
 
 export default pool;
