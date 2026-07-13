@@ -4,14 +4,14 @@ import compression from "compression";
 
 import api from "./routes/api.js";
 import jogos from "./routes/jogos.js";
+import analises from "./routes/analises.js";
 
 const app = express();
-
 const PORT = process.env.PORT || 3000;
 
-// ===============================
-// MIDDLEWARES
-// ===============================
+/* =====================================================
+   MIDDLEWARES
+===================================================== */
 
 app.use(cors());
 
@@ -21,39 +21,73 @@ app.use(express.json());
 
 app.use(express.urlencoded({ extended: true }));
 
-// Log das requisições
+/* =====================================================
+   LOG DAS REQUISIÇÕES
+===================================================== */
+
 app.use((req, res, next) => {
-    console.log(
-        `[${new Date().toLocaleString("pt-BR")}] ${req.method} ${req.url}`
-    );
+
+    const data = new Date().toLocaleString("pt-BR");
+
+    console.log(`[${data}] ${req.method} ${req.originalUrl}`);
+
     next();
+
 });
 
-// ===============================
-// ARQUIVOS ESTÁTICOS
-// ===============================
+/* =====================================================
+   ARQUIVOS ESTÁTICOS
+===================================================== */
 
 app.use(express.static("public"));
 
-// ===============================
-// ROTAS
-// ===============================
+/* =====================================================
+   ROTAS DA API
+===================================================== */
 
 app.use("/api", api);
 
 app.use("/api/jogos", jogos);
 
-// ===============================
-// ROTA PRINCIPAL
-// ===============================
+app.use("/api/analises", analises);
 
-app.get("/", (req, res) => {
-    res.sendFile(process.cwd() + "/public/index.html");
+/* =====================================================
+   HEALTH CHECK
+===================================================== */
+
+app.get("/health", (req, res) => {
+
+    res.json({
+
+        status: "online",
+
+        sistema: "BetVision AI",
+
+        versao: "1.0.0",
+
+        servidor: process.env.RENDER
+            ? "Render"
+            : "Local",
+
+        data: new Date()
+
+    });
+
 });
 
-// ===============================
-// 404
-// ===============================
+/* =====================================================
+   HOME
+===================================================== */
+
+app.get("/", (req, res) => {
+
+    res.sendFile(process.cwd() + "/public/index.html");
+
+});
+
+/* =====================================================
+   404
+===================================================== */
 
 app.use((req, res) => {
 
@@ -67,9 +101,9 @@ app.use((req, res) => {
 
 });
 
-// ===============================
-// ERROS
-// ===============================
+/* =====================================================
+   TRATAMENTO DE ERROS
+===================================================== */
 
 app.use((err, req, res, next) => {
 
@@ -85,30 +119,42 @@ app.use((err, req, res, next) => {
 
 });
 
-// ===============================
-// INICIAR SERVIDOR
-// ===============================
+/* =====================================================
+   INICIAR SERVIDOR
+===================================================== */
 
 app.listen(PORT, () => {
 
     console.log("");
 
-    console.log("=======================================");
+    console.log("==============================================");
 
     console.log("⚽ BETVISION AI");
 
     console.log("Servidor iniciado com sucesso");
 
+    console.log("");
+
     console.log("Porta:", PORT);
 
-    console.log("URL Local: http://localhost:" + PORT);
+    console.log("");
 
-    console.log("API Ping: /api/ping");
+    console.log("Rotas disponíveis:");
 
-    console.log("API Dashboard: /api/dashboard");
+    console.log("GET  /");
 
-    console.log("API Jogos: /api/jogos");
+    console.log("GET  /health");
 
-    console.log("=======================================");
+    console.log("GET  /api/ping");
+
+    console.log("GET  /api/dashboard");
+
+    console.log("GET  /api/jogos");
+
+    console.log("GET  /api/analises");
+
+    console.log("");
+
+    console.log("==============================================");
 
 });
