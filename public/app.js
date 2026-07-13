@@ -1,493 +1,747 @@
 // ======================================================
-// BetVision AI - Dashboard Frontend
+// BetVision AI - Backend Server
 // app.js
 // ======================================================
 
-"use strict";
 
+import express from "express";
+import cors from "cors";
+import compression from "compression";
+import helmet from "helmet";
+import morgan from "morgan";
+import { WebSocketServer } from "ws";
+import dotenv from "dotenv";
 
-// ======================================================
-// CONFIGURAÇÃO
-// ======================================================
+import path from "path";
+import { fileURLToPath } from "url";
 
-const CONFIG = {
-
-    API_DASHBOARD: "/api/dashboard",
-
-    UPDATE_INTERVAL: 30000 // 30 segundos
-
-};
 
 
 // ======================================================
-// INICIALIZAÇÃO
+// ROTAS
 // ======================================================
 
-document.addEventListener("DOMContentLoaded", () => {
+
+import jogosRouter from "./routes/jogos.js";
+import oddsRouter from "./routes/odds.js";
+import analisesRouter from "./routes/analises.js";
+import valuebetsRouter from "./routes/valuebets.js";
+import futebolRouter from "./routes/futebol.js";
+import inteligenciaRouter from "./routes/inteligencia.js";
 
 
-    console.log("🤖 BetVision AI iniciado");
 
 
-    carregarDashboard();
+// ======================================================
+// BANCO
+// ======================================================
 
 
-    setInterval(() => {
+import db,{ conectarBanco } from "./database/database.js";
 
-        carregarDashboard();
 
-    }, CONFIG.UPDATE_INTERVAL);
 
+
+// ======================================================
+// SERVIÇOS
+// ======================================================
+
+
+import {
+    sincronizarSistema
+
+} from "./services/sincronizacaoService.js";
+
+
+import {
+    listarCampeonatos
+
+} from "./services/bancoService.js";
+
+
+
+
+// ======================================================
+// CONFIG
+// ======================================================
+
+
+dotenv.config();
+
+
+
+const __filename =
+fileURLToPath(import.meta.url);
+
+
+const __dirname =
+path.dirname(__filename);
+
+
+
+const app =
+express();
+
+
+
+const PORT =
+process.env.PORT || 3000;
+
+
+
+const HOST =
+"0.0.0.0";
+
+
+
+
+// ======================================================
+// MIDDLEWARES
+// ======================================================
+
+
+app.use(
+    helmet()
+);
+
+
+app.use(
+    morgan("combined")
+);
+
+
+app.use(
+    cors()
+);
+
+
+app.use(
+    express.json()
+);
+
+
+app.use(
+    compression()
+);
+
+
+
+// arquivos frontend
+
+app.use(
+
+express.static(
+
+path.join(
+__dirname,
+"public"
+
+)
+
+)
+
+);
+
+
+
+
+// ======================================================
+// ROTAS API
+// ======================================================
+
+
+app.use(
+
+"/api/jogos",
+
+jogosRouter
+
+);
+
+
+
+app.use(
+
+"/api/odds",
+
+oddsRouter
+
+);
+
+
+
+app.use(
+
+"/api/analises",
+
+analisesRouter
+
+);
+
+
+
+app.use(
+
+"/api/valuebets",
+
+valuebetsRouter
+
+);
+
+
+
+app.use(
+
+"/api/futebol",
+
+futebolRouter
+
+);
+
+
+
+app.use(
+
+"/api/inteligencia",
+
+inteligenciaRouter
+
+);
+
+
+
+
+
+
+// ======================================================
+// CAMPEONATOS
+// ======================================================
+
+
+app.get(
+
+"/api/campeonatos",
+
+async(req,res)=>{
+
+
+try{
+
+
+const dados =
+await listarCampeonatos();
+
+
+
+res.json({
+
+total:
+dados.length,
+
+
+campeonatos:
+dados
+
+
+});
+
+
+}
+
+catch(error){
+
+
+res.status(500).json({
+
+erro:
+error.message
+
+});
+
+
+}
+
+
+}
+
+
+);
+
+
+
+
+
+
+// ======================================================
+// DASHBOARD REAL
+// ======================================================
+
+
+app.get(
+
+"/api/dashboard",
+
+async(req,res)=>{
+
+
+try{
+
+
+const campeonatos =
+await listarCampeonatos();
+
+
+
+let jogos = 0;
+let analises = 0;
+let valuebets = 0;
+
+
+
+try{
+
+
+const r1 =
+await db.query(
+
+`
+SELECT COUNT(*) 
+FROM jogos
+
+`
+
+);
+
+
+jogos =
+Number(
+r1.rows[0].count
+);
+
+
+
+}
+
+catch{}
+
+
+
+
+try{
+
+
+const r2 =
+await db.query(
+
+`
+SELECT COUNT(*) 
+FROM analises
+
+`
+
+);
+
+
+analises =
+Number(
+r2.rows[0].count
+);
+
+
+
+}
+
+catch{}
+
+
+
+
+
+try{
+
+
+const r3 =
+await db.query(
+
+`
+SELECT COUNT(*) 
+FROM valuebets
+
+`
+
+);
+
+
+valuebets =
+Number(
+r3.rows[0].count
+);
+
+
+
+}
+
+catch{}
+
+
+
+
+
+res.json({
+
+
+sistema:
+
+"BetVision AI",
+
+
+
+status:
+
+"operacional",
+
+
+
+jogosHoje:
+
+jogos,
+
+
+
+campeonatos:
+
+campeonatos.length,
+
+
+
+analisesIA:
+
+analises,
+
+
+
+valueBets:
+
+valuebets,
+
+
+
+modelo:
+
+"Probabilidade + Estatística",
+
+
+
+ultimaAtualizacao:
+
+new Date()
 
 
 });
 
 
 
+}
+
+
+catch(error){
+
+
+console.error(
+error
+);
+
+
+
+res.status(500).json({
+
+erro:
+
+error.message
+
+});
+
+
+}
+
+
+}
+
+
+);
+
+
+
+
+
 
 // ======================================================
-// BUSCAR DADOS DA IA
+// PING
 // ======================================================
 
-async function carregarDashboard(){
+
+app.get(
+
+"/api/ping",
+
+(req,res)=>{
 
 
-    try {
+res.json({
+
+status:
+"online",
+
+sistema:
+"BetVision AI",
+
+versao:
+"3.0",
+
+hora:
+new Date()
+
+});
 
 
-        const resposta = await fetch(CONFIG.API_DASHBOARD);
+}
 
 
-
-        if(!resposta.ok){
-
-            throw new Error(
-                "API retornou erro: " + resposta.status
-            );
-
-        }
-
-
-
-        const dados = await resposta.json();
-
-
-
-        atualizarDashboard(dados);
-
-
-
-        atualizarStatusSistema(true);
-
-
-
-    } catch(error){
+);
 
 
 
-        console.error(
-            "Erro carregando dashboard:",
-            error
-        );
 
 
 
-        atualizarStatusSistema(false);
+// ======================================================
+// FRONTEND
+// ======================================================
+
+
+app.get(
+
+"/",
+
+(req,res)=>{
+
+
+res.sendFile(
+
+path.join(
+
+__dirname,
+
+"public",
+
+"index.html"
+
+)
+
+);
+
+
+}
+
+);
 
 
 
-    }
 
+
+
+
+// ======================================================
+// SERVIDOR
+// ======================================================
+
+
+const server =
+
+app.listen(
+
+PORT,
+
+HOST,
+
+async()=>{
+
+
+console.log(
+
+`🚀 BetVision AI online porta ${PORT}`
+
+);
+
+
+
+await conectarBanco();
+
+
+
+try{
+
+
+const campeonatos =
+
+await sincronizarSistema();
+
+
+
+console.log(
+
+`🌎 ${campeonatos.length} campeonatos sincronizados`
+
+);
+
+
+
+}
+
+catch(error){
+
+
+console.error(
+
+"Erro sincronização:",
+
+error.message
+
+);
 
 
 }
 
 
 
+}
 
+);
+
+
+
+
+
+
+
+// ======================================================
+// WEBSOCKET
 // ======================================================
-// ATUALIZA DASHBOARD
-// ======================================================
-
-function atualizarDashboard(dados){
 
 
+const wss =
 
-    atualizarKPIs(dados);
+new WebSocketServer({
 
+server
 
-
-    atualizarJogos(dados);
+});
 
 
 
-    atualizarValueBets(dados);
+
+
+wss.on(
+
+"connection",
+
+socket=>{
+
+
+console.log(
+
+"🔵 WebSocket conectado"
+
+);
 
 
 
-    atualizarModeloIA(dados);
+socket.send(
+
+JSON.stringify({
+
+tipo:
+"status",
+
+sistema:
+"BetVision AI",
+
+mensagem:
+"IA tempo real ativa",
+
+data:
+new Date()
+
+})
+
+);
 
 
 
-    atualizarUltimaAtualizacao();
+socket.on(
+
+"close",
+
+()=>{
+
+
+console.log(
+
+"Cliente desconectado"
+
+);
+
+
+}
+
+);
 
 
 
 }
 
+);
+
+
 
 
 
 
 // ======================================================
-// KPIs PRINCIPAIS
+// BROADCAST
 // ======================================================
 
-function atualizarKPIs(dados){
+
+export function enviarAtualizacao(dados){
 
 
 
-    const jogos =
-        dados.jogosHoje ??
-        dados.totalJogos ??
-        0;
+wss.clients.forEach(
+
+cliente=>{
 
 
+if(
 
-    const campeonatos =
-        dados.campeonatos ??
-        0;
+cliente.readyState === 1
 
-
-
-    const analises =
-        dados.analisesIA ??
-        dados.analises ??
-        0;
+){
 
 
+cliente.send(
 
-    const valueBets =
-        dados.valueBets ??
-        0;
+JSON.stringify(dados)
 
-
-
-    alterarTexto(
-        "totalJogos",
-        jogos
-    );
-
-
-
-    alterarTexto(
-        "totalCampeonatos",
-        campeonatos
-    );
-
-
-
-    alterarTexto(
-        "totalAnalises",
-        analises
-    );
-
-
-
-    alterarTexto(
-        "totalValueBets",
-        valueBets
-    );
-
+);
 
 
 }
 
 
-
-
-// ======================================================
-// LISTA DE JOGOS
-// ======================================================
-
-function atualizarJogos(dados){
-
-
-
-    const container =
-        document.getElementById(
-            "listaJogos"
-        );
-
-
-
-    if(!container){
-
-        return;
-
-    }
-
-
-
-    const jogos =
-        dados.jogos ||
-        [];
-
-
-
-    if(jogos.length === 0){
-
-
-        container.innerHTML = `
-
-        <div class="empty">
-
-            Nenhum jogo analisado hoje
-
-        </div>
-
-        `;
-
-
-        return;
-
-    }
-
-
-
-
-    container.innerHTML = "";
-
-
-
-
-    jogos.forEach(jogo => {
-
-
-
-        const card =
-        document.createElement(
-            "div"
-        );
-
-
-
-        card.className =
-        "card-jogo";
-
-
-
-        card.innerHTML = `
-
-
-        <h3>
-
-        ${jogo.timeCasa ?? "-"}
-        x
-        ${jogo.timeFora ?? "-"}
-
-        </h3>
-
-
-
-        <p>
-
-        Campeonato:
-        ${jogo.campeonato ?? "-"}
-
-        </p>
-
-
-
-        <p>
-
-        Probabilidade:
-
-        ${jogo.probabilidade ?? 0}%
-
-        </p>
-
-
-
-        <p>
-
-        Placar previsto:
-
-        ${jogo.placar ?? "-"}
-
-        </p>
-
-
-        `;
-
-
-
-        container.appendChild(card);
-
-
-
-    });
-
-
-
-
 }
 
 
-
-
-
-// ======================================================
-// VALUE BETS
-// ======================================================
-
-function atualizarValueBets(dados){
-
-
-
-    const container =
-    document.getElementById(
-        "listaValueBets"
-    );
-
-
-
-    if(!container){
-
-        return;
-
-    }
-
-
-
-    const bets =
-    dados.valueBetsLista ||
-    dados.valueBetsDados ||
-    [];
-
-
-
-    if(bets.length === 0){
-
-
-
-        container.innerHTML = `
-
-        <div class="empty">
-
-        Nenhuma oportunidade encontrada
-
-        </div>
-
-        `;
-
-
-        return;
-
-
-    }
-
-
-
-
-
-    container.innerHTML = "";
-
-
-
-
-    bets.forEach(bet => {
-
-
-
-        const item =
-        document.createElement(
-            "div"
-        );
-
-
-
-        item.className =
-        "value-bet";
-
-
-
-        item.innerHTML = `
-
-
-        <strong>
-
-        ${bet.jogo ?? "Jogo"}
-
-        </strong>
-
-
-
-        <p>
-
-        Mercado:
-        ${bet.mercado ?? "-"}
-
-        </p>
-
-
-
-        <p>
-
-        Odd:
-        ${bet.odd ?? "-"}
-
-        </p>
-
-
-
-        <p>
-
-        Valor estimado:
-
-        ${bet.valor ?? "-"}%
-
-        </p>
-
-
-
-        `;
-
-
-
-        container.appendChild(item);
-
-
-
-    });
-
-
-
-}
-
-
-
-
-
-// ======================================================
-// MODELO IA
-// ======================================================
-
-function atualizarModeloIA(dados){
-
-
-
-    const modelo =
-    dados.modelo ||
-    "Probabilidade + Estatística";
-
-
-
-    alterarTexto(
-        "modeloIA",
-        modelo
-    );
-
+);
 
 
 }
@@ -498,137 +752,58 @@ function atualizarModeloIA(dados){
 
 
 // ======================================================
-// STATUS SISTEMA
+// 404
 // ======================================================
 
-function atualizarStatusSistema(online){
+
+app.use(
+
+(req,res)=>{
 
 
+res.status(404).json({
 
-    const elemento =
-    document.getElementById(
-        "statusSistema"
-    );
+erro:
+"Rota não encontrada",
 
+rota:
+req.originalUrl
 
-
-    if(!elemento){
-
-        return;
-
-    }
-
-
-
-
-    if(online){
-
-
-        elemento.innerHTML =
-        "🟢 IA Online";
-
-
-        elemento.className =
-        "online";
-
-
-
-    }else{
-
-
-        elemento.innerHTML =
-        "🔴 API Offline";
-
-
-        elemento.className =
-        "offline";
-
-
-    }
-
+});
 
 
 }
 
+);
+
+
 
 
 
 
 // ======================================================
-// DATA/HORA
+// ERRO GLOBAL
 // ======================================================
 
-function atualizarUltimaAtualizacao(){
+
+app.use(
+
+(err,req,res,next)=>{
+
+
+console.error(err);
 
 
 
-    const elemento =
-    document.getElementById(
-        "ultimaAtualizacao"
-    );
+res.status(500).json({
 
+erro:
 
+"Erro interno do servidor"
 
-    if(!elemento){
-
-        return;
-
-    }
-
-
-
-    elemento.innerHTML =
-    "Atualizado: "
-    +
-    new Date()
-    .toLocaleString(
-        "pt-BR"
-    );
-
+});
 
 
 }
 
-
-
-
-
-// ======================================================
-// FUNÇÃO AUXILIAR
-// ======================================================
-
-function alterarTexto(id, valor){
-
-
-
-    const elemento =
-    document.getElementById(id);
-
-
-
-    if(elemento){
-
-        elemento.innerText =
-        valor;
-
-    }
-
-
-
-}
-
-
-
-// ======================================================
-// EXPORTAÇÃO GLOBAL
-// ======================================================
-
-window.BetVisionAI = {
-
-
-    atualizarDashboard,
-
-    carregarDashboard
-
-
-};
+);
