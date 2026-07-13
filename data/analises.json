@@ -1,0 +1,83 @@
+[
+  {
+    "id": 1,
+    "campeonato": "Brasileirão Série A",
+    "data": "2026-07-14",
+    "hora": "19:00",
+
+    "mandante": "Flamengo",
+    "visitante": "Palmeiras",
+
+    "status": "Agendado",
+
+    "probCasa": 58,
+    "probEmpate": 24,
+    "probVisitante": 18,
+
+    "oddCasa": 1.95,
+    "oddEmpate": 3.40,
+    "oddVisitante": 4.60,
+
+    "confianca": 87,
+
+    "placar": "2 x 1",
+
+    "melhorAposta": "Flamengo vence",
+
+    "valueBet": true
+  },
+  {
+    "id": 2,
+    "campeonato": "Brasileirão Série A",
+    "data": "2026-07-14",
+    "hora": "21:30",
+
+    "mandante": "Corinthians",
+    "visitante": "São Paulo",
+
+    "status": "Agendado",
+
+    "probCasa": 39,
+    "probEmpate": 34,
+    "probVisitante": 27,
+
+    "oddCasa": 2.30,
+    "oddEmpate": 3.10,
+    "oddVisitante": 3.20,
+
+    "confianca": 71,
+
+    "placar": "1 x 1",
+
+    "melhorAposta": "Empate",
+
+    "valueBet": false
+  },
+  {
+    "id": 3,
+    "campeonato": "Premier League",
+    "data": "2026-07-14",
+    "hora": "16:00",
+
+    "mandante": "Liverpool",
+    "visitante": "Chelsea",
+
+    "status": "Agendado",
+
+    "probCasa": 51,
+    "probEmpate": 26,
+    "probVisitante": 23,
+
+    "oddCasa": 2.05,
+    "oddEmpate": 3.45,
+    "oddVisitante": 3.80,
+
+    "confianca": 82,
+
+    "placar": "2 x 0",
+
+    "melhorAposta": "Liverpool vence",
+
+    "valueBet": true
+  }
+]
