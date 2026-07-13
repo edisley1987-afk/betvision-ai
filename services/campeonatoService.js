@@ -86,6 +86,10 @@ export async function buscarCampeonatos() {
 
         );
 
+console.log("STATUS:", resposta.status);
+console.log("HEADERS:", resposta.headers);
+console.log("BODY:", JSON.stringify(resposta.data, null, 2));
+
         if (!resposta.data.response) {
 
             return campeonatosBase();
