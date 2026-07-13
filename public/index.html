@@ -1,48 +1,91 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BetVision AI</title>
 
-    <link rel="stylesheet" href="style.css">
+<html lang="pt-br">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport" content="width=device-width,initial-scale=1">
+
+<title>BetVision AI</title>
+
+<link rel="stylesheet" href="style.css">
+
 </head>
 
 <body>
 
 <header>
 
-<h1>⚽ BetVision AI</h1>
+<div class="logo">
 
-<p>Plataforma Inteligente de Análise de Apostas</p>
+⚽ BetVision AI
+
+</div>
+
+<div id="status">
+
+🟢 Online
+
+</div>
 
 </header>
 
-<main>
+<section class="cards">
 
 <div class="card">
-<h2>Sistema</h2>
-<p id="status">Conectando...</p>
-</div>
 
-<div class="card">
 <h2>Jogos Hoje</h2>
-<p>0</p>
+
+<span id="jogos">0</span>
+
 </div>
 
 <div class="card">
+
 <h2>Value Bets</h2>
-<p>0</p>
+
+<span id="valuebets">0</span>
+
 </div>
 
 <div class="card">
-<h2>Confiança Média</h2>
-<p>0%</p>
+
+<h2>ROI</h2>
+
+<span id="roi">0%</span>
+
 </div>
 
-</main>
+<div class="card">
+
+<h2>Assertividade</h2>
+
+<span id="assertividade">0%</span>
+
+</div>
+
+</section>
+
+<section class="painel">
+
+<h2>
+
+Melhores Apostas
+
+</h2>
+
+<div id="lista">
+
+Nenhuma análise disponível.
+
+</div>
+
+</section>
 
 <script src="app.js"></script>
 
 </body>
+
 </html>
