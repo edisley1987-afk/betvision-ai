@@ -17,35 +17,35 @@ import jogosRouter from "./routes/jogos.js";
 import oddsRouter from "./routes/odds.js";
 import analisesRouter from "./routes/analises.js";
 import valuebetsRouter from "./routes/valuebets.js";
+import futebolRouter from "./routes/futebol.js";
 
 
 
 /*
 ====================================
- BANCO E SERVIÇOS
+ BANCO
 ====================================
 */
-
 
 import "./database/database.js";
 
 
+
+/*
+====================================
+ SERVIÇOS
+====================================
+*/
+
 import {
-
     sincronizarSistema
-
 }
-
 from "./services/sincronizacaoService.js";
 
 
-
 import {
-
     listarCampeonatos
-
 }
-
 from "./services/bancoService.js";
 
 
@@ -64,15 +64,18 @@ const app = express();
 
 
 
-const PORT = process.env.PORT || 3000;
+const PORT =
+process.env.PORT || 3000;
 
-const HOST = "0.0.0.0";
+
+const HOST =
+"0.0.0.0";
 
 
 
 /*
 ====================================
- MIDDLEWARE
+ MIDDLEWARES
 ====================================
 */
 
@@ -92,11 +95,8 @@ app.use(
     express.static(
 
         path.join(
-
             __dirname,
-
             "public"
-
         )
 
     )
@@ -107,26 +107,16 @@ app.use(
 
 /*
 ====================================
- ROTAS PRINCIPAIS
+ ROTAS API
 ====================================
 */
 
 
 app.use(
 
-    "/api/jogos",
+"/api/jogos",
 
-    jogosRouter
-
-);
-
-
-
-app.use(
-
-    "/api/odds",
-
-    oddsRouter
+jogosRouter
 
 );
 
@@ -134,9 +124,9 @@ app.use(
 
 app.use(
 
-    "/api/analises",
+"/api/odds",
 
-    analisesRouter
+oddsRouter
 
 );
 
@@ -144,9 +134,19 @@ app.use(
 
 app.use(
 
-    "/api/valuebets",
+"/api/analises",
 
-    valuebetsRouter
+analisesRouter
+
+);
+
+
+
+app.use(
+
+"/api/valuebets",
+
+valuebetsRouter
 
 );
 
@@ -154,7 +154,24 @@ app.use(
 
 /*
 ====================================
- BANCO - CAMPEONATOS
+ FUTEBOL REAL
+====================================
+*/
+
+
+app.use(
+
+"/api/futebol",
+
+futebolRouter
+
+);
+
+
+
+/*
+====================================
+ CAMPEONATOS
 ====================================
 */
 
@@ -177,12 +194,15 @@ async(req,res)=>{
 
         res.json({
 
-            total:dados.length,
+            total:
+            dados.length,
 
-            campeonatos:dados
+
+            campeonatos:
+            dados
+
 
         });
-
 
 
     }
@@ -193,9 +213,6 @@ async(req,res)=>{
         res.status(500).json({
 
             erro:
-            "Erro ao buscar campeonatos",
-
-            detalhe:
             error.message
 
         });
@@ -204,14 +221,13 @@ async(req,res)=>{
     }
 
 
-
 });
 
 
 
 /*
 ====================================
- STATUS SISTEMA
+ STATUS
 ====================================
 */
 
@@ -225,15 +241,25 @@ app.get(
 
     res.json({
 
-        status:"online",
+        status:
+        "online",
 
-        sistema:"BetVision AI",
 
-        versao:"1.0",
+        sistema:
+        "BetVision AI",
 
-        banco:"SQLite",
 
-        horario:new Date()
+        versao:
+        "2.0",
+
+
+        banco:
+        "SQLite",
+
+
+        futebol:
+        "API conectada"
+
 
     });
 
@@ -262,20 +288,32 @@ app.get(
         "BetVision AI",
 
 
-        jogosHoje:0,
+        modulo:
+        "Futebol Real",
 
 
-        campeonatos:0,
+        jogosHoje:
+        0,
 
 
-        analisesGeradas:0,
+        campeonatos:
+        0,
 
 
-        oportunidades:0,
+        times:
+        0,
+
+
+        analises:
+        0,
+
+
+        oportunidades:
+        0,
 
 
         statusIA:
-        "aguardando dados"
+        "aguardando treinamento"
 
 
     });
@@ -320,7 +358,7 @@ app.get(
 
 /*
 ====================================
- SERVIDOR HTTP
+ SERVIDOR
 ====================================
 */
 
@@ -353,7 +391,7 @@ async()=>{
 
         console.log(
 
-            `🌎 ${campeonatos.length} campeonatos carregados`
+        `🌎 ${campeonatos.length} campeonatos carregados`
 
         );
 
@@ -363,9 +401,9 @@ async()=>{
     catch(error){
 
 
-        console.error(
+        console.log(
 
-            "Erro sincronização:",
+            "Falha sincronização",
 
             error.message
 
@@ -375,8 +413,9 @@ async()=>{
     }
 
 
+}
 
-});
+);
 
 
 
@@ -387,7 +426,8 @@ async()=>{
 */
 
 
-const wss = new WebSocketServer({
+const wss =
+new WebSocketServer({
 
     server
 
@@ -415,15 +455,21 @@ wss.on(
 
         JSON.stringify({
 
-            tipo:"status",
+            tipo:
+            "status",
 
-            sistema:"BetVision AI",
+
+            sistema:
+            "BetVision AI",
+
 
             mensagem:
-            "Tempo real conectado",
+            "Tempo real ativo",
 
-            data:
+
+            horario:
             new Date()
+
 
         })
 
@@ -440,7 +486,7 @@ wss.on(
 
             console.log(
 
-                "Cliente saiu"
+            "WebSocket encerrado"
 
             );
 
@@ -450,14 +496,15 @@ wss.on(
     );
 
 
+}
 
-});
+);
 
 
 
 /*
 ====================================
- ENVIO TEMPO REAL
+ FUNÇÃO TEMPO REAL
 ====================================
 */
 
@@ -513,8 +560,9 @@ app.use(
         erro:
         "Rota não encontrada",
 
-        caminho:
+        rota:
         req.originalUrl
+
 
     });
 
@@ -539,8 +587,6 @@ app.use(
 
     console.error(
 
-        "Erro interno:",
-
         err
 
     );
@@ -550,7 +596,8 @@ app.use(
     res.status(500).json({
 
         erro:
-        "Erro interno do servidor"
+        "Erro interno servidor"
+
 
     });
 
