@@ -1,112 +1,143 @@
 import db from "../database/database.js";
 
+/*
+====================================
+ LISTAR CAMPEONATOS
+====================================
+*/
 
+export async function listarCampeonatos() {
 
-export function inserirCampeonato(dados){
+    try {
 
+        const resultado = await db.query(`
+            SELECT
+                id,
+                nome,
+                pais,
+                continente,
+                temporada
+            FROM campeonatos
+            ORDER BY nome
+        `);
 
-    return new Promise(
+        return resultado.rows;
 
-        (resolve,reject)=>{
+    } catch (erro) {
 
+        console.error("Erro ao listar campeonatos:", erro);
 
-            db.run(
+        return [];
 
-            `
-            INSERT INTO campeonatos
-            (
-            id,
-            nome,
-            pais,
-            continente,
-            temporada
-            )
-
-            VALUES(?,?,?,?,?)
-            `,
-
-
-            [
-
-                dados.id,
-
-                dados.nome,
-
-                dados.pais,
-
-                dados.continente || "",
-
-                dados.temporada || "2026"
-
-            ],
-
-
-            function(erro){
-
-
-                if(erro)
-
-                    reject(erro);
-
-
-                else
-
-                    resolve(this.lastID);
-
-
-            });
-
-
-        }
-
-    );
+    }
 
 }
 
+/*
+====================================
+ INSERIR CAMPEONATO
+====================================
+*/
 
+export async function inserirCampeonato(dados) {
 
-export function listarCampeonatos(){
+    try {
 
+        const resultado = await db.query(
+            `
+            INSERT INTO campeonatos
+            (
+                id,
+                nome,
+                pais,
+                continente,
+                temporada
+            )
+            VALUES
+            ($1,$2,$3,$4,$5)
+            ON CONFLICT (id)
+            DO UPDATE SET
+                nome = EXCLUDED.nome,
+                pais = EXCLUDED.pais,
+                continente = EXCLUDED.continente,
+                temporada = EXCLUDED.temporada
+            RETURNING id;
+            `,
+            [
+                dados.id,
+                dados.nome,
+                dados.pais,
+                dados.continente || "",
+                dados.temporada || "2026"
+            ]
+        );
 
-    return new Promise(
+        return resultado.rows[0];
 
-        (resolve,reject)=>{
+    } catch (erro) {
 
+        console.error("Erro ao inserir campeonato:", erro);
+        throw erro;
 
-            db.all(
+    }
 
+}
+
+/*
+====================================
+ BUSCAR CAMPEONATO
+====================================
+*/
+
+export async function buscarCampeonato(id) {
+
+    try {
+
+        const resultado = await db.query(
             `
             SELECT *
-
             FROM campeonatos
-
-            ORDER BY nome
-
+            WHERE id=$1
             `,
+            [id]
+        );
 
+        return resultado.rows[0] || null;
 
-            [],
+    } catch (erro) {
 
+        console.error("Erro ao buscar campeonato:", erro);
+        return null;
 
-            (erro,rows)=>{
+    }
 
+}
 
-                if(erro)
+/*
+====================================
+ REMOVER CAMPEONATO
+====================================
+*/
 
-                    reject(erro);
+export async function removerCampeonato(id) {
 
+    try {
 
-                else
+        await db.query(
+            `
+            DELETE FROM campeonatos
+            WHERE id=$1
+            `,
+            [id]
+        );
 
-                    resolve(rows);
+        return true;
 
+    } catch (erro) {
 
-            });
+        console.error("Erro ao remover campeonato:", erro);
+        return false;
 
-
-        }
-
-    );
-
+    }
 
 }
