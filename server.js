@@ -19,16 +19,34 @@ import analisesRouter from "./routes/analises.js";
 import valuebetsRouter from "./routes/valuebets.js";
 
 
+
 /*
 ====================================
- SERVIÇOS
+ BANCO E SERVIÇOS
 ====================================
 */
 
+
+import "./database/database.js";
+
+
 import {
+
     sincronizarSistema
+
 }
+
 from "./services/sincronizacaoService.js";
+
+
+
+import {
+
+    listarCampeonatos
+
+}
+
+from "./services/bancoService.js";
 
 
 
@@ -74,8 +92,11 @@ app.use(
     express.static(
 
         path.join(
+
             __dirname,
+
             "public"
+
         )
 
     )
@@ -86,7 +107,7 @@ app.use(
 
 /*
 ====================================
- ROTAS API
+ ROTAS PRINCIPAIS
 ====================================
 */
 
@@ -133,31 +154,91 @@ app.use(
 
 /*
 ====================================
- STATUS
+ BANCO - CAMPEONATOS
 ====================================
 */
 
 
 app.get(
-    "/api/ping",
-    (req,res)=>{
+
+"/api/campeonatos",
+
+async(req,res)=>{
+
+
+    try{
+
+
+        const dados =
+
+        await listarCampeonatos();
+
 
 
         res.json({
 
-            status:"online",
+            total:dados.length,
 
-            sistema:"BetVision AI",
+            campeonatos:dados
 
-            versao:"1.0",
+        });
 
-            horario:new Date()
+
+
+    }
+
+    catch(error){
+
+
+        res.status(500).json({
+
+            erro:
+            "Erro ao buscar campeonatos",
+
+            detalhe:
+            error.message
 
         });
 
 
     }
-);
+
+
+
+});
+
+
+
+/*
+====================================
+ STATUS SISTEMA
+====================================
+*/
+
+
+app.get(
+
+"/api/ping",
+
+(req,res)=>{
+
+
+    res.json({
+
+        status:"online",
+
+        sistema:"BetVision AI",
+
+        versao:"1.0",
+
+        banco:"SQLite",
+
+        horario:new Date()
+
+    });
+
+
+});
 
 
 
@@ -169,32 +250,38 @@ app.get(
 
 
 app.get(
-    "/api/dashboard",
-    (req,res)=>{
+
+"/api/dashboard",
+
+(req,res)=>{
 
 
-        res.json({
+    res.json({
 
-            sistema:"BetVision AI",
-
-            jogosHoje:0,
-
-            campeonatos:0,
-
-            analisesGeradas:0,
-
-            oportunidades:0,
-
-            statusIA:
-            "aguardando dados"
+        sistema:
+        "BetVision AI",
 
 
-        });
+        jogosHoje:0,
 
 
-    }
-);
+        campeonatos:0,
 
+
+        analisesGeradas:0,
+
+
+        oportunidades:0,
+
+
+        statusIA:
+        "aguardando dados"
+
+
+    });
+
+
+});
 
 
 
@@ -206,92 +293,90 @@ app.get(
 
 
 app.get(
-    "/",
-    (req,res)=>{
+
+"/",
+
+(req,res)=>{
 
 
-        res.sendFile(
+    res.sendFile(
 
-            path.join(
+        path.join(
 
-                __dirname,
+            __dirname,
 
-                "public",
+            "public",
 
-                "index.html"
+            "index.html"
 
-            )
+        )
 
-        );
+    );
 
 
-    }
-);
+});
 
 
 
 /*
 ====================================
- SERVIDOR
+ SERVIDOR HTTP
 ====================================
 */
 
 
 const server = app.listen(
 
-    PORT,
+PORT,
 
-    HOST,
+HOST,
 
-    async()=>{
+async()=>{
+
+
+    console.log(
+
+        `🚀 BetVision AI rodando porta ${PORT}`
+
+    );
+
+
+
+    try{
+
+
+        const campeonatos =
+
+        await sincronizarSistema();
+
 
 
         console.log(
-            `🚀 BetVision AI online porta ${PORT}`
+
+            `🌎 ${campeonatos.length} campeonatos carregados`
+
         );
-
-
-
-        /*
-        Inicializa sincronização
-        */
-
-        try{
-
-
-            const campeonatos =
-
-                await sincronizarSistema();
-
-
-
-            console.log(
-
-                `🌎 ${campeonatos.length} campeonatos sincronizados`
-
-            );
-
-
-
-        }catch(error){
-
-
-            console.error(
-
-                "Erro sincronização:",
-
-                error.message
-
-            );
-
-
-        }
-
 
 
     }
 
-);
+    catch(error){
+
+
+        console.error(
+
+            "Erro sincronização:",
+
+            error.message
+
+        );
+
+
+    }
+
+
+
+});
 
 
 
@@ -313,62 +398,60 @@ const wss = new WebSocketServer({
 
 wss.on(
 
-    "connection",
+"connection",
 
-    (socket)=>{
-
-
-        console.log(
-
-            "🔵 Cliente conectado WebSocket"
-
-        );
+(socket)=>{
 
 
+    console.log(
 
-        socket.send(
+        "🔵 WebSocket conectado"
 
-            JSON.stringify({
-
-                tipo:"status",
-
-                sistema:"BetVision AI",
-
-                mensagem:
-                "Conectado em tempo real",
-
-                data:new Date()
-
-            })
-
-        );
+    );
 
 
 
+    socket.send(
 
-        socket.on(
+        JSON.stringify({
 
-            "close",
+            tipo:"status",
 
-            ()=>{
+            sistema:"BetVision AI",
 
+            mensagem:
+            "Tempo real conectado",
 
-                console.log(
+            data:
+            new Date()
 
-                    "Cliente WebSocket saiu"
+        })
 
-                );
-
-
-            }
-
-        );
-
+    );
 
 
-    }
 
-);
+    socket.on(
+
+        "close",
+
+        ()=>{
+
+
+            console.log(
+
+                "Cliente saiu"
+
+            );
+
+
+        }
+
+    );
+
+
+
+});
 
 
 
@@ -389,7 +472,7 @@ export function enviarAtualizacao(dados){
 
             if(
 
-                cliente.readyState === 1
+            cliente.readyState === 1
 
             ){
 
@@ -456,6 +539,8 @@ app.use(
 
     console.error(
 
+        "Erro interno:",
+
         err
 
     );
@@ -465,10 +550,9 @@ app.use(
     res.status(500).json({
 
         erro:
-        "Erro interno servidor"
+        "Erro interno do servidor"
 
     });
-
 
 
 }
