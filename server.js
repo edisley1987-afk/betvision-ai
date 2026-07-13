@@ -30,7 +30,7 @@ import inteligenciaRouter from "./routes/inteligencia.js";
 ====================================
 */
 
-import "./database/database.js";
+import { conectarBanco } from "./database/database.js";
 
 
 
@@ -421,7 +421,7 @@ async()=>{
         `🚀 BetVision AI online porta ${PORT}`
 
     );
-
+await conectarBanco();
 
 
     try{
