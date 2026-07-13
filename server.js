@@ -5,7 +5,10 @@ import { WebSocketServer } from "ws";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
-
+import jogosRouter from "./routes/jogos.js";
+import oddsRouter from "./routes/odds.js";
+import analisesRouter from "./routes/analises.js";
+import valuebetsRouter from "./routes/valuebets.js";
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
