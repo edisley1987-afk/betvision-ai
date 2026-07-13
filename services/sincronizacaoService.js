@@ -1,33 +1,33 @@
-import {
-    buscarCampeonatos
-}
-from "./campeonatoService.js";
+import { buscarCampeonatos } from "./campeonatoService.js";
+import { inserirCampeonato } from "./bancoService.js";
 
+export async function sincronizarSistema() {
 
+    console.log("Sincronizando campeonatos...");
 
-export async function sincronizarSistema(){
+    const campeonatos = await buscarCampeonatos();
 
+    console.log(`${campeonatos.length} campeonatos encontrados na API`);
 
-    console.log(
-        "Sincronizando campeonatos..."
-    );
+    for (const campeonato of campeonatos) {
 
+        try {
 
+            await inserirCampeonato(campeonato);
 
-    const campeonatos =
-        await buscarCampeonatos();
+        } catch (erro) {
 
+            console.error(
+                `Erro ao salvar ${campeonato.nome}:`,
+                erro.message
+            );
 
+        }
 
-    console.log(
+    }
 
-        `${campeonatos.length} campeonatos carregados`
-
-    );
-
-
+    console.log("✅ Sincronização concluída");
 
     return campeonatos;
-
 
 }
