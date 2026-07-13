@@ -23,15 +23,13 @@ import futebolRouter from "./routes/futebol.js";
 import inteligenciaRouter from "./routes/inteligencia.js";
 
 
-
 /*
 ====================================
  BANCO
 ====================================
 */
 
-import { conectarBanco } from "./database/database.js";
-
+import db, { conectarBanco } from "./database/database.js";
 
 
 /*
@@ -50,7 +48,6 @@ import {
     listarCampeonatos
 }
 from "./services/bancoService.js";
-
 
 
 dotenv.config();
@@ -77,6 +74,61 @@ process.env.PORT || 3000;
 
 const HOST =
 "0.0.0.0";
+
+
+
+/*
+====================================
+ CRIAR TABELAS
+====================================
+*/
+
+
+async function criarTabelas(){
+
+    try{
+
+
+        await db.query(`
+
+        CREATE TABLE IF NOT EXISTS campeonatos (
+
+            id INTEGER PRIMARY KEY,
+
+            nome VARCHAR(150) NOT NULL,
+
+            pais VARCHAR(100),
+
+            continente VARCHAR(100),
+
+            temporada VARCHAR(20)
+
+        );
+
+        `);
+
+
+
+        console.log(
+            "✅ Tabela campeonatos verificada"
+        );
+
+
+    }
+    catch(error){
+
+
+        console.error(
+
+            "❌ Erro criando tabela:",
+            error.message
+
+        );
+
+
+    }
+
+}
 
 
 
@@ -136,68 +188,39 @@ app.use(
 
 
 app.use(
-
 "/api/jogos",
-
 jogosRouter
-
 );
 
 
-
 app.use(
-
 "/api/odds",
-
 oddsRouter
-
 );
 
 
-
 app.use(
-
 "/api/analises",
-
 analisesRouter
-
 );
 
 
-
 app.use(
-
 "/api/valuebets",
-
 valuebetsRouter
-
 );
 
 
-
 app.use(
-
 "/api/futebol",
-
 futebolRouter
-
 );
-
-
-
-/*
- INTELIGÊNCIA ARTIFICIAL
-*/
 
 
 app.use(
-
 "/api/inteligencia",
-
 inteligenciaRouter
-
 );
-
 
 
 
@@ -219,9 +242,7 @@ async(req,res)=>{
 
 
         const dados =
-
         await listarCampeonatos();
-
 
 
         res.json({
@@ -234,7 +255,6 @@ async(req,res)=>{
             dados
 
         });
-
 
 
     }
@@ -278,27 +298,11 @@ app.get(
         status:
         "online",
 
-
         sistema:
         "BetVision AI",
 
-
         versao:
         "3.0",
-
-
-        modulos:
-
-        [
-
-            "Banco SQLite",
-
-            "Futebol API",
-
-            "IA Predict"
-
-        ],
-
 
         horario:
         new Date()
@@ -331,26 +335,16 @@ app.get(
         sistema:
         "BetVision AI",
 
-
         status:
         "operacional",
 
+        jogosHoje:0,
 
-        jogosHoje:
-        0,
+        campeonatos:0,
 
+        analisesIA:0,
 
-        campeonatos:
-        0,
-
-
-        analisesIA:
-        0,
-
-
-        valueBets:
-        0,
-
+        valueBets:0,
 
         modelo:
         "Probabilidade + Estatística"
@@ -421,10 +415,18 @@ async()=>{
         `🚀 BetVision AI online porta ${PORT}`
 
     );
-await conectarBanco();
+
 
 
     try{
+
+
+        await conectarBanco();
+
+
+
+        await criarTabelas();
+
 
 
         const campeonatos =
@@ -447,7 +449,7 @@ await conectarBanco();
 
         console.error(
 
-            "Erro sincronização",
+            "Erro inicialização:",
 
             error.message
 
@@ -460,7 +462,6 @@ await conectarBanco();
 }
 
 );
-
 
 
 
@@ -480,7 +481,6 @@ new WebSocketServer({
 
 
 
-
 wss.on(
 
 "connection",
@@ -489,11 +489,8 @@ wss.on(
 
 
     console.log(
-
         "🔵 WebSocket conectado"
-
     );
-
 
 
     socket.send(
@@ -503,39 +500,16 @@ wss.on(
             tipo:
             "status",
 
-
             sistema:
             "BetVision AI",
 
-
             mensagem:
             "IA tempo real ativa",
-
 
             data:
             new Date()
 
         })
-
-    );
-
-
-
-    socket.on(
-
-    "close",
-
-    ()=>{
-
-
-        console.log(
-
-        "Cliente desconectado"
-
-        );
-
-
-    }
 
     );
 
@@ -546,14 +520,6 @@ wss.on(
 
 
 
-
-/*
-====================================
- BROADCAST
-====================================
-*/
-
-
 export function enviarAtualizacao(dados){
 
 
@@ -562,11 +528,7 @@ export function enviarAtualizacao(dados){
         cliente=>{
 
 
-            if(
-
-            cliente.readyState === 1
-
-            ){
+            if(cliente.readyState === 1){
 
 
                 cliente.send(
@@ -629,11 +591,7 @@ app.use(
 (err,req,res,next)=>{
 
 
-    console.error(
-
-        err
-
-    );
+    console.error(err);
 
 
 
