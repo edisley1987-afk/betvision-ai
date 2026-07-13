@@ -1,6 +1,8 @@
 import express from "express";
 import cors from "cors";
 import compression from "compression";
+import helmet from "helmet";
+import morgan from "morgan";
 import { WebSocketServer } from "ws";
 import dotenv from "dotenv";
 import path from "path";
@@ -18,6 +20,7 @@ import oddsRouter from "./routes/odds.js";
 import analisesRouter from "./routes/analises.js";
 import valuebetsRouter from "./routes/valuebets.js";
 import futebolRouter from "./routes/futebol.js";
+import inteligenciaRouter from "./routes/inteligencia.js";
 
 
 
@@ -54,13 +57,17 @@ dotenv.config();
 
 
 
-const __filename = fileURLToPath(import.meta.url);
-
-const __dirname = path.dirname(__filename);
-
+const __filename =
+fileURLToPath(import.meta.url);
 
 
-const app = express();
+const __dirname =
+path.dirname(__filename);
+
+
+
+const app =
+express();
 
 
 
@@ -80,13 +87,29 @@ const HOST =
 */
 
 
-app.use(cors());
+app.use(
+    helmet()
+);
 
 
-app.use(express.json());
+app.use(
+    morgan("combined")
+);
 
 
-app.use(compression());
+app.use(
+    cors()
+);
+
+
+app.use(
+    express.json()
+);
+
+
+app.use(
+    compression()
+);
 
 
 
@@ -107,7 +130,7 @@ app.use(
 
 /*
 ====================================
- ROTAS API
+ ROTAS
 ====================================
 */
 
@@ -152,13 +175,6 @@ valuebetsRouter
 
 
 
-/*
-====================================
- FUTEBOL REAL
-====================================
-*/
-
-
 app.use(
 
 "/api/futebol",
@@ -166,6 +182,22 @@ app.use(
 futebolRouter
 
 );
+
+
+
+/*
+ INTELIGÊNCIA ARTIFICIAL
+*/
+
+
+app.use(
+
+"/api/inteligencia",
+
+inteligenciaRouter
+
+);
+
 
 
 
@@ -201,8 +233,8 @@ async(req,res)=>{
             campeonatos:
             dados
 
-
         });
+
 
 
     }
@@ -221,7 +253,9 @@ async(req,res)=>{
     }
 
 
-});
+}
+
+);
 
 
 
@@ -250,21 +284,31 @@ app.get(
 
 
         versao:
-        "2.0",
+        "3.0",
 
 
-        banco:
-        "SQLite",
+        modulos:
+
+        [
+
+            "Banco SQLite",
+
+            "Futebol API",
+
+            "IA Predict"
+
+        ],
 
 
-        futebol:
-        "API conectada"
-
+        horario:
+        new Date()
 
     });
 
 
-});
+}
+
+);
 
 
 
@@ -288,8 +332,8 @@ app.get(
         "BetVision AI",
 
 
-        modulo:
-        "Futebol Real",
+        status:
+        "operacional",
 
 
         jogosHoje:
@@ -300,26 +344,24 @@ app.get(
         0,
 
 
-        times:
+        analisesIA:
         0,
 
 
-        analises:
+        valueBets:
         0,
 
 
-        oportunidades:
-        0,
-
-
-        statusIA:
-        "aguardando treinamento"
+        modelo:
+        "Probabilidade + Estatística"
 
 
     });
 
 
-});
+}
+
+);
 
 
 
@@ -352,7 +394,9 @@ app.get(
     );
 
 
-});
+}
+
+);
 
 
 
@@ -374,7 +418,7 @@ async()=>{
 
     console.log(
 
-        `🚀 BetVision AI rodando porta ${PORT}`
+        `🚀 BetVision AI online porta ${PORT}`
 
     );
 
@@ -391,7 +435,7 @@ async()=>{
 
         console.log(
 
-        `🌎 ${campeonatos.length} campeonatos carregados`
+        `🌎 ${campeonatos.length} campeonatos sincronizados`
 
         );
 
@@ -401,9 +445,9 @@ async()=>{
     catch(error){
 
 
-        console.log(
+        console.error(
 
-            "Falha sincronização",
+            "Erro sincronização",
 
             error.message
 
@@ -416,6 +460,7 @@ async()=>{
 }
 
 );
+
 
 
 
@@ -464,12 +509,11 @@ wss.on(
 
 
             mensagem:
-            "Tempo real ativo",
+            "IA tempo real ativa",
 
 
-            horario:
+            data:
             new Date()
-
 
         })
 
@@ -479,19 +523,19 @@ wss.on(
 
     socket.on(
 
-        "close",
+    "close",
 
-        ()=>{
-
-
-            console.log(
-
-            "WebSocket encerrado"
-
-            );
+    ()=>{
 
 
-        }
+        console.log(
+
+        "Cliente desconectado"
+
+        );
+
+
+    }
 
     );
 
@@ -502,9 +546,10 @@ wss.on(
 
 
 
+
 /*
 ====================================
- FUNÇÃO TEMPO REAL
+ BROADCAST
 ====================================
 */
 
@@ -545,7 +590,7 @@ export function enviarAtualizacao(dados){
 
 /*
 ====================================
- ERRO 404
+ 404
 ====================================
 */
 
@@ -562,7 +607,6 @@ app.use(
 
         rota:
         req.originalUrl
-
 
     });
 
@@ -596,8 +640,7 @@ app.use(
     res.status(500).json({
 
         erro:
-        "Erro interno servidor"
-
+        "Erro interno do servidor"
 
     });
 
