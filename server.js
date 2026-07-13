@@ -6,16 +6,38 @@ import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 
+
+/*
+====================================
+ ROTAS
+====================================
+*/
+
 import jogosRouter from "./routes/jogos.js";
 import oddsRouter from "./routes/odds.js";
 import analisesRouter from "./routes/analises.js";
 import valuebetsRouter from "./routes/valuebets.js";
 
 
+/*
+====================================
+ SERVIÇOS
+====================================
+*/
+
+import {
+    sincronizarSistema
+}
+from "./services/sincronizacaoService.js";
+
+
+
 dotenv.config();
 
 
+
 const __filename = fileURLToPath(import.meta.url);
+
 const __dirname = path.dirname(__filename);
 
 
@@ -25,28 +47,40 @@ const app = express();
 
 
 const PORT = process.env.PORT || 3000;
+
 const HOST = "0.0.0.0";
 
 
 
 /*
 ====================================
- MIDDLEWARES
+ MIDDLEWARE
 ====================================
 */
 
 
 app.use(cors());
 
+
 app.use(express.json());
+
 
 app.use(compression());
 
 
 
-app.use(express.static(
-    path.join(__dirname,"public")
-));
+app.use(
+
+    express.static(
+
+        path.join(
+            __dirname,
+            "public"
+        )
+
+    )
+
+);
 
 
 
@@ -58,86 +92,109 @@ app.use(express.static(
 
 
 app.use(
+
     "/api/jogos",
+
     jogosRouter
+
 );
 
 
+
 app.use(
+
     "/api/odds",
+
     oddsRouter
+
 );
 
 
+
 app.use(
+
     "/api/analises",
+
     analisesRouter
+
 );
+
 
 
 app.use(
+
     "/api/valuebets",
+
     valuebetsRouter
+
 );
 
 
 
 /*
 ====================================
- STATUS SISTEMA
+ STATUS
 ====================================
 */
 
 
-app.get("/api/ping",(req,res)=>{
+app.get(
+    "/api/ping",
+    (req,res)=>{
 
 
-    res.json({
+        res.json({
 
-        status:"online",
+            status:"online",
 
-        sistema:"BetVision AI",
+            sistema:"BetVision AI",
 
-        versao:"1.0",
+            versao:"1.0",
 
-        timestamp:new Date()
+            horario:new Date()
 
-    });
+        });
 
 
-});
+    }
+);
 
 
 
 /*
 ====================================
- DASHBOARD PRINCIPAL
+ DASHBOARD
 ====================================
 */
 
 
-app.get("/api/dashboard",(req,res)=>{
+app.get(
+    "/api/dashboard",
+    (req,res)=>{
 
 
-    res.json({
+        res.json({
 
-        sistema:"BetVision AI",
+            sistema:"BetVision AI",
 
-        jogosHoje:0,
+            jogosHoje:0,
 
-        analisesGeradas:0,
+            campeonatos:0,
 
-        oportunidades:0,
+            analisesGeradas:0,
 
-        statusIA:"aguardando dados",
+            oportunidades:0,
 
-        servidor:"online"
-
-
-    });
+            statusIA:
+            "aguardando dados"
 
 
-});
+        });
+
+
+    }
+);
+
 
 
 
@@ -148,90 +205,88 @@ app.get("/api/dashboard",(req,res)=>{
 */
 
 
-app.get("/",(req,res)=>{
+app.get(
+    "/",
+    (req,res)=>{
 
 
-    res.sendFile(
+        res.sendFile(
 
-        path.join(
-            __dirname,
-            "public",
-            "index.html"
-        )
+            path.join(
 
-    );
+                __dirname,
 
+                "public",
 
-});
+                "index.html"
 
+            )
 
-
-/*
-====================================
- ERRO 404
-====================================
-*/
+        );
 
 
-app.use((req,res)=>{
-
-
-    res.status(404).json({
-
-        erro:"Endpoint não encontrado",
-
-        rota:req.originalUrl
-
-    });
-
-
-});
+    }
+);
 
 
 
 /*
 ====================================
- TRATAMENTO DE ERROS
-====================================
-*/
-
-
-app.use((err,req,res,next)=>{
-
-
-    console.error(
-        "Erro:",
-        err
-    );
-
-
-    res.status(500).json({
-
-        erro:"Erro interno do servidor"
-
-    });
-
-
-});
-
-
-
-/*
-====================================
- SERVIDOR HTTP
+ SERVIDOR
 ====================================
 */
 
 
 const server = app.listen(
+
     PORT,
+
     HOST,
-    ()=>{
+
+    async()=>{
 
 
         console.log(
-            `🚀 BetVision AI rodando na porta ${PORT}`
+            `🚀 BetVision AI online porta ${PORT}`
         );
+
+
+
+        /*
+        Inicializa sincronização
+        */
+
+        try{
+
+
+            const campeonatos =
+
+                await sincronizarSistema();
+
+
+
+            console.log(
+
+                `🌎 ${campeonatos.length} campeonatos sincronizados`
+
+            );
+
+
+
+        }catch(error){
+
+
+            console.error(
+
+                "Erro sincronização:",
+
+                error.message
+
+            );
+
+
+        }
+
 
 
     }
@@ -242,7 +297,7 @@ const server = app.listen(
 
 /*
 ====================================
- WEBSOCKET REAL TIME
+ WEBSOCKET
 ====================================
 */
 
@@ -255,13 +310,18 @@ const wss = new WebSocketServer({
 
 
 
+
 wss.on(
+
     "connection",
+
     (socket)=>{
 
 
         console.log(
-            "🔵 Cliente WebSocket conectado"
+
+            "🔵 Cliente conectado WebSocket"
+
         );
 
 
@@ -275,10 +335,9 @@ wss.on(
                 sistema:"BetVision AI",
 
                 mensagem:
-                "Conexão WebSocket ativa",
+                "Conectado em tempo real",
 
-                horario:
-                new Date()
+                data:new Date()
 
             })
 
@@ -286,19 +345,25 @@ wss.on(
 
 
 
+
         socket.on(
+
             "close",
+
             ()=>{
 
 
                 console.log(
-                    "Cliente WebSocket desconectado"
+
+                    "Cliente WebSocket saiu"
+
                 );
 
 
             }
 
         );
+
 
 
     }
@@ -309,7 +374,7 @@ wss.on(
 
 /*
 ====================================
- FUNÇÃO BROADCAST FUTURA
+ ENVIO TEMPO REAL
 ====================================
 */
 
@@ -318,12 +383,16 @@ export function enviarAtualizacao(dados){
 
 
     wss.clients.forEach(
+
         cliente=>{
 
 
             if(
+
                 cliente.readyState === 1
+
             ){
+
 
                 cliente.send(
 
@@ -331,11 +400,77 @@ export function enviarAtualizacao(dados){
 
                 );
 
+
             }
 
 
         }
+
     );
 
 
 }
+
+
+
+/*
+====================================
+ ERRO 404
+====================================
+*/
+
+
+app.use(
+
+(req,res)=>{
+
+
+    res.status(404).json({
+
+        erro:
+        "Rota não encontrada",
+
+        caminho:
+        req.originalUrl
+
+    });
+
+
+}
+
+);
+
+
+
+/*
+====================================
+ ERRO GLOBAL
+====================================
+*/
+
+
+app.use(
+
+(err,req,res,next)=>{
+
+
+    console.error(
+
+        err
+
+    );
+
+
+
+    res.status(500).json({
+
+        erro:
+        "Erro interno servidor"
+
+    });
+
+
+
+}
+
+);
