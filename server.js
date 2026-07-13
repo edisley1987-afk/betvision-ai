@@ -23,7 +23,13 @@ app.use(express.json());
 app.use(compression());
 
 app.use(express.static(path.join(__dirname, "public")));
+app.use("/api/jogos", jogosRouter);
 
+app.use("/api/odds", oddsRouter);
+
+app.use("/api/analises", analisesRouter);
+
+app.use("/api/valuebets", valuebetsRouter);
 
 /*
  API STATUS
