@@ -1,147 +1,29 @@
-import sqlite3 from "sqlite3";
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
+import pkg from "pg";
 
+const { Pool } = pkg;
 
-const __filename = fileURLToPath(import.meta.url);
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+        rejectUnauthorized: false
+    }
+});
 
-const __dirname = path.dirname(__filename);
+export async function conectarBanco() {
+    try {
+        const client = await pool.connect();
 
+        console.log("🐘 PostgreSQL conectado");
 
+        client.release();
 
-sqlite3.verbose();
+    } catch (erro) {
 
+        console.error("Erro ao conectar PostgreSQL");
 
+        console.error(erro);
 
-const caminhoBanco = path.join(
-
-    __dirname,
-
-    "../data",
-
-    "betvision.db"
-
-);
-
-
-
-/*
- Criar pasta data
-*/
-
-
-if(!fs.existsSync(
-
-    path.dirname(caminhoBanco)
-
-)){
-
-    fs.mkdirSync(
-
-        path.dirname(caminhoBanco),
-
-        {
-            recursive:true
-        }
-
-    );
-
+    }
 }
 
-
-
-const db = new sqlite3.Database(
-
-    caminhoBanco,
-
-    (erro)=>{
-
-
-        if(erro){
-
-            console.error(
-
-                "Erro banco:",
-                erro
-
-            );
-
-        }
-        else{
-
-            console.log(
-
-                "🗄️ SQLite conectado"
-
-            );
-
-        }
-
-
-    }
-
-);
-
-
-
-
-/*
- Executar schema
-*/
-
-
-const schema = fs.readFileSync(
-
-    path.join(
-
-        __dirname,
-
-        "schema.sql"
-
-    ),
-
-    "utf8"
-
-);
-
-
-
-db.exec(
-
-    schema,
-
-    (erro)=>{
-
-
-        if(erro){
-
-            console.error(
-
-                "Erro criando tabelas",
-
-                erro
-
-            );
-
-        }
-
-        else{
-
-            console.log(
-
-                "✅ Banco estruturado"
-
-            );
-
-        }
-
-
-    }
-
-);
-
-
-
-
-export default db;
+export default pool;
