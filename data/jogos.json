@@ -1,0 +1,21 @@
+{
+  "total": 1,
+  "jogos": [
+    {
+      "id": 1,
+      "campeonato": "Brasileirão",
+      "casa": "Time A",
+      "fora": "Time B",
+      "horario": "20:00",
+
+      "analiseIA": {
+        "probabilidadeCasa": 45,
+        "probabilidadeEmpate": 30,
+        "probabilidadeFora": 25,
+        "placarPrevisto": "1x0",
+        "golsEsperados": 2.1,
+        "valueBet": true
+      }
+    }
+  ]
+}
