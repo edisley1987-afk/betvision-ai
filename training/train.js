@@ -1,0 +1,1 @@
+console.log('Treinamento placeholder');

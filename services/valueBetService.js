@@ -1,0 +1,1 @@
+export const calcularValue=(p,odd)=>({ev:(p*odd-1).toFixed(2)});

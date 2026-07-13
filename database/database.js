@@ -1,0 +1,1 @@
+export function connect(){ console.log('DB'); }

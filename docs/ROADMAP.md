@@ -1,0 +1,1 @@
+Painel, PWA, WebSocket, Alertas, Tema, Produção.

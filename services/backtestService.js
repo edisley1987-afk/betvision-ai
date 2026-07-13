@@ -1,0 +1,1 @@
+export function backtest(){return {roi:0};}

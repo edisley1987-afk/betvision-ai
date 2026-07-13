@@ -1,0 +1,1 @@
+import {Router} from 'express'; const r=Router(); r.get('/',(q,s)=>s.json([])); export default r;

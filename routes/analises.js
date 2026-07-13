@@ -1,0 +1,1 @@
+import {Router} from 'express'; const r=Router(); r.get('/',(q,s)=>s.json([{id:1,jogo:'Flamengo x Palmeiras'}])); export default r;

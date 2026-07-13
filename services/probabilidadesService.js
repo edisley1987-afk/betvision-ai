@@ -1,0 +1,1 @@
+export const prob=()=>({casa:58,empate:24,fora:18});

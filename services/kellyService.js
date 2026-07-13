@@ -1,0 +1,1 @@
+export function kelly(bankroll,edge,odds){return bankroll*((edge)/(odds-1));}

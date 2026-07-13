@@ -1,0 +1,1 @@
+const jogos=[{c:'Brasileirão',m:'Flamengo',v:'Palmeiras',p:'58%'}];const g=document.getElementById('games');jogos.forEach(j=>g.innerHTML+=`<div class='game'><h3>${j.m} x ${j.v}</h3><p>${j.c}</p><strong>Probabilidade: ${j.p}</strong></div>`);

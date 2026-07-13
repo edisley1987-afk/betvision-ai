@@ -1,0 +1,1 @@
+import {Router} from 'express'; const r=Router(); r.post('/login',(q,s)=>s.json({token:'demo'})); export default r;

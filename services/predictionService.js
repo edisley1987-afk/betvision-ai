@@ -1,0 +1,1 @@
+export function prever(){return {casa:58,empate:24,fora:18};}
