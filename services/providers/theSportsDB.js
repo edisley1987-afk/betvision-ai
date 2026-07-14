@@ -1,49 +1,60 @@
-import axios from "axios";
+import {
+    buscarEventosLiga
+}
+from "./providers/theSportsDB.js";
 
 
-const BASE_URL =
-"https://www.thesportsdb.com/api/v1/json/123";
+
+export async function buscarJogos(){
+
+
+    const eventos = await buscarEventosLiga(4351);
 
 
 
-export async function buscarEventosLiga(idLiga){
-
-
-    try{
-
-
-        const resposta = await axios.get(
-
-            `${BASE_URL}/eventsnextleague.php?id=${idLiga}`
-
-        );
-
-
-        console.log(
-            "Resposta TheSportsDB:",
-            resposta.data
-        );
-
-
-        return resposta.data.events || [];
-
-
-    }
-
-    catch(error){
-
-
-        console.error(
-
-            "Erro TheSportsDB:",
-            error.message
-
-        );
-
+    if(!Array.isArray(eventos)){
 
         return [];
 
     }
+
+
+
+    return eventos.map(evento => ({
+
+
+        id: evento.idEvent,
+
+
+        campeonato:
+        evento.strLeague || "Futebol",
+
+
+        casa:
+        evento.strHomeTeam,
+
+
+        fora:
+        evento.strAwayTeam,
+
+
+        horario:
+        evento.dateEvent,
+
+
+        hora:
+        evento.strTime,
+
+
+        estadio:
+        evento.strVenue,
+
+
+        status:
+        evento.strStatus || "Agendado"
+
+
+    }));
 
 
 }
