@@ -1,6 +1,9 @@
 import express from "express";
 import { buscarJogos } from "../services/futebolService.js";
 import db from "../database/database.js";
+import { buscarOdds } from "../services/oddsService.js";
+import { calcularValueBet } from "../services/valueBetService.js";
+
 
 const router = express.Router();
 
@@ -8,119 +11,163 @@ const router = express.Router();
 
 /*
 ====================================
- Lista jogos disponíveis
- Salva análises IA e Value Bets
+ LISTA JOGOS DISPONÍVEIS
+
+ Fluxo:
+
+ Jogos
+   ↓
+ IA
+   ↓
+ Odds
+   ↓
+ Value Bet
+   ↓
+ Banco
+
 ====================================
 */
 
+
 router.get("/", async (req,res)=>{
+
 
     try{
 
+
         const jogos = await buscarJogos();
+
 
 
         for (const jogo of jogos) {
 
 
+
             if (!jogo.analiseIA) {
+
                 continue;
+
             }
 
 
-            const analise = jogo.analiseIA;
+
+            const analise =
+            jogo.analiseIA;
 
 
 
-            // Salvar análise IA
+
+            /*
+            ====================================
+            SALVAR ANÁLISE IA
+            ====================================
+            */
+
 
             await db.query(
 
-                `
-                INSERT INTO analises (
+            `
+            INSERT INTO analises (
 
-                    jogo,
+                jogo,
 
-                    probabilidade_casa,
+                probabilidade_casa,
 
-                    probabilidade_empate,
+                probabilidade_empate,
 
-                    probabilidade_fora,
+                probabilidade_fora,
 
-                    gols_esperados,
+                gols_esperados,
 
-                    placar_previsto,
+                placar_previsto,
 
-                    value_bet,
+                value_bet,
 
-                    confianca,
+                confianca,
 
-                    algoritmo
+                algoritmo
 
-                )
+            )
 
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
 
-                `,
+            `,
 
-                [
 
-                    analise.jogo,
+            [
 
-                    analise.probabilidadeCasa,
+                analise.jogo,
 
-                    analise.probabilidadeEmpate,
+                analise.probabilidadeCasa,
 
-                    analise.probabilidadeFora,
+                analise.probabilidadeEmpate,
 
-                    analise.golsEsperados,
+                analise.probabilidadeFora,
 
-                    analise.placarPrevisto,
+                analise.golsEsperados,
 
-                    analise.valueBet,
+                analise.placarPrevisto,
 
-                    analise.confianca,
+                analise.valueBet,
 
-                    analise.algoritmo
+                analise.confianca,
 
-                ]
+                analise.algoritmo
+
+            ]
 
             );
 
 
 
 
-            // Se for Value Bet, salvar também
 
-            if (analise.valueBet === true) {
+            /*
+            ====================================
+            CALCULAR VALUE BET
+            ====================================
+            */
 
 
-                await db.query(
+            try{
 
-                    `
-                    INSERT INTO valuebets (
 
-                        jogo,
+                const odds =
+                await buscarOdds(
+                    jogo.id
+                );
 
-                        mercado,
 
-                        confianca
 
-                    )
+                const resultadoValueBet =
 
-                    VALUES ($1,$2,$3)
+                await calcularValueBet(
 
-                    `,
+                    jogo,
 
-                    [
+                    analise,
 
-                        analise.jogo,
+                    odds
 
-                        "Resultado Final",
+                );
 
-                        analise.confianca
 
-                    ]
+
+
+                jogo.valueBet =
+                resultadoValueBet;
+
+
+
+            }
+
+            catch(error){
+
+
+                console.log(
+
+                    "Erro calculando Value Bet:",
+                    error.message
 
                 );
 
@@ -128,7 +175,10 @@ router.get("/", async (req,res)=>{
             }
 
 
+
         }
+
+
 
 
 
@@ -142,22 +192,32 @@ router.get("/", async (req,res)=>{
 
 
 
-    }catch(error){
+
+
+    }
+
+    catch(error){
+
 
 
         console.error(error);
 
 
+
         res.status(500).json({
 
-            erro:"Erro ao buscar jogos",
+            erro:
+            "Erro ao buscar jogos",
 
-            detalhe:error.message
+            detalhe:
+            error.message
 
         });
 
 
+
     }
+
 
 });
 
