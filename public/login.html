@@ -1,1 +1,201 @@
-<!doctype html><html><body><h1>Login</h1></body></html>
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>BetVision AI | Login</title>
+
+    <meta name="description"
+          content="Login do BetVision AI">
+
+    <link rel="stylesheet" href="style.css">
+
+    <link rel="icon" href="favicon/favicon.ico">
+
+</head>
+
+<body>
+
+<header>
+
+    <div class="logo">
+
+        <h1>⚽ BetVision AI</h1>
+
+        <p>Área Restrita</p>
+
+    </div>
+
+</header>
+
+<main class="container">
+
+<div class="card fade-in" style="max-width:500px;margin:auto;">
+
+    <h2>Entrar no Sistema</h2>
+
+    <p>
+
+        Faça login para acessar os recursos administrativos
+        do BetVision AI.
+
+    </p>
+
+    <br>
+
+    <form id="formLogin">
+
+        <label>E-mail</label>
+
+        <input
+            type="email"
+            id="email"
+            placeholder="Digite seu e-mail"
+            required>
+
+        <label>Senha</label>
+
+        <input
+            type="password"
+            id="senha"
+            placeholder="Digite sua senha"
+            required>
+
+        <br>
+
+        <button
+            type="submit"
+            class="btn-primary">
+
+            Entrar
+
+        </button>
+
+    </form>
+
+    <br>
+
+    <div id="mensagem"></div>
+
+    <hr>
+
+    <p>
+
+        Não possui conta?
+
+        <a href="register.html">
+
+            Criar conta
+
+        </a>
+
+    </p>
+
+</div>
+</main>
+
+<footer>
+
+    <p>
+
+        © 2026 BetVision AI • Login Seguro
+
+    </p>
+
+</footer>
+
+<script>
+
+const form = document.getElementById("formLogin");
+
+form.addEventListener("submit", async (e) => {
+
+    e.preventDefault();
+
+    const email = document.getElementById("email").value.trim();
+    const senha = document.getElementById("senha").value;
+
+    const mensagem = document.getElementById("mensagem");
+
+    mensagem.innerHTML = "";
+
+    try {
+
+        const resposta = await fetch("/api/login", {
+
+            method: "POST",
+
+            headers: {
+                "Content-Type": "application/json"
+            },
+
+            body: JSON.stringify({
+                email,
+                senha
+            })
+
+        });
+
+        const dados = await resposta.json();
+
+        if (!resposta.ok) {
+
+            throw new Error(
+                dados.erro || "Usuário ou senha inválidos."
+            );
+
+        }
+
+        if (dados.token) {
+
+            localStorage.setItem(
+                "token",
+                dados.token
+            );
+
+        }
+
+        mensagem.innerHTML = `
+
+            <div class="alert alert-success">
+
+                Login realizado com sucesso.
+
+            </div>
+
+        `;
+
+        setTimeout(() => {
+
+            window.location.href = "admin.html";
+
+        }, 1000);
+
+    }
+
+    catch (erro) {
+
+        mensagem.innerHTML = `
+
+            <div class="alert alert-danger">
+
+                ${erro.message}
+
+            </div>
+
+        `;
+
+    }
+
+});
+
+</script>
+
+</body>
+
+</html>
