@@ -198,11 +198,11 @@ async function criarTabelas(){
     }
 
 }
+/*
 ====================================
  MIDDLEWARES
 ====================================
 */
-
 
 app.use(
     helmet()
