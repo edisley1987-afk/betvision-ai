@@ -1,1 +1,804 @@
-body{margin:0;display:flex;font-family:Arial;background:#0f172a;color:#fff}.sidebar{width:220px;background:#111827;height:100vh;padding:20px}.sidebar a{display:block;color:#fff;text-decoration:none;margin:12px 0}.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.card{background:#1f2937;padding:16px;border-radius:10px}.game{background:#1f2937;margin-top:16px;padding:16px;border-radius:10px}
+/* ==========================================================
+   BetVision AI
+   style.css
+   Parte 1/5
+========================================================== */
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+html{
+    scroll-behavior:smooth;
+}
+
+body{
+
+    font-family:Arial,Helvetica,sans-serif;
+
+    background:#0d1117;
+
+    color:#ecf0f1;
+
+    overflow-x:hidden;
+
+}
+
+/* ==========================================================
+   LAYOUT
+========================================================== */
+
+.layout{
+
+    display:flex;
+
+    min-height:100vh;
+
+}
+
+/* ==========================================================
+   SIDEBAR
+========================================================== */
+
+.sidebar{
+
+    width:260px;
+
+    background:#111827;
+
+    border-right:1px solid #1f2937;
+
+    position:fixed;
+
+    top:0;
+
+    left:0;
+
+    bottom:0;
+
+    padding:30px 20px;
+
+}
+
+.logo{
+
+    text-align:center;
+
+    margin-bottom:40px;
+
+}
+
+.logo h1{
+
+    color:#00d084;
+
+    font-size:30px;
+
+}
+
+.logo p{
+
+    color:#95a5a6;
+
+    margin-top:10px;
+
+    font-size:14px;
+
+}
+
+.sidebar nav{
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:12px;
+
+}
+
+.sidebar nav a{
+
+    color:#ecf0f1;
+
+    text-decoration:none;
+
+    padding:14px;
+
+    border-radius:10px;
+
+    transition:.3s;
+
+    font-size:16px;
+
+}
+
+.sidebar nav a:hover{
+
+    background:#00d084;
+
+    color:#000;
+
+}
+
+/* ==========================================================
+   CONTEÚDO
+========================================================== */
+
+.conteudo{
+
+    margin-left:260px;
+
+    width:calc(100% - 260px);
+
+    padding:30px;
+
+}
+
+/* ==========================================================
+   HEADER
+========================================================== */
+
+.topo{
+
+    display:flex;
+
+    justify-content:space-between;
+
+    align-items:center;
+
+    margin-bottom:30px;
+
+}
+
+.topo h2{
+
+    font-size:34px;
+
+    color:white;
+
+}
+
+.topo p{
+
+    margin-top:8px;
+
+    color:#95a5a6;
+
+}
+
+/* ==========================================================
+   STATUS
+========================================================== */
+
+.status{
+
+    padding:10px 18px;
+
+    border-radius:30px;
+
+    font-weight:bold;
+
+}
+
+.online{
+
+    background:#00d084;
+
+    color:#000;
+
+}
+
+.offline{
+
+    background:#e74c3c;
+
+    color:white;
+
+}
+
+/* ==========================================================
+   KPIs
+========================================================== */
+
+.kpis{
+
+    display:grid;
+
+    grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+
+    gap:20px;
+
+    margin-bottom:35px;
+
+}
+
+.card{
+
+    background:#161b22;
+
+    border:1px solid #30363d;
+
+    border-radius:14px;
+
+    padding:25px;
+
+    transition:.3s;
+
+}
+
+.card:hover{
+
+    transform:translateY(-6px);
+
+    box-shadow:0 12px 35px rgba(0,208,132,.18);
+
+}
+
+.card h3{
+
+    color:#9ca3af;
+
+    margin-bottom:15px;
+
+    font-size:15px;
+
+}
+
+.card h1{
+
+    font-size:38px;
+
+    color:#00d084;
+
+}
+/* ==========================================================
+   PAINÉIS
+========================================================== */
+
+.painel{
+
+    background:#161b22;
+
+    border:1px solid #30363d;
+
+    border-radius:15px;
+
+    margin-bottom:30px;
+
+    overflow:hidden;
+
+}
+
+.painel-header{
+
+    display:flex;
+
+    justify-content:space-between;
+
+    align-items:center;
+
+    padding:20px 25px;
+
+    background:#1f2937;
+
+    border-bottom:1px solid #30363d;
+
+}
+
+.painel-header h2{
+
+    color:#ffffff;
+
+    font-size:22px;
+
+    font-weight:600;
+
+}
+
+.painel-body{
+
+    padding:25px;
+
+}
+
+/* ==========================================================
+   RESUMO
+========================================================== */
+
+.resumo-grid{
+
+    display:grid;
+
+    grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+
+    gap:20px;
+
+}
+
+.resumo-grid div{
+
+    background:#0f172a;
+
+    border:1px solid #30363d;
+
+    border-radius:12px;
+
+    padding:20px;
+
+}
+
+.resumo-grid strong{
+
+    display:block;
+
+    color:#00d084;
+
+    margin-bottom:10px;
+
+    font-size:15px;
+
+}
+
+.resumo-grid p{
+
+    color:#ecf0f1;
+
+    font-size:16px;
+
+}
+
+/* ==========================================================
+   LISTAS
+========================================================== */
+
+.lista{
+
+    padding:20px;
+
+}
+
+.loading{
+
+    text-align:center;
+
+    color:#9ca3af;
+
+    padding:35px;
+
+    font-size:16px;
+
+}
+
+/* ==========================================================
+   CARDS DAS ANÁLISES
+========================================================== */
+
+.item{
+
+    background:#111827;
+
+    border:1px solid #30363d;
+
+    border-radius:12px;
+
+    padding:18px;
+
+    margin-bottom:18px;
+
+    transition:.3s;
+
+}
+
+.item:hover{
+
+    border-color:#00d084;
+
+    transform:translateY(-3px);
+
+}
+
+.item h3{
+
+    color:#ffffff;
+
+    margin-bottom:12px;
+
+    font-size:19px;
+
+}
+
+.item p{
+
+    color:#cbd5e1;
+
+    margin:6px 0;
+
+    font-size:15px;
+
+}
+
+/* ==========================================================
+   BADGES
+========================================================== */
+
+.badge{
+
+    display:inline-block;
+
+    padding:6px 12px;
+
+    border-radius:20px;
+
+    font-size:13px;
+
+    font-weight:bold;
+
+    margin-top:10px;
+
+}
+
+.badge-alta{
+
+    background:#00d084;
+
+    color:#000;
+
+}
+
+.badge-media{
+
+    background:#f39c12;
+
+    color:#fff;
+
+}
+
+.badge-baixa{
+
+    background:#e74c3c;
+
+    color:#fff;
+
+}
+
+/* ==========================================================
+   VALUE BET
+========================================================== */
+
+.value{
+
+    border-left:5px solid #00d084;
+
+}
+
+.sem-value{
+
+    border-left:5px solid #444;
+
+}
+
+/* ==========================================================
+   TABELAS
+========================================================== */
+
+table{
+
+    width:100%;
+
+    border-collapse:collapse;
+
+}
+
+table th{
+
+    background:#1f2937;
+
+    color:#00d084;
+
+    padding:15px;
+
+    text-align:left;
+
+    font-weight:600;
+
+}
+
+table td{
+
+    padding:15px;
+
+    border-bottom:1px solid #30363d;
+
+    color:#ecf0f1;
+
+}
+
+table tr:hover{
+
+    background:#111827;
+
+}
+/* ==========================================
+   JOGOS
+========================================== */
+
+.jogo-card {
+    background: #1e293b;
+    border-left: 5px solid #3b82f6;
+    border-radius: 12px;
+    padding: 18px;
+    margin-bottom: 16px;
+    transition: .3s;
+}
+
+.jogo-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 25px rgba(0,0,0,.25);
+}
+
+.jogo-times {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 18px;
+    font-weight: bold;
+    color: white;
+}
+
+.jogo-info {
+    margin-top: 12px;
+    color: #94a3b8;
+    font-size: 14px;
+}
+
+/* ==========================================
+   ANÁLISES IA
+========================================== */
+
+.analise-card {
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 18px;
+}
+
+.analise-card h3 {
+    color: #3b82f6;
+    margin-bottom: 12px;
+}
+
+.analise-card strong {
+    color: white;
+}
+
+.analise-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit,minmax(180px,1fr));
+    gap: 12px;
+    margin-top: 15px;
+}
+
+.analise-item {
+    background: #1e293b;
+    border-radius: 10px;
+    padding: 14px;
+    text-align: center;
+}
+
+.analise-item h4 {
+    color: #94a3b8;
+    font-size: 13px;
+    margin-bottom: 8px;
+}
+
+.analise-item span {
+    font-size: 22px;
+    font-weight: bold;
+    color: white;
+}
+
+/* ==========================================
+   VALUE BET
+========================================== */
+
+.valuebet {
+    border-left: 6px solid #22c55e;
+    background: rgba(34,197,94,.08);
+}
+
+.valuebet h3 {
+    color: #4ade80;
+}
+
+.valuebet strong {
+    color: #22c55e;
+}
+
+/* ==========================================
+   STATUS
+========================================== */
+
+.status-online {
+    color: #22c55e;
+    font-weight: bold;
+}
+
+.status-offline {
+    color: #ef4444;
+    font-weight: bold;
+}
+
+.status-warning {
+    color: #facc15;
+    font-weight: bold;
+}
+
+/* ==========================================
+   LOADING
+========================================== */
+
+.loading {
+    text-align: center;
+    padding: 40px;
+    color: #94a3b8;
+}
+
+.spinner {
+    width: 42px;
+    height: 42px;
+    border: 4px solid rgba(255,255,255,.12);
+    border-top: 4px solid #3b82f6;
+    border-radius: 50%;
+    margin: auto;
+    animation: girar 1s linear infinite;
+}
+
+@keyframes girar {
+
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+
+}
+
+/* ==========================================
+   ALERTAS
+========================================== */
+
+.alert {
+    padding: 15px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    font-weight: 600;
+}
+
+.alert-success {
+    background: rgba(34,197,94,.12);
+    color: #4ade80;
+}
+
+.alert-danger {
+    background: rgba(239,68,68,.12);
+    color: #f87171;
+}
+
+.alert-warning {
+    background: rgba(245,158,11,.12);
+    color: #facc15;
+}
+
+.alert-info {
+    background: rgba(59,130,246,.12);
+    color: #60a5fa;
+}
+
+/* ==========================================
+   FOOTER
+========================================== */
+
+footer {
+    margin-top: 50px;
+    padding: 25px;
+    text-align: center;
+    color: #94a3b8;
+    border-top: 1px solid #334155;
+    font-size: 14px;
+}
+
+/* ==========================================
+   ANIMAÇÕES
+========================================== */
+
+.fade-in {
+    animation: fadeIn .5s ease;
+}
+
+@keyframes fadeIn {
+
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+}
+
+/* ==========================================
+   RESPONSIVO
+========================================== */
+
+@media (max-width: 1024px) {
+
+    .cards {
+        grid-template-columns: repeat(2,1fr);
+    }
+
+}
+
+@media (max-width: 768px) {
+
+    header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 15px;
+    }
+
+    .cards {
+        grid-template-columns: 1fr;
+    }
+
+    .analise-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .jogo-times {
+        flex-direction: column;
+        gap: 10px;
+        text-align: center;
+    }
+
+    table {
+        display: block;
+        overflow-x: auto;
+    }
+
+}
+
+@media (max-width: 480px) {
+
+    body {
+        font-size: 14px;
+    }
+
+    h1 {
+        font-size: 24px;
+    }
+
+    .card {
+        padding: 16px;
+    }
+
+    .kpi h2 {
+        font-size: 28px;
+    }
+
+    button {
+        width: 100%;
+    }
+
+}
+
+/* ==========================================
+   FIM
+========================================== */
