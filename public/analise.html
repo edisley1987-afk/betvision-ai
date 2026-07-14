@@ -1,1 +1,269 @@
-<!doctype html><html><body><h1>Análise</h1></body></html>
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>BetVision AI | Análises</title>
+
+    <meta name="description"
+        content="Análises inteligentes de partidas utilizando IA, estatística e probabilidades.">
+
+    <link rel="stylesheet" href="style.css">
+
+    <link rel="icon" href="favicon/favicon.ico">
+
+</head>
+
+<body>
+
+<header>
+
+    <div class="logo">
+
+        <h1>⚽ BetVision AI</h1>
+
+        <p>Inteligência Artificial para Apostas</p>
+
+    </div>
+
+    <nav>
+
+        <a href="index.html">Dashboard</a>
+        <a href="analise.html" class="ativo">Análises</a>
+        <a href="ia.html">IA</a>
+        <a href="admin.html">Admin</a>
+
+    </nav>
+
+</header>
+
+<main class="container">
+
+    <section class="card fade-in">
+
+        <h2>📊 Análises Inteligentes</h2>
+
+        <p>
+
+            As análises abaixo são geradas automaticamente utilizando
+            modelos estatísticos, probabilidades, expectativa de gols,
+            Value Bet e algoritmos de Inteligência Artificial.
+
+        </p>
+
+    </section>
+
+    <section class="cards">
+
+        <div class="kpi">
+
+            <h3>Total de Análises</h3>
+
+            <h2 id="totalAnalises">0</h2>
+
+        </div>
+
+        <div class="kpi">
+
+            <h3>Value Bets</h3>
+
+            <h2 id="totalValueBets">0</h2>
+
+        </div>
+
+        <div class="kpi">
+
+            <h3>Confiança Alta</h3>
+
+            <h2 id="totalAlta">0</h2>
+
+        </div>
+
+    </section>
+
+    <section class="card">
+
+        <h2>Lista de Análises</h2>
+
+        <div id="loadingAnalises" class="loading">
+
+            <div class="spinner"></div>
+
+            <p>Carregando análises...</p>
+
+        </div>
+
+        <div id="listaAnalises">
+
+        </div>
+
+    </section>
+        </main>
+
+    <footer>
+
+        <p>
+
+            © 2026 BetVision AI • Inteligência Artificial para Apostas Esportivas
+
+        </p>
+
+    </footer>
+
+<script>
+
+async function carregarAnalises() {
+
+    const loading = document.getElementById("loadingAnalises");
+    const lista = document.getElementById("listaAnalises");
+
+    loading.style.display = "block";
+    lista.innerHTML = "";
+
+    try {
+
+        const resposta = await fetch("/api/analises");
+
+        if (!resposta.ok) {
+            throw new Error("Erro ao carregar análises.");
+        }
+
+        const dados = await resposta.json();
+
+        loading.style.display = "none";
+
+        document.getElementById("totalAnalises").textContent =
+            dados.total || 0;
+
+        let totalVB = 0;
+        let totalAlta = 0;
+
+        if (!dados.analises || dados.analises.length === 0) {
+
+            lista.innerHTML = `
+
+                <div class="alert alert-warning">
+
+                    Nenhuma análise encontrada.
+
+                </div>
+
+            `;
+
+            return;
+
+        }
+
+        dados.analises.forEach(analise => {
+
+            if (analise.value_bet)
+                totalVB++;
+
+            if (
+                analise.confianca &&
+                analise.confianca.toLowerCase() === "alta"
+            )
+                totalAlta++;
+
+            lista.innerHTML += `
+
+            <div class="analise-card fade-in ${analise.value_bet ? "valuebet" : ""}">
+
+                <h3>${analise.jogo}</h3>
+
+                <div class="analise-grid">
+
+                    <div class="analise-item">
+                        <h4>Casa</h4>
+                        <span>${analise.probabilidade_casa}%</span>
+                    </div>
+
+                    <div class="analise-item">
+                        <h4>Empate</h4>
+                        <span>${analise.probabilidade_empate}%</span>
+                    </div>
+
+                    <div class="analise-item">
+                        <h4>Fora</h4>
+                        <span>${analise.probabilidade_fora}%</span>
+                    </div>
+
+                    <div class="analise-item">
+                        <h4>Gols Esperados</h4>
+                        <span>${analise.gols_esperados}</span>
+                    </div>
+
+                    <div class="analise-item">
+                        <h4>Placar</h4>
+                        <span>${analise.placar_previsto}</span>
+                    </div>
+
+                    <div class="analise-item">
+                        <h4>Confiança</h4>
+                        <span>${analise.confianca}</span>
+                    </div>
+
+                </div>
+
+                <br>
+
+                <p>
+
+                    <strong>Algoritmo:</strong>
+                    ${analise.algoritmo}
+
+                </p>
+
+                <p>
+
+                    <strong>Value Bet:</strong>
+
+                    ${analise.value_bet
+                        ? '<span class="badge badge-success">SIM</span>'
+                        : '<span class="badge badge-danger">NÃO</span>'}
+
+                </p>
+
+            </div>
+
+            `;
+
+        });
+
+        document.getElementById("totalValueBets").textContent = totalVB;
+        document.getElementById("totalAlta").textContent = totalAlta;
+
+    }
+
+    catch (erro) {
+
+        loading.style.display = "none";
+
+        lista.innerHTML = `
+
+            <div class="alert alert-danger">
+
+                ${erro.message}
+
+            </div>
+
+        `;
+
+        console.error(erro);
+
+    }
+
+}
+
+carregarAnalises();
+
+setInterval(carregarAnalises, 30000);
+
+</script>
+
+</body>
+
+</html>
