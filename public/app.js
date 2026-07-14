@@ -508,7 +508,68 @@ new Date()
 
 
 );
+// ======================================================
+// DEBUG BANCO
+// ======================================================
 
+app.get("/api/debug-db", async (req, res) => {
+
+    try {
+
+        const resultado = {};
+
+        // Campeonatos
+        try {
+            const r = await db.query("SELECT COUNT(*) FROM campeonatos");
+            resultado.campeonatos = Number(r.rows[0].count);
+        } catch (e) {
+            resultado.campeonatos = e.message;
+        }
+
+        // Jogos
+        try {
+            const r = await db.query("SELECT COUNT(*) FROM jogos");
+            resultado.jogos = Number(r.rows[0].count);
+        } catch (e) {
+            resultado.jogos = e.message;
+        }
+
+        // Análises
+        try {
+            const r = await db.query("SELECT COUNT(*) FROM analises");
+            resultado.analises = Number(r.rows[0].count);
+        } catch (e) {
+            resultado.analises = e.message;
+        }
+
+        // Value Bets
+        try {
+            const r = await db.query("SELECT COUNT(*) FROM valuebets");
+            resultado.valuebets = Number(r.rows[0].count);
+        } catch (e) {
+            resultado.valuebets = e.message;
+        }
+
+        // Informações do banco
+        try {
+            const r = await db.query("SELECT current_database(), current_user");
+            resultado.database = r.rows[0];
+        } catch (e) {
+            resultado.database = e.message;
+        }
+
+        res.json(resultado);
+
+    } catch (erro) {
+
+        res.status(500).json({
+            erro: erro.message,
+            stack: erro.stack
+        });
+
+    }
+
+});
 
 
 
