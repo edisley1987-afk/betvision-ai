@@ -1,1 +1,102 @@
-<!doctype html><html><body><h1>Cadastro</h1></body></html>
+</main>
+
+<footer>
+
+    <p>
+
+        © 2026 BetVision AI • Login Seguro
+
+    </p>
+
+</footer>
+
+<script>
+
+const form = document.getElementById("formLogin");
+
+form.addEventListener("submit", async (e) => {
+
+    e.preventDefault();
+
+    const email = document.getElementById("email").value.trim();
+    const senha = document.getElementById("senha").value;
+
+    const mensagem = document.getElementById("mensagem");
+
+    mensagem.innerHTML = "";
+
+    try {
+
+        const resposta = await fetch("/api/login", {
+
+            method: "POST",
+
+            headers: {
+                "Content-Type": "application/json"
+            },
+
+            body: JSON.stringify({
+                email,
+                senha
+            })
+
+        });
+
+        const dados = await resposta.json();
+
+        if (!resposta.ok) {
+
+            throw new Error(
+                dados.erro || "Usuário ou senha inválidos."
+            );
+
+        }
+
+        if (dados.token) {
+
+            localStorage.setItem(
+                "token",
+                dados.token
+            );
+
+        }
+
+        mensagem.innerHTML = `
+
+            <div class="alert alert-success">
+
+                Login realizado com sucesso.
+
+            </div>
+
+        `;
+
+        setTimeout(() => {
+
+            window.location.href = "admin.html";
+
+        }, 1000);
+
+    }
+
+    catch (erro) {
+
+        mensagem.innerHTML = `
+
+            <div class="alert alert-danger">
+
+                ${erro.message}
+
+            </div>
+
+        `;
+
+    }
+
+});
+
+</script>
+
+</body>
+
+</html>
