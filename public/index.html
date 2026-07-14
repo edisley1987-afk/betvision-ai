@@ -1,273 +1,659 @@
-```html
 <!DOCTYPE html>
 <html lang="pt-BR">
 
 <head>
 
-<meta charset="UTF-8">
+    <meta charset="UTF-8">
 
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
 
-<title>BetVision AI - Dashboard</title>
+    <title>BetVision AI</title>
 
-<link rel="stylesheet" href="style.css">
+    <meta name="description"
+          content="Plataforma de Inteligência Artificial para análise de apostas esportivas">
+
+    <link rel="icon"
+          href="favicon.ico">
+
+    <link rel="manifest"
+          href="pwa-manifest.json">
+
+    <link rel="stylesheet"
+          href="style.css">
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 </head>
 
-
 <body>
 
+<div class="layout">
 
-<!-- MENU LATERAL -->
+<!-- ====================================== -->
+<!-- SIDEBAR -->
+<!-- ====================================== -->
 
 <aside class="sidebar">
 
-<div class="logo">
+    <div class="logo">
 
-<h2>⚽ BetVision AI</h2>
+        <h1>⚽ BetVision AI</h1>
 
-<p>Inteligência em Apostas</p>
+        <p>Inteligência Artificial</p>
 
-</div>
+    </div>
 
+    <nav>
 
-<nav>
+        <a href="#dashboard">
+            📊 Dashboard
+        </a>
 
-<a href="index.html">
-🏠 Dashboard
-</a>
+        <a href="#jogos">
+            ⚽ Jogos
+        </a>
 
+        <a href="#analises">
+            🤖 IA
+        </a>
 
-<a href="analise.html">
-⚽ Jogos
-</a>
+        <a href="#valuebets">
+            💎 Value Bets
+        </a>
 
+        <a href="#estatisticas">
+            📈 Estatísticas
+        </a>
 
-<a href="ia.html">
-🤖 Análises IA
-</a>
-
-
-<a href="admin.html">
-⚙️ Administração
-</a>
-
-
-</nav>
-
+    </nav>
 
 </aside>
 
+<!-- ====================================== -->
+<!-- CONTEÚDO -->
+<!-- ====================================== -->
 
+<main class="conteudo">
 
-
-<!-- CONTEÚDO PRINCIPAL -->
-
-<main>
-
-
-<header class="topbar">
+<header class="topo">
 
 <div>
 
-<h1>
+<h2>
 Dashboard Inteligente
-</h1>
+</h2>
 
-<p>
-Análise preditiva de partidas e oportunidades de valor
+<p id="ultimaAtualizacao">
+
+Carregando...
+
 </p>
 
 </div>
 
+<div id="statusServidor"
+     class="status online">
 
-<div class="status">
-
-🟢 Sistema Online
+🟢 Online
 
 </div>
-
 
 </header>
 
-
-
-
-
-<!-- INDICADORES -->
+<!-- ====================================== -->
+<!-- KPIs -->
+<!-- ====================================== -->
 
 <section class="kpis">
 
+<div class="card">
 
-<div class="card kpi">
+<h3>Jogos Hoje</h3>
 
-<h3>
-⚽ Jogos Hoje
-</h3>
+<h1 id="jogosHoje">
 
-
-<strong id="totalJogos">
 0
-</strong>
 
-
-</div>
-
-
-
-
-
-<div class="card kpi">
-
-<h3>
-💰 Value Bets
-</h3>
-
-
-<strong id="valueBets">
-0
-</strong>
-
+</h1>
 
 </div>
-
-
-
-
-
-<div class="card kpi">
-
-<h3>
-📈 ROI Previsto
-</h3>
-
-
-<strong id="roi">
-0%
-</strong>
-
-
-</div>
-
-
-
-
-
-<div class="card kpi">
-
-<h3>
-🤖 Precisão IA
-</h3>
-
-
-<strong id="precisao">
-0%
-</strong>
-
-
-</div>
-
-
-</section>
-
-
-
-
-
-
-
-<!-- JOGOS ANALISADOS -->
-
-<section class="dashboard-section">
-
-
-<h2>
-🔥 Melhores Oportunidades do Dia
-</h2>
-
-
-
-<div id="games" class="games-grid">
-
 
 <div class="card">
 
-<p>
-Carregando análises da inteligência artificial...
-</p>
+<h3>Campeonatos</h3>
 
+<h1 id="campeonatos">
+
+0
+
+</h1>
 
 </div>
-
-
-</div>
-
-
-</section>
-
-
-
-
-
-
-
-<!-- ÚLTIMAS ANÁLISES -->
-
-<section class="dashboard-section">
-
-
-<h2>
-🧠 Últimas Análises IA
-</h2>
-
-
-
-<div id="analises">
-
 
 <div class="card">
 
-<p>
-Aguardando processamento...
-</p>
+<h3>Análises IA</h3>
 
+<h1 id="analisesIA">
+
+0
+
+</h1>
 
 </div>
 
+<div class="card">
+
+<h3>Value Bets</h3>
+
+<h1 id="valueBets">
+
+0
+
+</h1>
 
 </div>
 
+<div class="card">
+
+<h3>ROI Previsto</h3>
+
+<h1 id="roiPrevisto">
+
+0%
+
+</h1>
+
+</div>
+
+<div class="card">
+
+<h3>Precisão IA</h3>
+
+<h1 id="precisaoIA">
+
+0%
+
+</h1>
+
+</div>
 
 </section>
 
+<!-- ====================================== -->
+<!-- RESUMO -->
+<!-- ====================================== -->
 
+<section class="painel">
 
+<div class="painel-header">
 
+<h2>
 
+Resumo do Sistema
 
+</h2>
 
-<footer>
+</div>
 
+<div class="painel-body">
 
-<p>
-© 2026 BetVision AI - Sistema Inteligente de Análise Esportiva
+<div class="resumo-grid">
+
+<div>
+
+<strong>Sistema</strong>
+
+<p id="nomeSistema">
+
+BetVision AI
+
 </p>
 
+</div>
+
+<div>
+
+<strong>Status</strong>
+
+<p id="statusSistema">
+
+Operacional
+
+</p>
+
+</div>
+
+<div>
+
+<strong>Modelo</strong>
+
+<p id="modeloIA">
+
+Probabilidade + Estatística
+
+</p>
+
+</div>
+
+<div>
+
+<strong>Última Atualização</strong>
+
+<p id="ultimaAtualizacaoCompleta">
+
+--
+
+</p>
+
+</div>
+
+</div>
+
+</div>
+
+</section>
+
+<!-- ====================================== -->
+<!-- JOGOS -->
+<!-- ====================================== -->
+
+<section
+id="jogos"
+class="painel">
+
+<div class="painel-header">
+
+<h2>
+
+⚽ Jogos do Dia
+
+</h2>
+
+</div>
+
+<div
+id="listaJogos"
+class="lista">
+
+<div class="loading">
+
+Carregando jogos...
+
+</div>
+
+</div>
+
+</section>
+<!-- ====================================== -->
+<!-- VALUE BETS -->
+<!-- ====================================== -->
+
+<section
+id="valuebets"
+class="painel">
+
+<div class="painel-header">
+
+<h2>
+
+💎 Melhores Value Bets
+
+</h2>
+
+</div>
+
+<div
+id="listaValueBets"
+class="lista">
+
+<div class="loading">
+
+Carregando oportunidades...
+
+</div>
+
+</div>
+
+</section>
+
+<!-- ====================================== -->
+<!-- ÚLTIMAS ANÁLISES IA -->
+<!-- ====================================== -->
+
+<section
+id="analises"
+class="painel">
+
+<div class="painel-header">
+
+<h2>
+
+🤖 Últimas Análises IA
+
+</h2>
+
+</div>
+
+<div
+id="listaAnalises"
+class="lista">
+
+<div class="loading">
+
+Carregando análises...
+
+</div>
+
+</div>
+
+</section>
+
+<!-- ====================================== -->
+<!-- ESTATÍSTICAS -->
+<!-- ====================================== -->
+
+<section
+id="estatisticas"
+class="painel">
+
+<div class="painel-header">
+
+<h2>
+
+📊 Estatísticas
+
+</h2>
+
+</div>
+
+<div class="graficos">
+
+<div class="grafico-card">
+
+<h3>
+
+Distribuição das Análises
+
+</h3>
+
+<canvas id="graficoAnalises"></canvas>
+
+</div>
+
+<div class="grafico-card">
+
+<h3>
+
+Value Bets
+
+</h3>
+
+<canvas id="graficoValue"></canvas>
+
+</div>
+
+</div>
+
+</section>
+
+<!-- ====================================== -->
+<!-- STATUS DO SERVIDOR -->
+<!-- ====================================== -->
+
+<section class="painel">
+
+<div class="painel-header">
+
+<h2>
+
+🖥 Status do Servidor
+
+</h2>
+
+</div>
+
+<div class="status-grid">
+
+<div class="status-card">
+
+<span>
+
+API
+
+</span>
+
+<strong id="apiStatus">
+
+Online
+
+</strong>
+
+</div>
+
+<div class="status-card">
+
+<span>
+
+Banco
+
+</span>
+
+<strong id="dbStatus">
+
+Conectado
+
+</strong>
+
+</div>
+
+<div class="status-card">
+
+<span>
+
+WebSocket
+
+</span>
+
+<strong id="wsStatus">
+
+Conectado
+
+</strong>
+
+</div>
+
+<div class="status-card">
+
+<span>
+
+Modelo IA
+
+</span>
+
+<strong id="modeloStatus">
+
+Ativo
+
+</strong>
+
+</div>
+
+</div>
+
+</section>
+
+<!-- ====================================== -->
+<!-- LOGS -->
+<!-- ====================================== -->
+
+<section class="painel">
+
+<div class="painel-header">
+
+<h2>
+
+📜 Eventos Recentes
+
+</h2>
+
+</div>
+
+<div
+id="logsSistema"
+class="logs">
+
+<div>
+
+Sistema iniciado.
+
+</div>
+
+</div>
+
+</section>
+<!-- ====================================== -->
+<!-- MODAL DETALHES DA IA -->
+<!-- ====================================== -->
+
+<div
+id="modalIA"
+class="modal">
+
+<div class="modal-content">
+
+<div class="modal-header">
+
+<h2>
+
+🤖 Detalhes da Análise
+
+</h2>
+
+<button
+id="fecharModal">
+
+✖
+
+</button>
+
+</div>
+
+<div
+id="conteudoModal">
+
+<p>
+
+Nenhuma análise selecionada.
+
+</p>
+
+</div>
+
+</div>
+
+</div>
+
+<!-- ====================================== -->
+<!-- TOAST -->
+<!-- ====================================== -->
+
+<div
+id="toast"
+class="toast">
+
+<span
+id="toastTexto">
+
+Sistema iniciado.
+
+</span>
+
+</div>
+
+<!-- ====================================== -->
+<!-- LOADER -->
+<!-- ====================================== -->
+
+<div
+id="loader"
+class="loader oculto">
+
+<div class="spinner"></div>
+
+<p>
+
+Carregando informações...
+
+</p>
+
+</div>
+
+<!-- ====================================== -->
+<!-- RODAPÉ -->
+<!-- ====================================== -->
+
+<footer class="rodape">
+
+<div>
+
+<strong>
+
+BetVision AI
+
+</strong>
+
+</div>
+
+<div>
+
+Modelo:
+
+<span id="modeloRodape">
+
+Probabilidade + Estatística
+
+</span>
+
+</div>
+
+<div>
+
+Versão
+
+<span>
+
+3.0
+
+</span>
+
+</div>
+
+<div>
+
+Banco:
+
+<span id="statusBanco">
+
+PostgreSQL
+
+</span>
+
+</div>
 
 </footer>
 
-
-
 </main>
 
+</div>
 
-
-
+<!-- ====================================== -->
+<!-- SCRIPT -->
+<!-- ====================================== -->
 
 <script src="app.js"></script>
-
 
 </body>
 
 </html>
-```
