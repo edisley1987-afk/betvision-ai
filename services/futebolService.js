@@ -1,133 +1,43 @@
-// =======================================
-// BetVision AI
-// Serviço de Futebol
-// =======================================
+import { buscarJogosReais }
+from "./providers/theSportsDB.js";
 
-
-import axios from "axios";
-
-import { analisarJogo } from "../ai/analiseJogo.js";
-
-
-
-
-// =======================================
-// Buscar Jogos
-// =======================================
 
 export async function buscarJogos(){
 
 
-    let jogos = [];
+    const eventos =
+    await buscarJogosReais();
 
 
 
-    try{
+    return eventos.map(evento=>({
 
 
-        /*
-          FUTURO:
-
-          API-FOOTBALL
-          SOFASCORE
-          SPORTMONKS
-
-          Exemplo:
-
-          const resposta = await axios.get(
-             "https://api-football.com/jogos"
-          );
-
-          jogos = resposta.data;
-
-        */
+        id:
+        evento.idEvent,
 
 
-
-        // MOCK TEMPORÁRIO
-
-        jogos = [
-
-            {
-
-                id:1,
-
-                campeonato:"Brasileirão",
-
-                casa:"Time A",
-
-                fora:"Time B",
-
-                horario:"20:00"
+        campeonato:
+        evento.strLeague,
 
 
-            },
+        casa:
+        evento.strHomeTeam,
 
 
-            {
-
-                id:2,
-
-                campeonato:"Champions League",
-
-                casa:"Time C",
-
-                fora:"Time D",
-
-                horario:"21:00"
+        fora:
+        evento.strAwayTeam,
 
 
-            }
+        horario:
+        evento.dateEvent,
 
 
-        ];
+        estadio:
+        evento.strVenue
 
 
-
-        /*
-          Executa Inteligência Artificial
-        */
-
-
-        const jogosAnalisados = jogos.map(jogo=>{
-
-
-            return {
-
-
-                ...jogo,
-
-
-                analiseIA:
-                    analisarJogo(jogo)
-
-
-
-            };
-
-
-        });
-
-
-
-        return jogosAnalisados;
-
-
-
-    }catch(error){
-
-
-        console.error(
-            "Erro futebolService:",
-            error.message
-        );
-
-
-        return [];
-
-
-    }
-
+    }));
 
 
 }
