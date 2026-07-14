@@ -13,7 +13,10 @@ let config = {
     }
 };
 
-// Carrega providers.json caso exista
+// ====================================
+// CARREGA providers.json
+// ====================================
+
 try {
 
     const caminho = path.join(
@@ -29,15 +32,18 @@ try {
 
     }
 
-} catch (erro) {
+} catch {
 
     console.warn(
-        "⚠ providers.json não encontrado. Utilizando configurações padrão."
+        "⚠ providers.json não encontrado. Utilizando configuração padrão."
     );
 
 }
 
-// Prioriza variável de ambiente do Render
+// ====================================
+// CONFIGURAÇÕES
+// ====================================
+
 const API_KEY =
     process.env.API_FOOTBALL_KEY ||
     config.futebolApi.apiKey;
@@ -46,20 +52,24 @@ const BASE_URL =
     process.env.API_FOOTBALL_URL ||
     config.futebolApi.baseUrl;
 
-/*
-====================================
-BUSCAR CAMPEONATOS
-====================================
-*/
+
+// ====================================
+// BUSCAR CAMPEONATOS
+// ====================================
 
 export async function buscarCampeonatos() {
 
     try {
 
+        // Sem chave da API
         if (!API_KEY) {
 
             console.warn(
-                "⚠ API_KEY não configurada. Utilizando base local."
+                "⚠ API_KEY não configurada."
+            );
+
+            console.warn(
+                "📦 Utilizando campeonatos locais."
             );
 
             return campeonatosBase();
@@ -86,47 +96,123 @@ export async function buscarCampeonatos() {
 
         );
 
-console.log("STATUS:", resposta.status);
-console.log("HEADERS:", resposta.headers);
-console.log("BODY:", JSON.stringify(resposta.data, null, 2));
+        console.log("STATUS:", resposta.status);
 
-        if (!resposta.data.response) {
+        console.log(
+            "BODY:",
+            JSON.stringify(resposta.data, null, 2)
+        );
+
+        // API retornou erro
+        if (
+
+            resposta.data.errors &&
+            Object.keys(resposta.data.errors).length > 0
+
+        ) {
+
+            console.warn(
+                "⚠ Erro retornado pela API:"
+            );
+
+            console.warn(
+                resposta.data.errors
+            );
+
+            console.warn(
+                "📦 Utilizando campeonatos locais."
+            );
 
             return campeonatosBase();
 
         }
 
-        const lista = resposta.data.response.map((liga) => ({
+        // Sem array de resposta
+        if (
 
-            id: liga.league.id,
+            !Array.isArray(
+                resposta.data.response
+            )
 
-            nome: liga.league.name,
+        ) {
 
-            pais: liga.country.name,
+            console.warn(
+                "⚠ Resposta inválida."
+            );
 
-            continente: liga.country.code || "",
+            return campeonatosBase();
 
-            logo: liga.league.logo,
+        }
 
-            tipo: liga.league.type,
+        // Array vazio
+        if (
 
-            temporada:
+            resposta.data.response.length === 0
 
-                liga.seasons?.length
-                    ? liga.seasons[liga.seasons.length - 1].year
-                    : new Date().getFullYear()
+        ) {
 
-        }));
+            console.warn(
+                "⚠ API retornou 0 campeonatos."
+            );
 
-        console.log(`✅ ${lista.length} campeonatos encontrados`);
+            console.warn(
+                "📦 Utilizando campeonatos locais."
+            );
+
+            return campeonatosBase();
+
+        }
+
+        const lista = resposta.data.response.map(
+
+            (liga) => ({
+
+                id: liga.league.id,
+
+                nome: liga.league.name,
+
+                pais: liga.country.name,
+
+                continente:
+                    liga.country.code || "",
+
+                logo:
+                    liga.league.logo,
+
+                tipo:
+                    liga.league.type,
+
+                temporada:
+
+                    liga.seasons?.length
+
+                        ? liga.seasons[
+                            liga.seasons.length - 1
+                        ].year
+
+                        : new Date().getFullYear()
+
+            })
+
+        );
+
+        console.log(
+            `✅ ${lista.length} campeonatos encontrados`
+        );
 
         return lista;
 
-    } catch (erro) {
+    }
+
+    catch (erro) {
 
         console.error(
-            "Erro API Football:",
+            "❌ Erro API Football:",
             erro.message
+        );
+
+        console.warn(
+            "📦 Utilizando campeonatos locais."
         );
 
         return campeonatosBase();
@@ -135,51 +221,64 @@ console.log("BODY:", JSON.stringify(resposta.data, null, 2));
 
 }
 
-/*
-====================================
-BUSCAR CAMPEONATO POR ID
-====================================
-*/
+
+// ====================================
+// BUSCAR POR ID
+// ====================================
 
 export async function buscarCampeonato(id) {
 
-    const lista = await buscarCampeonatos();
+    const lista =
+        await buscarCampeonatos();
 
-    return lista.find(
+    return (
 
-        campeonato => campeonato.id == id
+        lista.find(
 
-    ) || null;
+            campeonato => campeonato.id == id
+
+        ) || null
+
+    );
 
 }
 
-/*
-====================================
-BUSCAR POR NOME
-====================================
-*/
+
+// ====================================
+// BUSCAR POR NOME
+// ====================================
 
 export async function buscarCampeonatoNome(nome) {
 
-    const lista = await buscarCampeonatos();
+    const lista =
+        await buscarCampeonatos();
 
-    return lista.find(
+    return (
 
-        campeonato =>
+        lista.find(
 
-            campeonato.nome
-                .toLowerCase()
-                .includes(nome.toLowerCase())
+            campeonato =>
 
-    ) || null;
+                campeonato.nome
+
+                    .toLowerCase()
+
+                    .includes(
+
+                        nome.toLowerCase()
+
+                    )
+
+        ) || null
+
+    );
 
 }
 
-/*
-====================================
-CAMPEONATOS BASE
-====================================
-*/
+
+// ====================================
+// CAMPEONATOS LOCAIS
+// ====================================
 
 function campeonatosBase() {
 
