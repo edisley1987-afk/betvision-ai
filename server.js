@@ -108,19 +108,88 @@ async function criarTabelas(){
         `);
 
 
-
         console.log(
             "✅ Tabela campeonatos verificada"
         );
 
 
+
+        await db.query(`
+
+        CREATE TABLE IF NOT EXISTS analises (
+
+            id SERIAL PRIMARY KEY,
+
+            jogo VARCHAR(200),
+
+            probabilidade_casa NUMERIC,
+
+            probabilidade_empate NUMERIC,
+
+            probabilidade_fora NUMERIC,
+
+            gols_esperados NUMERIC,
+
+            placar_previsto VARCHAR(20),
+
+            value_bet BOOLEAN DEFAULT false,
+
+            confianca VARCHAR(50),
+
+            algoritmo VARCHAR(100),
+
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+        );
+
+        `);
+
+
+        console.log(
+            "✅ Tabela analises verificada"
+        );
+
+
+
+        await db.query(`
+
+        CREATE TABLE IF NOT EXISTS valuebets (
+
+            id SERIAL PRIMARY KEY,
+
+            jogo VARCHAR(200),
+
+            mercado VARCHAR(100),
+
+            odd_mercado NUMERIC,
+
+            odd_justa NUMERIC,
+
+            valor_percentual NUMERIC,
+
+            confianca VARCHAR(50),
+
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+        );
+
+        `);
+
+
+        console.log(
+            "✅ Tabela valuebets verificada"
+        );
+
+
     }
+
+
     catch(error){
 
 
         console.error(
 
-            "❌ Erro criando tabela:",
+            "❌ Erro criando tabelas:",
             error.message
 
         );
@@ -129,10 +198,6 @@ async function criarTabelas(){
     }
 
 }
-
-
-
-/*
 ====================================
  MIDDLEWARES
 ====================================
