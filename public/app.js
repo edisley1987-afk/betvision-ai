@@ -3,143 +3,423 @@
 // public/app.js
 // ==========================================
 
+
 document.addEventListener("DOMContentLoaded", () => {
+
     carregarDashboard();
+    carregarValueBets();
     conectarWebSocket();
+
 });
+
+
 
 // ==========================================
 // DASHBOARD
 // ==========================================
 
-async function carregarDashboard() {
 
-    try {
+async function carregarDashboard(){
 
-        const resposta = await fetch("/api/dashboard");
+try{
 
-        if (!resposta.ok) {
-            throw new Error("Erro ao buscar dashboard");
-        }
 
-        const dados = await resposta.json();
+const resposta = await fetch("/api/dashboard");
 
-        atualizarKPIs(dados);
 
-        carregarCampeonatos();
+if(!resposta.ok){
 
-    } catch (erro) {
-
-        console.error(erro);
-
-        mostrarMensagem(
-            "oportunidades",
-            "Erro ao conectar ao servidor."
-        );
-
-    }
+throw new Error("Dashboard indisponível");
 
 }
+
+
+const dados = await resposta.json();
+
+
+
+atualizarKPIs(dados);
+
+
+carregarCampeonatos();
+
+
+
+}catch(erro){
+
+
+console.error(
+"Erro dashboard:",
+erro
+);
+
+
+mostrarMensagem(
+"oportunidades",
+"Servidor indisponível"
+);
+
+
+}
+
+}
+
+
+
+
 
 // ==========================================
 // KPIs
 // ==========================================
 
-function atualizarKPIs(dados) {
 
-    atualizarElemento("jogosHoje", dados.jogosHoje);
-    atualizarElemento("valueBets", dados.valueBets);
-    atualizarElemento("analisesIA", dados.analisesIA);
+function atualizarKPIs(dados){
 
-    const roi = document.getElementById("roiPrevisto");
-    if (roi) roi.textContent = "0%";
 
-    const precisao = document.getElementById("precisaoIA");
-    if (precisao) precisao.textContent = "100%";
+atualizarElemento(
+"jogosHoje",
+dados.jogosHoje ?? 0
+);
+
+
+atualizarElemento(
+"valueBets",
+dados.valueBets ?? 0
+);
+
+
+atualizarElemento(
+"analisesIA",
+dados.analisesIA ?? 0
+);
+
+
+
+atualizarElemento(
+"roiPrevisto",
+(dados.roi ?? 0)+"%"
+);
+
+
+
+atualizarElemento(
+"precisaoIA",
+(dados.precisao ?? 0)+"%"
+);
+
+
 
 }
+
+
+
+
+
+
 
 // ==========================================
 // CAMPEONATOS
 // ==========================================
 
-async function carregarCampeonatos() {
 
-    try {
+async function carregarCampeonatos(){
 
-        const resposta = await fetch("/api/campeonatos");
 
-        const dados = await resposta.json();
+try{
 
-        mostrarMensagem(
-            "analises",
-            `Base carregada com ${dados.total} campeonatos.`
-        );
 
-    } catch (erro) {
+const resposta =
+await fetch("/api/campeonatos");
 
-        console.error(erro);
 
-    }
+
+if(!resposta.ok){
+
+throw new Error();
 
 }
+
+
+
+const dados =
+await resposta.json();
+
+
+
+mostrarMensagem(
+
+"analises",
+
+`Base carregada com ${dados.total ?? dados.length ?? 0} campeonatos.`
+
+);
+
+
+
+}catch(erro){
+
+
+mostrarMensagem(
+
+"analises",
+
+"Erro carregando campeonatos."
+
+);
+
+
+}
+
+
+}
+
+
+
+
+
+
+
+// ==========================================
+// VALUE BETS
+// ==========================================
+
+
+async function carregarValueBets(){
+
+
+try{
+
+
+const resposta =
+await fetch("/api/valuebets");
+
+
+
+if(!resposta.ok){
+
+return;
+
+}
+
+
+
+const dados =
+await resposta.json();
+
+
+
+mostrarMensagem(
+
+"oportunidades",
+
+`${dados.length ?? 0} oportunidades encontradas.`
+
+);
+
+
+
+}catch(erro){
+
+
+console.error(
+"Erro value bets",
+erro
+);
+
+
+}
+
+
+}
+
+
+
+
+
+
 
 // ==========================================
 // WEBSOCKET
 // ==========================================
 
-function conectarWebSocket() {
 
-    const protocolo =
-        location.protocol === "https:" ? "wss" : "ws";
+let socket;
 
-    const socket =
-        new WebSocket(`${protocolo}://${location.host}`);
 
-    socket.onopen = () => {
 
-        console.log("WebSocket conectado");
+function conectarWebSocket(){
 
-    };
 
-    socket.onmessage = (evento) => {
 
-        const dados = JSON.parse(evento.data);
+const protocolo =
+location.protocol === "https:"
+?
+"wss"
+:
+"ws";
 
-        console.log(dados);
 
-    };
 
-    socket.onclose = () => {
+socket =
+new WebSocket(
 
-        console.log("Reconectando...");
+`${protocolo}://${location.host}`
 
-        setTimeout(conectarWebSocket, 5000);
+);
 
-    };
+
+
+socket.onopen = ()=>{
+
+
+console.log(
+"BetVision AI WebSocket conectado"
+);
+
+
+};
+
+
+
+
+
+socket.onmessage=(evento)=>{
+
+
+try{
+
+
+const dados =
+JSON.parse(evento.data);
+
+
+
+console.log(
+"Atualização IA:",
+dados
+);
+
+
+
+if(dados.dashboard){
+
+atualizarKPIs(
+dados.dashboard
+);
 
 }
+
+
+
+if(dados.tipo==="valuebet"){
+
+carregarValueBets();
+
+}
+
+
+
+}catch(erro){
+
+
+console.error(
+"Mensagem inválida WS",
+erro
+);
+
+
+}
+
+
+};
+
+
+
+
+
+socket.onerror=()=>{
+
+
+console.log(
+"Erro WebSocket"
+);
+
+
+};
+
+
+
+
+
+socket.onclose=()=>{
+
+
+console.log(
+"Reconectando WebSocket..."
+);
+
+
+
+setTimeout(
+
+conectarWebSocket,
+
+5000
+
+);
+
+
+};
+
+
+
+}
+
+
+
+
+
+
 
 // ==========================================
 // UTILITÁRIOS
 // ==========================================
 
-function atualizarElemento(id, valor) {
 
-    const elemento = document.getElementById(id);
+function atualizarElemento(id,valor){
 
-    if (elemento) {
-        elemento.textContent = valor;
-    }
+
+const elemento =
+document.getElementById(id);
+
+
+
+if(elemento){
+
+elemento.textContent = valor;
 
 }
 
-function mostrarMensagem(id, texto) {
 
-    const elemento = document.getElementById(id);
+}
 
-    if (elemento) {
-        elemento.innerHTML = texto;
-    }
+
+
+
+
+function mostrarMensagem(id,texto){
+
+
+const elemento =
+document.getElementById(id);
+
+
+
+if(elemento){
+
+elemento.innerHTML = texto;
+
+}
+
 
 }
