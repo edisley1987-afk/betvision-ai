@@ -40,49 +40,122 @@ import db, { conectarBanco } from "./database/database.js";
 
 import {
     sincronizarSistema
-}
-from "./services/sincronizacaoService.js";
+} from "./services/sincronizacaoService.js";
 
 
 import {
     listarCampeonatos
-}
-from "./services/bancoService.js";
+} from "./services/bancoService.js";
 
 
 dotenv.config();
 
 
 
-const __filename =
-fileURLToPath(import.meta.url);
+const __filename = fileURLToPath(import.meta.url);
 
-
-const __dirname =
-path.dirname(__filename);
+const __dirname = path.dirname(__filename);
 
 
 
-const app =
-express();
+const app = express();
 
 
+const PORT = process.env.PORT || 3000;
 
-const PORT =
-process.env.PORT || 3000;
-
-
-const HOST =
-"0.0.0.0";
+const HOST = "0.0.0.0";
 
 
 
 /*
 ====================================
- CRIAR TABELAS
+ MIDDLEWARES
 ====================================
 */
 
+
+app.use(
+    helmet({
+
+        contentSecurityPolicy: {
+
+            directives: {
+
+                defaultSrc:[
+                    "'self'"
+                ],
+
+                scriptSrc:[
+                    "'self'",
+                    "https://cdn.jsdelivr.net"
+                ],
+
+                styleSrc:[
+                    "'self'",
+                    "'unsafe-inline'"
+                ],
+
+                imgSrc:[
+                    "'self'",
+                    "data:"
+                ],
+
+                connectSrc:[
+                    "'self'",
+                    "ws:",
+                    "wss:"
+                ]
+
+            }
+
+        }
+
+    })
+);
+
+
+
+app.use(
+    morgan("combined")
+);
+
+
+
+app.use(
+    cors()
+);
+
+
+
+app.use(
+    express.json()
+);
+
+
+
+app.use(
+    compression()
+);
+
+
+
+app.use(
+
+    express.static(
+
+        path.join(
+            __dirname,
+            "public"
+        )
+
+    )
+
+);
+/*
+====================================
+ CRIAÇÃO DAS TABELAS
+====================================
+*/
 
 async function criarTabelas(){
 
@@ -101,7 +174,11 @@ async function criarTabelas(){
 
             continente VARCHAR(100),
 
-            temporada VARCHAR(20)
+            temporada VARCHAR(20),
+
+            ativo BOOLEAN DEFAULT TRUE,
+
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 
         );
 
@@ -110,6 +187,39 @@ async function criarTabelas(){
 
         console.log(
             "✅ Tabela campeonatos verificada"
+        );
+
+
+
+        await db.query(`
+
+        CREATE TABLE IF NOT EXISTS jogos (
+
+            id SERIAL PRIMARY KEY,
+
+            api_id INTEGER UNIQUE,
+
+            campeonato VARCHAR(150),
+
+            time_casa VARCHAR(100),
+
+            time_fora VARCHAR(100),
+
+            data_jogo TIMESTAMP,
+
+            estadio VARCHAR(150),
+
+            status VARCHAR(50) DEFAULT 'agendado',
+
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+        );
+
+        `);
+
+
+        console.log(
+            "✅ Tabela jogos verificada"
         );
 
 
@@ -181,11 +291,9 @@ async function criarTabelas(){
         );
 
 
+
     }
-
-
     catch(error){
-
 
         console.error(
 
@@ -194,61 +302,15 @@ async function criarTabelas(){
 
         );
 
-
     }
 
 }
-/*
-====================================
- MIDDLEWARES
-====================================
-*/
-
-app.use(
-    helmet({
-        contentSecurityPolicy:false
-    })
-);
-
-app.use(
-    morgan("combined")
-);
-
-
-app.use(
-    cors()
-);
-
-
-app.use(
-    express.json()
-);
-
-
-app.use(
-    compression()
-);
-
-
-
-app.use(
-
-    express.static(
-
-        path.join(
-            __dirname,
-            "public"
-        )
-
-    )
-
-);
 
 
 
 /*
 ====================================
- ROTAS
+ ROTAS API
 ====================================
 */
 
@@ -311,6 +373,7 @@ async(req,res)=>{
         await listarCampeonatos();
 
 
+
         res.json({
 
             total:
@@ -347,7 +410,7 @@ async(req,res)=>{
 
 /*
 ====================================
- STATUS
+ PING
 ====================================
 */
 
@@ -389,98 +452,280 @@ app.get(
 */
 
 
-app.get("/api/dashboard", async (req, res) => {
+app.get("/api/dashboard", async(req,res)=>{
 
-    try {
 
-        const campeonatos = await listarCampeonatos();
+    try{
+
+
+        const campeonatos =
+        await listarCampeonatos();
+
+
 
         let jogos = 0;
+
         let analises = 0;
+
         let valuebets = 0;
 
-        try {
-            const r = await db.query("SELECT COUNT(*) FROM jogos");
-            jogos = Number(r.rows[0].count);
-        } catch (e) {
-            console.log("Tabela jogos inexistente.");
+
+
+        try{
+
+            const resultado =
+            await db.query(
+
+                "SELECT COUNT(*) FROM jogos"
+
+            );
+
+
+            jogos =
+            Number(resultado.rows[0].count);
+
+
+        }
+        catch(e){
+
+            console.log(
+                "Tabela jogos inexistente"
+            );
+
         }
 
-        try {
-            const r = await db.query("SELECT COUNT(*) FROM analises");
-            analises = Number(r.rows[0].count);
-        } catch (e) {
-            console.log("Tabela analises inexistente.");
+
+
+        try{
+
+            const resultado =
+            await db.query(
+
+                "SELECT COUNT(*) FROM analises"
+
+            );
+
+
+            analises =
+            Number(resultado.rows[0].count);
+
+
+        }
+        catch(e){
+
+            console.log(
+                "Tabela analises inexistente"
+            );
+
         }
 
-        try {
-            const r = await db.query("SELECT COUNT(*) FROM valuebets");
-            valuebets = Number(r.rows[0].count);
-        } catch (e) {
-            console.log("Tabela valuebets inexistente.");
+
+
+        try{
+
+            const resultado =
+            await db.query(
+
+                "SELECT COUNT(*) FROM valuebets"
+
+            );
+
+
+            valuebets =
+            Number(resultado.rows[0].count);
+
+
         }
+        catch(e){
+
+            console.log(
+                "Tabela valuebets inexistente"
+            );
+
+        }
+
+
 
         res.json({
 
-            sistema: "BetVision AI",
-            status: "operacional",
+            sistema:
+            "BetVision AI",
 
-            jogosHoje: jogos,
-            campeonatos: campeonatos.length,
-            analisesIA: analises,
-            valueBets: valuebets,
+            status:
+            "operacional",
 
-            modelo: "Probabilidade + Estatística",
-            ultimaAtualizacao: new Date()
+
+            jogosHoje:
+            jogos,
+
+
+            campeonatos:
+            campeonatos.length,
+
+
+            analisesIA:
+            analises,
+
+
+            valueBets:
+            valuebets,
+
+
+            modelo:
+            "Probabilidade + Estatística",
+
+
+            ultimaAtualizacao:
+            new Date()
 
         });
 
-    } catch (erro) {
-
-        console.error(erro);
-
-        res.status(500).json({
-            erro: erro.message
-        });
 
     }
 
+    catch(error){
+
+
+        res.status(500).json({
+
+            erro:
+            error.message
+
+        });
+
+
+    }
+
+
 });
-app.get("/api/debug-db", async (req, res) => {
+/*
+====================================
+ DEBUG BANCO
+====================================
+*/
+
+
+app.get("/api/debug-db", async(req,res)=>{
+
 
     const dados = {};
 
-    try {
-        const r = await db.query("SELECT COUNT(*) FROM campeonatos");
-        dados.campeonatos = Number(r.rows[0].count);
-    } catch (e) {
-        dados.campeonatos = e.message;
+
+    try{
+
+        const r =
+        await db.query(
+            "SELECT COUNT(*) FROM campeonatos"
+        );
+
+        dados.campeonatos =
+        Number(r.rows[0].count);
+
+
+    }
+    catch(e){
+
+        dados.campeonatos =
+        e.message;
+
     }
 
-    try {
-        const r = await db.query("SELECT COUNT(*) FROM analises");
-        dados.analises = Number(r.rows[0].count);
-    } catch (e) {
-        dados.analises = e.message;
+
+
+    try{
+
+        const r =
+        await db.query(
+            "SELECT COUNT(*) FROM jogos"
+        );
+
+        dados.jogos =
+        Number(r.rows[0].count);
+
+
+    }
+    catch(e){
+
+        dados.jogos =
+        e.message;
+
     }
 
-    try {
-        const r = await db.query("SELECT COUNT(*) FROM valuebets");
-        dados.valuebets = Number(r.rows[0].count);
-    } catch (e) {
-        dados.valuebets = e.message;
+
+
+    try{
+
+        const r =
+        await db.query(
+            "SELECT COUNT(*) FROM analises"
+        );
+
+        dados.analises =
+        Number(r.rows[0].count);
+
+
+    }
+    catch(e){
+
+        dados.analises =
+        e.message;
+
     }
 
-    try {
-        const r = await db.query("SELECT current_database(), current_user");
-        dados.database = r.rows[0];
-    } catch (e) {
-        dados.database = e.message;
+
+
+    try{
+
+        const r =
+        await db.query(
+            "SELECT COUNT(*) FROM valuebets"
+        );
+
+        dados.valuebets =
+        Number(r.rows[0].count);
+
+
     }
+    catch(e){
+
+        dados.valuebets =
+        e.message;
+
+    }
+
+
+
+    try{
+
+        const r =
+        await db.query(
+            "SELECT current_database(), current_user"
+        );
+
+
+        dados.database =
+        r.rows[0];
+
+
+    }
+    catch(e){
+
+        dados.database =
+        e.message;
+
+    }
+
+
 
     res.json(dados);
 
+
 });
+
+
+
+
+
 /*
 ====================================
  FRONTEND
@@ -488,11 +733,7 @@ app.get("/api/debug-db", async (req, res) => {
 */
 
 
-app.get(
-
-"/",
-
-(req,res)=>{
+app.get("/",(req,res)=>{
 
 
     res.sendFile(
@@ -510,15 +751,15 @@ app.get(
     );
 
 
-}
+});
 
-);
+
 
 
 
 /*
 ====================================
- SERVIDOR
+ INICIAR SERVIDOR
 ====================================
 */
 
@@ -552,7 +793,6 @@ async()=>{
 
 
         const campeonatos =
-
         await sincronizarSistema();
 
 
@@ -572,7 +812,6 @@ async()=>{
         console.error(
 
             "Erro inicialização:",
-
             error.message
 
         );
@@ -584,6 +823,8 @@ async()=>{
 }
 
 );
+
+
 
 
 
@@ -603,6 +844,7 @@ new WebSocketServer({
 
 
 
+
 wss.on(
 
 "connection",
@@ -615,6 +857,7 @@ wss.on(
     );
 
 
+
     socket.send(
 
         JSON.stringify({
@@ -622,11 +865,14 @@ wss.on(
             tipo:
             "status",
 
+
             sistema:
             "BetVision AI",
 
+
             mensagem:
             "IA tempo real ativa",
+
 
             data:
             new Date()
@@ -636,13 +882,34 @@ wss.on(
     );
 
 
-}
 
-);
+    socket.on(
+
+    "close",
+
+    ()=>{
+
+
+        console.log(
+
+            "⚪ WebSocket desconectado"
+
+        );
+
+
+    }
+
+    );
+
+
+});
+
+
 
 
 
 export function enviarAtualizacao(dados){
+
 
 
     wss.clients.forEach(
@@ -650,7 +917,11 @@ export function enviarAtualizacao(dados){
         cliente=>{
 
 
-            if(cliente.readyState === 1){
+            if(
+
+                cliente.readyState === 1
+
+            ){
 
 
                 cliente.send(
@@ -669,6 +940,8 @@ export function enviarAtualizacao(dados){
 
 
 }
+
+
 
 
 
@@ -698,6 +971,8 @@ app.use(
 }
 
 );
+
+
 
 
 
