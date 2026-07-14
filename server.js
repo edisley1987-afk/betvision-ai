@@ -445,7 +445,41 @@ app.get("/api/dashboard", async (req, res) => {
     }
 
 });
+app.get("/api/debug-db", async (req, res) => {
 
+    const dados = {};
+
+    try {
+        const r = await db.query("SELECT COUNT(*) FROM campeonatos");
+        dados.campeonatos = Number(r.rows[0].count);
+    } catch (e) {
+        dados.campeonatos = e.message;
+    }
+
+    try {
+        const r = await db.query("SELECT COUNT(*) FROM analises");
+        dados.analises = Number(r.rows[0].count);
+    } catch (e) {
+        dados.analises = e.message;
+    }
+
+    try {
+        const r = await db.query("SELECT COUNT(*) FROM valuebets");
+        dados.valuebets = Number(r.rows[0].count);
+    } catch (e) {
+        dados.valuebets = e.message;
+    }
+
+    try {
+        const r = await db.query("SELECT current_database(), current_user");
+        dados.database = r.rows[0];
+    } catch (e) {
+        dados.database = e.message;
+    }
+
+    res.json(dados);
+
+});
 /*
 ====================================
  FRONTEND
