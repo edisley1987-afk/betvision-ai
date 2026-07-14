@@ -205,9 +205,10 @@ async function criarTabelas(){
 */
 
 app.use(
-    helmet()
+    helmet({
+        contentSecurityPolicy:false
+    })
 );
-
 
 app.use(
     morgan("combined")
