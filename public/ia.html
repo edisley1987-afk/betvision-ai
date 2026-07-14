@@ -1,1 +1,279 @@
-<!doctype html><html><body><h1>IA BetVision</h1></body></html>
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>BetVision AI | Inteligência Artificial</title>
+
+    <meta name="description"
+          content="Painel da Inteligência Artificial do BetVision AI">
+
+    <link rel="stylesheet" href="style.css">
+
+    <link rel="icon" href="favicon/favicon.ico">
+
+</head>
+
+<body>
+
+<header>
+
+    <div class="logo">
+
+        <h1>⚽ BetVision AI</h1>
+
+        <p>Motor de Inteligência Artificial</p>
+
+    </div>
+
+    <nav>
+
+        <a href="index.html">Dashboard</a>
+
+        <a href="analise.html">Análises</a>
+
+        <a href="ia.html" class="ativo">IA</a>
+
+        <a href="admin.html">Admin</a>
+
+    </nav>
+
+</header>
+
+<main class="container">
+
+<section class="card fade-in">
+
+    <h2>🤖 Inteligência Artificial</h2>
+
+    <p>
+
+        O motor de IA utiliza estatísticas,
+        probabilidades, forma recente,
+        expectativa de gols, odds do mercado
+        e algoritmos preditivos para gerar
+        análises automaticamente.
+
+    </p>
+
+</section>
+
+<section class="cards">
+
+    <div class="kpi">
+
+        <h3>Análises Geradas</h3>
+
+        <h2 id="kpiAnalises">0</h2>
+
+    </div>
+
+    <div class="kpi">
+
+        <h3>Value Bets</h3>
+
+        <h2 id="kpiValue">0</h2>
+
+    </div>
+
+    <div class="kpi">
+
+        <h3>Modelo</h3>
+
+        <h2>IA v3.0</h2>
+
+    </div>
+
+</section>
+
+<section class="card">
+
+    <h2>Previsões da IA</h2>
+
+    <div id="loadingIA" class="loading">
+
+        <div class="spinner"></div>
+
+        <p>Processando previsões...</p>
+
+    </div>
+
+    <div id="listaIA">
+
+    </div>
+
+</section>
+</main>
+
+<footer>
+
+    <p>
+
+        © 2026 BetVision AI • Inteligência Artificial para Apostas Esportivas
+
+    </p>
+
+</footer>
+
+<script>
+
+async function carregarIA() {
+
+    const loading = document.getElementById("loadingIA");
+    const lista = document.getElementById("listaIA");
+
+    loading.style.display = "block";
+    lista.innerHTML = "";
+
+    try {
+
+        const resposta = await fetch("/api/analises");
+
+        if (!resposta.ok) {
+            throw new Error("Erro ao consultar a IA.");
+        }
+
+        const dados = await resposta.json();
+
+        loading.style.display = "none";
+
+        let totalAnalises = dados.total || 0;
+        let totalValue = 0;
+
+        document.getElementById("kpiAnalises").textContent = totalAnalises;
+
+        if (!dados.analises || dados.analises.length === 0) {
+
+            lista.innerHTML = `
+
+                <div class="alert alert-warning">
+
+                    Nenhuma previsão disponível.
+
+                </div>
+
+            `;
+
+            document.getElementById("kpiValue").textContent = 0;
+
+            return;
+
+        }
+
+        dados.analises.forEach(item => {
+
+            if (item.value_bet)
+                totalValue++;
+
+            lista.innerHTML += `
+
+            <div class="analise-card fade-in ${item.value_bet ? "valuebet" : ""}">
+
+                <h3>${item.jogo}</h3>
+
+                <div class="analise-grid">
+
+                    <div class="analise-item">
+                        <h4>Casa</h4>
+                        <span>${item.probabilidade_casa}%</span>
+                    </div>
+
+                    <div class="analise-item">
+                        <h4>Empate</h4>
+                        <span>${item.probabilidade_empate}%</span>
+                    </div>
+
+                    <div class="analise-item">
+                        <h4>Fora</h4>
+                        <span>${item.probabilidade_fora}%</span>
+                    </div>
+
+                    <div class="analise-item">
+                        <h4>Placar</h4>
+                        <span>${item.placar_previsto}</span>
+                    </div>
+
+                    <div class="analise-item">
+                        <h4>Gols</h4>
+                        <span>${item.gols_esperados}</span>
+                    </div>
+
+                    <div class="analise-item">
+                        <h4>Confiança</h4>
+                        <span>${item.confianca}</span>
+                    </div>
+
+                </div>
+
+                <br>
+
+                <p>
+
+                    <strong>Algoritmo:</strong>
+                    ${item.algoritmo}
+
+                </p>
+
+                <p>
+
+                    <strong>Value Bet:</strong>
+
+                    ${item.value_bet
+                        ? '<span class="badge badge-success">SIM</span>'
+                        : '<span class="badge badge-danger">NÃO</span>'}
+
+                </p>
+
+                <p>
+
+                    <strong>Gerado em:</strong>
+
+                    ${new Date(item.criado_em).toLocaleString("pt-BR")}
+
+                </p>
+
+            </div>
+
+            `;
+
+        });
+
+        document.getElementById("kpiValue").textContent = totalValue;
+
+    }
+
+    catch (erro) {
+
+        loading.style.display = "none";
+
+        lista.innerHTML = `
+
+            <div class="alert alert-danger">
+
+                ${erro.message}
+
+            </div>
+
+        `;
+
+        console.error(erro);
+
+    }
+
+}
+
+carregarIA();
+
+// Atualiza automaticamente a cada 30 segundos
+setInterval(carregarIA, 30000);
+
+</script>
+
+</body>
+
+</html>
