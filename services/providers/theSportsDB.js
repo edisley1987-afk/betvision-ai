@@ -6,22 +6,35 @@ const BASE_URL =
 
 
 
-export async function buscarJogosReais(){
+export async function buscarEventosLiga(idLiga){
 
 
     try{
 
 
-        const resposta =
-        await axios.get(
+        const resposta = await axios.get(
 
-            `${BASE_URL}/eventsnextleague.php?id= Brazilian Serie A`
+            `${BASE_URL}/eventsnextleague.php?id=${idLiga}`
 
         );
 
 
-        return resposta.data.events || [];
+        console.log(
+            "Resposta TheSportsDB:",
+            resposta.data
+        );
 
+
+        if(
+            Array.isArray(resposta.data.events)
+        ){
+
+            return resposta.data.events;
+
+        }
+
+
+        return [];
 
 
     }
@@ -30,13 +43,14 @@ export async function buscarJogosReais(){
 
 
         console.error(
+
             "Erro TheSportsDB:",
             error.message
+
         );
 
 
         return [];
-
 
     }
 
