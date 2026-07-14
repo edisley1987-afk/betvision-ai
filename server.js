@@ -323,41 +323,63 @@ app.get(
 */
 
 
-app.get(
+app.get("/api/dashboard", async (req, res) => {
 
-"/api/dashboard",
+    try {
 
-(req,res)=>{
+        const campeonatos = await listarCampeonatos();
 
+        let jogos = 0;
+        let analises = 0;
+        let valuebets = 0;
 
-    res.json({
+        try {
+            const r = await db.query("SELECT COUNT(*) FROM jogos");
+            jogos = Number(r.rows[0].count);
+        } catch (e) {
+            console.log("Tabela jogos inexistente.");
+        }
 
-        sistema:
-        "BetVision AI",
+        try {
+            const r = await db.query("SELECT COUNT(*) FROM analises");
+            analises = Number(r.rows[0].count);
+        } catch (e) {
+            console.log("Tabela analises inexistente.");
+        }
 
-        status:
-        "operacional",
+        try {
+            const r = await db.query("SELECT COUNT(*) FROM valuebets");
+            valuebets = Number(r.rows[0].count);
+        } catch (e) {
+            console.log("Tabela valuebets inexistente.");
+        }
 
-        jogosHoje:0,
+        res.json({
 
-        campeonatos:0,
+            sistema: "BetVision AI",
+            status: "operacional",
 
-        analisesIA:0,
+            jogosHoje: jogos,
+            campeonatos: campeonatos.length,
+            analisesIA: analises,
+            valueBets: valuebets,
 
-        valueBets:0,
+            modelo: "Probabilidade + Estatística",
+            ultimaAtualizacao: new Date()
 
-        modelo:
-        "Probabilidade + Estatística"
+        });
 
+    } catch (erro) {
 
-    });
+        console.error(erro);
 
+        res.status(500).json({
+            erro: erro.message
+        });
 
-}
+    }
 
-);
-
-
+});
 
 /*
 ====================================
