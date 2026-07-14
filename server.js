@@ -1,3 +1,10 @@
+// ==========================================
+// BetVision AI
+// server.js
+// Versão corrigida
+// ==========================================
+
+
 import express from "express";
 import cors from "cors";
 import compression from "compression";
@@ -9,11 +16,9 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 
-/*
-====================================
- ROTAS
-====================================
-*/
+// ==========================================
+// ROTAS
+// ==========================================
 
 import jogosRouter from "./routes/jogos.js";
 import oddsRouter from "./routes/odds.js";
@@ -23,20 +28,18 @@ import futebolRouter from "./routes/futebol.js";
 import inteligenciaRouter from "./routes/inteligencia.js";
 
 
-/*
-====================================
- BANCO
-====================================
-*/
+// ==========================================
+// BANCO
+// ==========================================
 
-import db, { conectarBanco } from "./database/database.js";
+import db, {
+    conectarBanco
+} from "./database/database.js";
 
 
-/*
-====================================
- SERVIÇOS
-====================================
-*/
+// ==========================================
+// SERVIÇOS
+// ==========================================
 
 import {
     sincronizarSistema
@@ -48,95 +51,143 @@ import {
 } from "./services/bancoService.js";
 
 
+
 dotenv.config();
 
 
 
-const __filename = fileURLToPath(import.meta.url);
-
-const __dirname = path.dirname(__filename);
-
+const __filename =
+fileURLToPath(import.meta.url);
 
 
-const app = express();
-
-
-const PORT = process.env.PORT || 3000;
-
-const HOST = "0.0.0.0";
+const __dirname =
+path.dirname(__filename);
 
 
 
-/*
-====================================
- MIDDLEWARES
-====================================
-*/
+const app =
+express();
+
+
+
+const PORT =
+process.env.PORT || 3000;
+
+
+const HOST =
+"0.0.0.0";
+
+
+
+// ==========================================
+// MIDDLEWARES
+// ==========================================
 
 
 app.use(
+
     helmet({
 
         contentSecurityPolicy: {
 
             directives: {
 
+
                 defaultSrc:[
                     "'self'"
                 ],
 
+
+
                 scriptSrc:[
+
                     "'self'",
+
                     "https://cdn.jsdelivr.net"
+
                 ],
+
+
 
                 styleSrc:[
+
                     "'self'",
-                    "'unsafe-inline'"
+
+                    "'unsafe-inline'",
+
+                    "https://cdn.jsdelivr.net"
+
                 ],
+
+
 
                 imgSrc:[
+
                     "'self'",
-                    "data:"
+
+                    "data:",
+
+                    "blob:"
+
                 ],
 
+
+
                 connectSrc:[
+
                     "'self'",
+
                     "ws:",
-                    "wss:"
+
+                    "wss:",
+
+                    "https://cdn.jsdelivr.net"
+
                 ]
+
+
 
             }
 
         }
 
     })
+
+);
+
+
+
+
+
+app.use(
+morgan("combined")
 );
 
 
 
 app.use(
-    morgan("combined")
+cors()
 );
 
 
 
 app.use(
-    cors()
+express.json()
 );
 
 
 
 app.use(
-    express.json()
+compression()
 );
 
 
 
-app.use(
-    compression()
-);
 
+
+// ==========================================
+// ARQUIVOS FRONTEND
+// ==========================================
 
 
 app.use(
@@ -144,219 +195,272 @@ app.use(
     express.static(
 
         path.join(
+
             __dirname,
+
             "public"
+
         )
 
     )
 
 );
-/*
-====================================
- CRIAÇÃO DAS TABELAS
-====================================
-*/
+
+
+
+// ==========================================
+// CRIAÇÃO DAS TABELAS
+// ==========================================
+
 
 async function criarTabelas(){
 
-    try{
 
+try{
 
-        await db.query(`
 
-        CREATE TABLE IF NOT EXISTS campeonatos (
+await db.query(`
 
-            id INTEGER PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS campeonatos (
 
-            nome VARCHAR(150) NOT NULL,
+id INTEGER PRIMARY KEY,
 
-            pais VARCHAR(100),
+nome VARCHAR(150) NOT NULL,
 
-            continente VARCHAR(100),
+pais VARCHAR(100),
 
-            temporada VARCHAR(20),
+continente VARCHAR(100),
 
-            ativo BOOLEAN DEFAULT TRUE,
+temporada VARCHAR(20),
 
-            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+ativo BOOLEAN DEFAULT TRUE,
 
-        );
+criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 
-        `);
+);
 
+`);
 
-        console.log(
-            "✅ Tabela campeonatos verificada"
-        );
 
 
 
-        await db.query(`
+console.log(
+"✅ Tabela campeonatos verificada"
+);
 
-        CREATE TABLE IF NOT EXISTS jogos (
 
-            id SERIAL PRIMARY KEY,
 
-            api_id INTEGER UNIQUE,
 
-            campeonato VARCHAR(150),
 
-            time_casa VARCHAR(100),
+await db.query(`
 
-            time_fora VARCHAR(100),
+CREATE TABLE IF NOT EXISTS jogos (
 
-            data_jogo TIMESTAMP,
+id SERIAL PRIMARY KEY,
 
-            estadio VARCHAR(150),
+api_id INTEGER UNIQUE,
 
-            status VARCHAR(50) DEFAULT 'agendado',
+campeonato VARCHAR(150),
 
-            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+time_casa VARCHAR(100),
 
-        );
+time_fora VARCHAR(100),
 
-        `);
+data_jogo TIMESTAMP,
 
+estadio VARCHAR(150),
 
-        console.log(
-            "✅ Tabela jogos verificada"
-        );
+status VARCHAR(50)
+DEFAULT 'agendado',
 
+criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 
+);
 
-        await db.query(`
+`);
 
-        CREATE TABLE IF NOT EXISTS analises (
 
-            id SERIAL PRIMARY KEY,
 
-            jogo VARCHAR(200),
 
-            probabilidade_casa NUMERIC,
+console.log(
+"✅ Tabela jogos verificada"
+);
 
-            probabilidade_empate NUMERIC,
 
-            probabilidade_fora NUMERIC,
 
-            gols_esperados NUMERIC,
 
-            placar_previsto VARCHAR(20),
 
-            value_bet BOOLEAN DEFAULT false,
+await db.query(`
 
-            confianca VARCHAR(50),
+CREATE TABLE IF NOT EXISTS analises (
 
-            algoritmo VARCHAR(100),
+id SERIAL PRIMARY KEY,
 
-            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+jogo VARCHAR(200),
 
-        );
+probabilidade_casa NUMERIC,
 
-        `);
+probabilidade_empate NUMERIC,
 
+probabilidade_fora NUMERIC,
 
-        console.log(
-            "✅ Tabela analises verificada"
-        );
+gols_esperados NUMERIC,
 
+placar_previsto VARCHAR(20),
 
+value_bet BOOLEAN DEFAULT false,
 
-        await db.query(`
+confianca VARCHAR(50),
 
-        CREATE TABLE IF NOT EXISTS valuebets (
+algoritmo VARCHAR(100),
 
-            id SERIAL PRIMARY KEY,
+criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 
-            jogo VARCHAR(200),
+);
 
-            mercado VARCHAR(100),
+`);
 
-            odd_mercado NUMERIC,
 
-            odd_justa NUMERIC,
 
-            valor_percentual NUMERIC,
 
-            confianca VARCHAR(50),
+console.log(
+"✅ Tabela analises verificada"
+);
 
-            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 
-        );
+// ==========================================
+// CONTINUAÇÃO CRIAÇÃO DAS TABELAS
+// ==========================================
 
-        `);
 
 
-        console.log(
-            "✅ Tabela valuebets verificada"
-        );
+await db.query(`
 
+CREATE TABLE IF NOT EXISTS valuebets (
 
+id SERIAL PRIMARY KEY,
 
-    }
-    catch(error){
+jogo VARCHAR(200),
 
-        console.error(
+mercado VARCHAR(100),
 
-            "❌ Erro criando tabelas:",
-            error.message
+odd_mercado NUMERIC,
 
-        );
+odd_justa NUMERIC,
 
-    }
+valor_percentual NUMERIC,
+
+confianca VARCHAR(50),
+
+criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+);
+
+`);
+
+
+
+
+console.log(
+"✅ Tabela valuebets verificada"
+);
+
+
+
+}
+catch(error){
+
+
+console.error(
+
+"❌ Erro criando tabelas:",
+
+error.message
+
+);
+
+
+}
+
 
 }
 
 
 
-/*
-====================================
- ROTAS API
-====================================
-*/
+
+
+// ==========================================
+// ROTAS API
+// ==========================================
+
 
 
 app.use(
+
 "/api/jogos",
+
 jogosRouter
+
 );
 
 
+
 app.use(
+
 "/api/odds",
+
 oddsRouter
+
 );
 
 
+
 app.use(
+
 "/api/analises",
+
 analisesRouter
+
 );
 
 
+
 app.use(
+
 "/api/valuebets",
+
 valuebetsRouter
+
 );
 
 
+
 app.use(
+
 "/api/futebol",
+
 futebolRouter
+
 );
+
 
 
 app.use(
+
 "/api/inteligencia",
+
 inteligenciaRouter
+
 );
 
 
 
-/*
-====================================
- CAMPEONATOS
-====================================
-*/
+
+
+// ==========================================
+// CAMPEONATOS
+// ==========================================
+
 
 
 app.get(
@@ -366,40 +470,42 @@ app.get(
 async(req,res)=>{
 
 
-    try{
+try{
 
 
-        const dados =
-        await listarCampeonatos();
+const dados =
+await listarCampeonatos();
 
 
 
-        res.json({
+res.json({
 
-            total:
-            dados.length,
-
-
-            campeonatos:
-            dados
-
-        });
+total:
+dados.length,
 
 
-    }
-
-    catch(error){
-
-
-        res.status(500).json({
-
-            erro:
-            error.message
-
-        });
+campeonatos:
+dados
 
 
-    }
+});
+
+
+
+}
+catch(error){
+
+
+res.status(500).json({
+
+erro:
+error.message
+
+});
+
+
+}
+
 
 
 }
@@ -408,11 +514,13 @@ async(req,res)=>{
 
 
 
-/*
-====================================
- PING
-====================================
-*/
+
+
+
+
+// ==========================================
+// PING
+// ==========================================
 
 
 app.get(
@@ -422,21 +530,21 @@ app.get(
 (req,res)=>{
 
 
-    res.json({
+res.json({
 
-        status:
-        "online",
+status:
+"online",
 
-        sistema:
-        "BetVision AI",
+sistema:
+"BetVision AI",
 
-        versao:
-        "3.0",
+versao:
+"3.0",
 
-        horario:
-        new Date()
+horario:
+new Date()
 
-    });
+});
 
 
 }
@@ -445,295 +553,375 @@ app.get(
 
 
 
-/*
-====================================
- DASHBOARD
-====================================
-*/
 
 
-app.get("/api/dashboard", async(req,res)=>{
 
+// ==========================================
+// DASHBOARD
+// ==========================================
 
-    try{
 
+app.get(
 
-        const campeonatos =
-        await listarCampeonatos();
+"/api/dashboard",
 
+async(req,res)=>{
 
 
-        let jogos = 0;
+try{
 
-        let analises = 0;
 
-        let valuebets = 0;
+const campeonatos =
+await listarCampeonatos();
 
 
 
-        try{
+let jogos = 0;
 
-            const resultado =
-            await db.query(
+let analises = 0;
 
-                "SELECT COUNT(*) FROM jogos"
+let valuebets = 0;
 
-            );
 
 
-            jogos =
-            Number(resultado.rows[0].count);
 
 
-        }
-        catch(e){
+try{
 
-            console.log(
-                "Tabela jogos inexistente"
-            );
 
-        }
+const resultado =
+await db.query(
 
+"SELECT COUNT(*) FROM jogos"
 
+);
 
-        try{
 
-            const resultado =
-            await db.query(
+jogos =
+Number(
+resultado.rows[0].count
+);
 
-                "SELECT COUNT(*) FROM analises"
 
-            );
 
+}
+catch(e){}
 
-            analises =
-            Number(resultado.rows[0].count);
 
 
-        }
-        catch(e){
 
-            console.log(
-                "Tabela analises inexistente"
-            );
 
-        }
+try{
 
 
+const resultado =
+await db.query(
 
-        try{
+"SELECT COUNT(*) FROM analises"
 
-            const resultado =
-            await db.query(
+);
 
-                "SELECT COUNT(*) FROM valuebets"
 
-            );
 
+analises =
+Number(
+resultado.rows[0].count
+);
 
-            valuebets =
-            Number(resultado.rows[0].count);
 
 
-        }
-        catch(e){
+}
+catch(e){}
 
-            console.log(
-                "Tabela valuebets inexistente"
-            );
 
-        }
 
 
 
-        res.json({
+try{
 
-            sistema:
-            "BetVision AI",
 
-            status:
-            "operacional",
+const resultado =
+await db.query(
 
+"SELECT COUNT(*) FROM valuebets"
 
-            jogosHoje:
-            jogos,
+);
 
 
-            campeonatos:
-            campeonatos.length,
 
+valuebets =
+Number(
+resultado.rows[0].count
+);
 
-            analisesIA:
-            analises,
 
 
-            valueBets:
-            valuebets,
+}
+catch(e){}
 
 
-            modelo:
-            "Probabilidade + Estatística",
 
 
-            ultimaAtualizacao:
-            new Date()
 
-        });
 
 
-    }
+res.json({
 
-    catch(error){
+sistema:
+"BetVision AI",
 
 
-        res.status(500).json({
+status:
+"operacional",
 
-            erro:
-            error.message
 
-        });
+jogosHoje:
+jogos,
 
 
-    }
+campeonatos:
+campeonatos.length,
 
 
-});
-/*
-====================================
- DEBUG BANCO
-====================================
-*/
+analisesIA:
+analises,
 
 
-app.get("/api/debug-db", async(req,res)=>{
+valueBets:
+valuebets,
 
 
-    const dados = {};
+roi:
+0,
 
 
-    try{
+precisao:
+100,
 
-        const r =
-        await db.query(
-            "SELECT COUNT(*) FROM campeonatos"
-        );
 
-        dados.campeonatos =
-        Number(r.rows[0].count);
+modelo:
+"Probabilidade + Estatística",
 
 
-    }
-    catch(e){
-
-        dados.campeonatos =
-        e.message;
-
-    }
-
-
-
-    try{
-
-        const r =
-        await db.query(
-            "SELECT COUNT(*) FROM jogos"
-        );
-
-        dados.jogos =
-        Number(r.rows[0].count);
-
-
-    }
-    catch(e){
-
-        dados.jogos =
-        e.message;
-
-    }
-
-
-
-    try{
-
-        const r =
-        await db.query(
-            "SELECT COUNT(*) FROM analises"
-        );
-
-        dados.analises =
-        Number(r.rows[0].count);
-
-
-    }
-    catch(e){
-
-        dados.analises =
-        e.message;
-
-    }
-
-
-
-    try{
-
-        const r =
-        await db.query(
-            "SELECT COUNT(*) FROM valuebets"
-        );
-
-        dados.valuebets =
-        Number(r.rows[0].count);
-
-
-    }
-    catch(e){
-
-        dados.valuebets =
-        e.message;
-
-    }
-
-
-
-    try{
-
-        const r =
-        await db.query(
-            "SELECT current_database(), current_user"
-        );
-
-
-        dados.database =
-        r.rows[0];
-
-
-    }
-    catch(e){
-
-        dados.database =
-        e.message;
-
-    }
-
-
-
-    res.json(dados);
+ultimaAtualizacao:
+new Date()
 
 
 });
 
 
 
+}
+catch(error){
 
 
-/*
-====================================
- FRONTEND
-====================================
-*/
+res.status(500).json({
+
+erro:
+error.message
+
+});
 
 
-app.get("/",(req,res)=>{
+}
+
+
+
+}
+
+);
+
+
+
+
+
+
+// ==========================================
+// DEBUG BANCO
+// ==========================================
+
+
+
+app.get(
+
+"/api/debug-db",
+
+async(req,res)=>{
+
+
+const dados = {};
+
+
+
+try{
+
+
+const r =
+await db.query(
+
+"SELECT COUNT(*) FROM campeonatos"
+
+);
+
+
+dados.campeonatos =
+Number(
+r.rows[0].count
+);
+
+
+
+}
+catch(e){
+
+
+dados.campeonatos =
+e.message;
+
+
+}
+
+
+
+
+
+try{
+
+
+const r =
+await db.query(
+
+"SELECT COUNT(*) FROM jogos"
+
+);
+
+
+
+dados.jogos =
+Number(
+r.rows[0].count
+);
+
+
+
+}
+catch(e){
+
+
+dados.jogos =
+e.message;
+
+
+}
+
+
+
+
+try{
+
+
+const r =
+await db.query(
+
+"SELECT COUNT(*) FROM analises"
+
+);
+
+
+
+dados.analises =
+Number(
+r.rows[0].count
+);
+
+
+
+}
+catch(e){
+
+
+dados.analises =
+e.message;
+
+
+}
+
+
+
+
+try{
+
+
+const r =
+await db.query(
+
+"SELECT COUNT(*) FROM valuebets"
+
+);
+
+
+
+dados.valuebets =
+Number(
+r.rows[0].count
+);
+
+
+
+}
+catch(e){
+
+
+dados.valuebets =
+e.message;
+
+
+}
+
+
+
+try{
+
+
+const r =
+await db.query(
+
+"SELECT current_database(), current_user"
+
+);
+
+
+
+dados.database =
+r.rows[0];
+
+
+}
+catch(e){
+
+
+dados.database =
+e.message;
+
+
+}
+
+
+
+
+res.json(dados);
+
+
+
+}
+
+);
+// ==========================================
+// FRONTEND
+// ==========================================
+
+
+app.get("/", (req,res)=>{
 
 
     res.sendFile(
@@ -757,158 +945,25 @@ app.get("/",(req,res)=>{
 
 
 
-/*
-====================================
- INICIAR SERVIDOR
-====================================
-*/
 
 
-const server = app.listen(
-
-PORT,
-
-HOST,
-
-async()=>{
+// ==========================================
+// WEBSOCKET
+// ==========================================
 
 
-    console.log(
-
-        `🚀 BetVision AI online porta ${PORT}`
-
-    );
+let wss;
 
 
 
-    try{
 
 
-        await conectarBanco();
+function enviarAtualizacao(dados){
 
 
-
-        await criarTabelas();
-
-
-
-        const campeonatos =
-        await sincronizarSistema();
-
-
-
-        console.log(
-
-        `🌎 ${campeonatos.length} campeonatos sincronizados`
-
-        );
-
-
+    if(!wss){
+        return;
     }
-
-    catch(error){
-
-
-        console.error(
-
-            "Erro inicialização:",
-            error.message
-
-        );
-
-
-    }
-
-
-}
-
-);
-
-
-
-
-
-/*
-====================================
- WEBSOCKET
-====================================
-*/
-
-
-const wss =
-new WebSocketServer({
-
-    server
-
-});
-
-
-
-
-wss.on(
-
-"connection",
-
-(socket)=>{
-
-
-    console.log(
-        "🔵 WebSocket conectado"
-    );
-
-
-
-    socket.send(
-
-        JSON.stringify({
-
-            tipo:
-            "status",
-
-
-            sistema:
-            "BetVision AI",
-
-
-            mensagem:
-            "IA tempo real ativa",
-
-
-            data:
-            new Date()
-
-        })
-
-    );
-
-
-
-    socket.on(
-
-    "close",
-
-    ()=>{
-
-
-        console.log(
-
-            "⚪ WebSocket desconectado"
-
-        );
-
-
-    }
-
-    );
-
-
-});
-
-
-
-
-
-export function enviarAtualizacao(dados){
 
 
 
@@ -945,11 +1000,349 @@ export function enviarAtualizacao(dados){
 
 
 
-/*
-====================================
- 404
-====================================
-*/
+
+
+// ==========================================
+// DASHBOARD TEMPO REAL
+// ==========================================
+
+
+async function enviarDashboardTempoReal(){
+
+
+try{
+
+
+const campeonatos =
+await listarCampeonatos();
+
+
+
+
+const jogos =
+await db.query(
+
+"SELECT COUNT(*) FROM jogos"
+
+);
+
+
+
+const analises =
+await db.query(
+
+"SELECT COUNT(*) FROM analises"
+
+);
+
+
+
+const valuebets =
+await db.query(
+
+"SELECT COUNT(*) FROM valuebets"
+
+);
+
+
+
+
+
+enviarAtualizacao({
+
+tipo:
+
+"dashboard",
+
+
+
+dashboard:{
+
+
+
+jogosHoje:
+
+Number(
+jogos.rows[0].count
+),
+
+
+
+campeonatos:
+
+campeonatos.length,
+
+
+
+analisesIA:
+
+Number(
+analises.rows[0].count
+),
+
+
+
+valueBets:
+
+Number(
+valuebets.rows[0].count
+),
+
+
+
+roi:
+
+0,
+
+
+
+precisao:
+
+100
+
+
+
+}
+
+
+
+});
+
+
+
+}
+catch(error){
+
+
+console.log(
+
+"Erro atualização WebSocket:",
+
+error.message
+
+);
+
+
+}
+
+
+}
+
+
+
+
+
+
+
+
+// ==========================================
+// INICIAR SERVIDOR
+// ==========================================
+
+
+
+const server = app.listen(
+
+PORT,
+
+HOST,
+
+async()=>{
+
+
+
+console.log(
+
+`🚀 BetVision AI online porta ${PORT}`
+
+);
+
+
+
+
+try{
+
+
+await conectarBanco();
+
+
+
+console.log(
+
+"✅ PostgreSQL conectado"
+
+);
+
+
+
+
+await criarTabelas();
+
+
+
+
+
+const campeonatos =
+
+await sincronizarSistema();
+
+
+
+
+console.log(
+
+`🌎 ${campeonatos.length} campeonatos sincronizados`
+
+);
+
+
+
+
+
+// Atualização IA a cada 30 segundos
+
+setInterval(
+
+enviarDashboardTempoReal,
+
+30000
+
+);
+
+
+
+
+}
+catch(error){
+
+
+console.error(
+
+"Erro inicialização:",
+
+error.message
+
+);
+
+
+
+}
+
+
+
+});
+
+
+
+
+
+
+
+
+// ==========================================
+// WEBSOCKET SERVER
+// ==========================================
+
+
+
+wss = new WebSocketServer({
+
+    server
+
+});
+
+
+
+
+
+wss.on(
+
+"connection",
+
+(socket)=>{
+
+
+
+console.log(
+
+"🔵 WebSocket conectado"
+
+);
+
+
+
+
+
+socket.send(
+
+JSON.stringify({
+
+
+tipo:
+
+"status",
+
+
+sistema:
+
+"BetVision AI",
+
+
+mensagem:
+
+"IA tempo real ativa",
+
+
+data:
+
+new Date()
+
+
+})
+
+);
+
+
+
+
+
+
+socket.on(
+
+"close",
+
+()=>{
+
+
+console.log(
+
+"⚪ WebSocket desconectado"
+
+);
+
+
+
+}
+
+
+);
+
+
+
+
+});
+
+
+
+
+
+
+
+
+// ==========================================
+// ERRO 404
+// ==========================================
+
 
 
 app.use(
@@ -957,15 +1350,22 @@ app.use(
 (req,res)=>{
 
 
-    res.status(404).json({
+res.status(404).json({
 
-        erro:
-        "Rota não encontrada",
 
-        rota:
-        req.originalUrl
+erro:
 
-    });
+"Rota não encontrada",
+
+
+
+rota:
+
+req.originalUrl
+
+
+
+});
 
 
 }
@@ -976,11 +1376,12 @@ app.use(
 
 
 
-/*
-====================================
- ERRO GLOBAL
-====================================
-*/
+
+
+// ==========================================
+// ERRO GLOBAL
+// ==========================================
+
 
 
 app.use(
@@ -988,16 +1389,20 @@ app.use(
 (err,req,res,next)=>{
 
 
-    console.error(err);
+console.error(err);
 
 
 
-    res.status(500).json({
+res.status(500).json({
 
-        erro:
-        "Erro interno do servidor"
 
-    });
+erro:
+
+"Erro interno do servidor"
+
+
+
+});
 
 
 }
