@@ -1,93 +1,215 @@
 import express from "express";
+import db from "../database/database.js";
+
 
 const router = express.Router();
+
 
 
 /*
 ====================================
  VALUE BETS
- Calcula oportunidades de valor
+
+ GET  -> Lista oportunidades salvas
+ POST -> Calcula oportunidade de valor
+
 ====================================
 */
 
 
-// Teste da rota
-router.get("/", (req, res) => {
 
-    res.json({
+/*
+====================================
+ LISTAR VALUE BETS
+====================================
+*/
 
-        sistema: "BetVision AI",
-        rota: "valuebets",
-        status: "online"
 
-    });
+router.get("/", async (req,res)=>{
+
+
+    try{
+
+
+        const resultado = await db.query(
+
+            `
+            SELECT *
+
+            FROM valuebets
+
+            ORDER BY criado_em DESC
+
+            `
+
+        );
+
+
+
+        res.json({
+
+
+            total:
+            resultado.rows.length,
+
+
+            valuebets:
+            resultado.rows
+
+
+        });
+
+
+
+    }
+
+    catch(error){
+
+
+
+        console.error(
+
+            "Erro buscando Value Bets:",
+            error
+
+        );
+
+
+
+        res.status(500).json({
+
+
+            erro:
+            "Erro ao buscar value bets",
+
+
+            detalhe:
+            error.message
+
+
+        });
+
+
+
+    }
+
 
 });
 
 
 
-// Calculadora de Value Bet
-router.post("/", (req, res) => {
 
-    try {
+
+/*
+====================================
+ CALCULADORA VALUE BET
+====================================
+*/
+
+
+router.post("/", async(req,res)=>{
+
+
+    try{
+
 
         const {
 
             oddMercado,
-            probabilidade
+
+            probabilidade,
+
+            jogo,
+
+            mercado
 
         } = req.body;
 
 
 
-        // Validação
 
-        if (
-            !oddMercado ||
-            !probabilidade
-        ) {
+
+        if(
+
+            oddMercado === undefined ||
+
+            probabilidade === undefined
+
+        ){
+
 
             return res.status(400).json({
 
-                erro: "Informe oddMercado e probabilidade"
-
-            });
-
-        }
-
-
-
-        const odd = Number(oddMercado);
-        const prob = Number(probabilidade);
-
-
-
-        if (
-            odd <= 0 ||
-            prob <= 0 ||
-            prob >= 1
-        ) {
-
-            return res.status(400).json({
 
                 erro:
-                "Probabilidade deve estar entre 0 e 1 e odd deve ser maior que zero"
+                "Informe oddMercado e probabilidade"
+
 
             });
+
 
         }
 
 
 
-        // Odd justa
-
-        const oddJusta = 1 / prob;
 
 
+        const odd =
+        Number(oddMercado);
 
-        // Cálculo de valor
 
-        const valor = (
+
+        const prob =
+        Number(probabilidade);
+
+
+
+
+
+        if(
+
+            odd <= 0 ||
+
+            prob <= 0 ||
+
+            prob >= 1
+
+        ){
+
+
+            return res.status(400).json({
+
+
+                erro:
+                "Probabilidade deve estar entre 0 e 1 e odd maior que zero"
+
+
+            });
+
+
+        }
+
+
+
+
+
+
+        /*
+        ================================
+        Cálculos
+        ================================
+        */
+
+
+        const oddJusta =
+        1 / prob;
+
+
+
+
+        const valor =
+
+        (
 
             (odd / oddJusta) - 1
 
@@ -95,39 +217,156 @@ router.post("/", (req, res) => {
 
 
 
-        res.json({
-
-            mercado: {
-
-                oddMercado: odd,
-
-                probabilidade: prob
-
-            },
 
 
-            analise: {
+        const oportunidade =
+        valor > 5;
 
-                oddJusta:
+
+
+
+
+
+
+        /*
+        ================================
+        Salvar se for Value Bet
+        ================================
+        */
+
+
+        if(oportunidade){
+
+
+            await db.query(
+
+
+            `
+            INSERT INTO valuebets
+
+            (
+
+                jogo,
+
+                mercado,
+
+                odd_mercado,
+
+                odd_justa,
+
+                valor_percentual,
+
+                confianca
+
+            )
+
+
+            VALUES
+
+            ($1,$2,$3,$4,$5,$6)
+
+            `,
+
+
+            [
+
+
+                jogo || "Jogo não informado",
+
+
+                mercado || "Resultado Final",
+
+
+                odd,
+
+
                 Number(
                     oddJusta.toFixed(2)
                 ),
 
 
-                valorPercentual:
                 Number(
                     valor.toFixed(2)
                 ),
 
 
-                oportunidade:
+                "Calculada"
 
-                    valor > 5
-                    ? "SIM"
-                    : "NÃO"
+
+            ]
+
+
+            );
+
+
+        }
+
+
+
+
+
+
+
+        res.json({
+
+
+
+            mercado:{
+
+
+                jogo:
+                jogo || null,
+
+
+                tipo:
+                mercado || "Resultado Final",
+
+
+                oddMercado:
+                odd,
+
+
+                probabilidade:
+                prob
+
 
 
             },
+
+
+
+            analise:{
+
+
+
+                oddJusta:
+
+                Number(
+                    oddJusta.toFixed(2)
+                ),
+
+
+
+
+                valorPercentual:
+
+                Number(
+                    valor.toFixed(2)
+                ),
+
+
+
+
+                oportunidade:
+
+                oportunidade
+                ? "SIM"
+                : "NÃO"
+
+
+
+            },
+
 
 
             modelo:
@@ -135,25 +374,38 @@ router.post("/", (req, res) => {
             "Probabilidade Estatística BetVision AI"
 
 
+
         });
+
+
 
 
 
     }
 
-    catch(error) {
+
+    catch(error){
 
 
         console.error(
+
             "Erro ValueBet:",
             error
+
         );
+
 
 
         res.status(500).json({
 
+
             erro:
-            "Erro interno ao calcular Value Bet"
+            "Erro interno ao calcular Value Bet",
+
+
+            detalhe:
+            error.message
+
 
         });
 
@@ -162,6 +414,8 @@ router.post("/", (req, res) => {
 
 
 });
+
+
 
 
 
