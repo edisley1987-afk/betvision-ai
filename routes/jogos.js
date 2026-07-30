@@ -6,12 +6,7 @@
 
 
 import express from "express";
-
-import db from "../database/database.js";
-
-import { 
-    buscarJogosComAnalise 
-} from "../services/futebolService.js";
+import { buscarJogos } from "../services/futebolService.js";
 
 import { 
     buscarOdds 
