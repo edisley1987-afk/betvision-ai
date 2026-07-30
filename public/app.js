@@ -252,42 +252,59 @@ function renderizarDashboard(dados) {
 
 
     atualizarElemento(
+    "jogosHoje",
+    dados.jogosHoje ?? 0
+);
 
-        "totalJogos",
+atualizarElemento(
+    "campeonatos",
+    dados.campeonatos ?? 0
+);
 
-        dados.jogosHoje ?? 0
+atualizarElemento(
+    "analisesIA",
+    dados.analisesIA ?? 0
+);
 
-    );
+atualizarElemento(
+    "valueBets",
+    dados.valueBets ?? 0
+);
 
+atualizarElemento(
+    "roiPrevisto",
+    `${dados.roi ?? 0}%`
+);
 
+atualizarElemento(
+    "precisaoIA",
+    `${dados.precisao ?? 0}%`
+);
 
-    atualizarElemento(
+atualizarElemento(
+    "nomeSistema",
+    dados.sistema ?? "BetVision AI"
+);
 
-        "totalCampeonatos",
+atualizarElemento(
+    "modeloIA",
+    dados.modelo ?? "-"
+);
 
-        dados.campeonatos ?? 0
+atualizarElemento(
+    "modeloRodape",
+    dados.modelo ?? "-"
+);
 
-    );
+atualizarElemento(
+    "ultimaAtualizacao",
+    formatarData(dados.ultimaAtualizacao)
+);
 
-
-
-    atualizarElemento(
-
-        "totalAnalises",
-
-        dados.analisesIA ?? 0
-
-    );
-
-
-
-    atualizarElemento(
-
-        "totalValueBets",
-
-        dados.valueBets ?? 0
-
-    );
+atualizarElemento(
+    "ultimaAtualizacaoCompleta",
+    formatarData(dados.ultimaAtualizacao)
+);
 
 
 
