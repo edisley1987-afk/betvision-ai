@@ -1,162 +1,107 @@
+// ==========================================
+// BetVision AI
+// routes/jogos.js
+// Versão 4.0
+// ==========================================
+
+
 import express from "express";
-import { buscarJogos } from "../services/futebolService.js";
+
 import db from "../database/database.js";
-import { buscarOdds } from "../services/oddsService.js";
-import { calcularValueBet } from "../services/valueBetService.js";
+
+import { 
+    buscarJogosComAnalise 
+} from "../services/futebolService.js";
+
+import { 
+    buscarOdds 
+} from "../services/oddsService.js";
+
+import { 
+    calcularValueBet 
+} from "../services/valueBetService.js";
+
 
 
 const router = express.Router();
 
 
 
-/*
-====================================
- LISTA JOGOS DISPONÍVEIS
 
- Fluxo:
 
- Jogos
-   ↓
- IA
-   ↓
- Odds
-   ↓
- Value Bet
-   ↓
- Banco
-
-====================================
-*/
+// ==========================================
+// LISTAR JOGOS + IA + VALUE BET
+// ==========================================
 
 
 router.get("/", async (req,res)=>{
 
 
-    try{
-
-
-        const jogos = await buscarJogos();
+    try {
 
 
 
-        for (const jogo of jogos) {
+        const jogos = 
+        await buscarJogosComAnalise();
 
 
 
-            if (!jogo.analiseIA) {
-
-                continue;
-
-            }
 
 
-
-            const analise =
-            jogo.analiseIA;
-
+        for(const jogo of jogos){
 
 
 
             /*
-            ====================================
-            SALVAR ANÁLISE IA
-            ====================================
+            =================================
+            SALVAR JOGO
+            =================================
             */
 
 
-            await db.query(
-
-            `
-            INSERT INTO analises (
-
-                jogo,
-
-                probabilidade_casa,
-
-                probabilidade_empate,
-
-                probabilidade_fora,
-
-                gols_esperados,
-
-                placar_previsto,
-
-                value_bet,
-
-                confianca,
-
-                algoritmo
-
-            )
-
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-
-            `,
+            try {
 
 
-            [
+                await db.query(
 
-                analise.jogo,
+                `
+                INSERT INTO jogos
 
-                analise.probabilidadeCasa,
+                (
+                    api_id,
+                    campeonato,
+                    time_casa,
+                    time_fora,
+                    data_jogo,
+                    estadio,
+                    status
+                )
 
-                analise.probabilidadeEmpate,
+                VALUES
+                ($1,$2,$3,$4,$5,$6,$7)
 
-                analise.probabilidadeFora,
+                ON CONFLICT(api_id)
+                DO NOTHING
 
-                analise.golsEsperados,
+                `,
 
-                analise.placarPrevisto,
+                [
 
-                analise.valueBet,
+                    jogo.id,
 
-                analise.confianca,
+                    jogo.campeonato,
 
-                analise.algoritmo
+                    jogo.casa,
 
-            ]
+                    jogo.fora,
 
-            );
+                    jogo.horario,
 
+                    jogo.estadio,
 
+                    jogo.status
 
-
-
-            /*
-            ====================================
-            CALCULAR VALUE BET
-            ====================================
-            */
-
-
-            try{
-
-
-                const odds =
-                await buscarOdds(
-                    jogo.id
-                );
-
-
-
-                const resultadoValueBet =
-
-                await calcularValueBet(
-
-                    jogo,
-
-                    analise,
-
-                    odds
-
-                );
-
-
-
-
-                jogo.valueBet =
-                resultadoValueBet;
-
+                ]);
 
 
             }
@@ -166,7 +111,7 @@ router.get("/", async (req,res)=>{
 
                 console.log(
 
-                    "Erro calculando Value Bet:",
+                    "Erro salvando jogo:",
                     error.message
 
                 );
@@ -176,7 +121,223 @@ router.get("/", async (req,res)=>{
 
 
 
+
+
+
+            /*
+            =================================
+            ANALISE IA
+            =================================
+            */
+
+
+            if(jogo.analiseIA){
+
+
+
+                const ia =
+                jogo.analiseIA;
+
+
+
+
+
+                try {
+
+
+
+                    const existe =
+                    await db.query(
+
+                    `
+                    SELECT id
+
+                    FROM analises
+
+                    WHERE jogo=$1
+
+                    LIMIT 1
+
+                    `,
+
+                    [
+
+                        ia.jogo
+
+                    ]
+
+                    );
+
+
+
+
+
+                    if(
+                        existe.rows.length === 0
+                    ){
+
+
+
+                        await db.query(
+
+                        `
+                        INSERT INTO analises
+
+                        (
+
+                            jogo,
+
+                            probabilidade_casa,
+
+                            probabilidade_empate,
+
+                            probabilidade_fora,
+
+                            gols_esperados,
+
+                            placar_previsto,
+
+                            value_bet,
+
+                            confianca,
+
+                            algoritmo
+
+                        )
+
+
+                        VALUES
+
+                        ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+
+                        `,
+
+
+                        [
+
+
+                            ia.jogo,
+
+
+                            ia.probabilidadeVitoriaCasa,
+
+
+                            25,
+
+
+                            100 -
+                            ia.probabilidadeVitoriaCasa -
+                            25,
+
+
+                            2.1,
+
+
+                            "2x1",
+
+
+                            false,
+
+
+                            ia.confianca || "Média",
+
+
+                            "BetVision AI v4.0"
+
+
+
+                        ]
+
+                        );
+
+
+                    }
+
+
+
+                }
+
+                catch(error){
+
+
+                    console.log(
+
+                        "Erro salvando IA:",
+                        error.message
+
+                    );
+
+
+                }
+
+
+
+
+
+
+
+                /*
+                =================================
+                VALUE BET
+                =================================
+                */
+
+
+                try{
+
+
+                    const odds =
+                    await buscarOdds(
+
+                        jogo.id
+
+                    );
+
+
+
+                    const value =
+                    await calcularValueBet(
+
+                        jogo,
+
+                        ia,
+
+                        odds
+
+                    );
+
+
+
+                    jogo.valueBet =
+                    value;
+
+
+
+                }
+
+
+                catch(error){
+
+
+                    console.log(
+
+                        "Erro Value Bet:",
+                        error.message
+
+                    );
+
+
+                }
+
+
+
+            }
+
+
+
+
         }
+
 
 
 
@@ -184,33 +345,49 @@ router.get("/", async (req,res)=>{
 
         res.json({
 
-            total:jogos.length,
+
+            total:
+            jogos.length,
+
 
             jogos
+
+
 
         });
 
 
 
 
-
     }
+
 
     catch(error){
 
 
 
-        console.error(error);
+        console.error(
+
+            "Erro rota jogos:",
+            error
+
+        );
 
 
 
         res.status(500).json({
 
+
             erro:
-            "Erro ao buscar jogos",
+
+            "Erro ao carregar jogos",
+
 
             detalhe:
+
             error.message
+
+
 
         });
 
@@ -219,7 +396,10 @@ router.get("/", async (req,res)=>{
     }
 
 
+
 });
+
+
 
 
 
