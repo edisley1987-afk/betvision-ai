@@ -1,120 +1,106 @@
 // ==========================================
 // BetVision AI
 // services/futebolService.js
-// Versão 4.0
+// API-FOOTBALL REAL
 // ==========================================
 
 
-import { buscarJogosReais } 
-from "./providers/theSportsDB.js";
+import axios from "axios";
 
-import { gerarAnalise } 
-from "./iaService.js";
+
+
+const BASE_URL =
+process.env.API_FOOTBALL_URL ||
+"https://v3.football.api-sports.io";
+
+
+
+const API_KEY =
+process.env.API_FOOTBALL_KEY;
 
 
 
 // ==========================================
-// BUSCAR JOGOS
+// BUSCAR JOGOS DO DIA
 // ==========================================
 
 
 export async function buscarJogos(){
 
 
-    try {
+try{
 
 
-        const eventos = await buscarJogosReais();
+if(!API_KEY){
 
 
-
-        if(
-            !eventos ||
-            eventos.length === 0
-        ){
+console.warn(
+"API_FOOTBALL_KEY não configurada"
+);
 
 
-            console.warn(
-                "⚠ Nenhum jogo encontrado no provider"
-            );
+return [];
 
-
-            return [];
-
-        }
+}
 
 
 
-
-
-        const jogos = eventos.map(
-
-            evento => ({
-
-
-                id:
-                evento.idEvent,
+const hoje =
+new Date()
+.toISOString()
+.split("T")[0];
 
 
 
-                campeonato:
-                evento.strLeague || "Desconhecido",
+
+const resposta = await axios.get(
+
+`${BASE_URL}/fixtures`,
+
+{
+
+
+headers:{
+
+
+"x-apisports-key":
+
+API_KEY
+
+
+},
 
 
 
-                casa:
-                evento.strHomeTeam,
+params:{
 
 
-
-                fora:
-                evento.strAwayTeam,
+date:hoje
 
 
-
-                horario:
-                evento.dateEvent,
+},
 
 
-
-                estadio:
-                evento.strVenue || "-",
+timeout:15000
 
 
-
-                status:
-                evento.strStatus || "Agendado"
+}
 
 
-            })
-
-        );
+);
 
 
 
 
 
-        return jogos;
+if(
+
+!resposta.data.response
+
+){
 
 
-
-    }
-
-    catch(error){
-
-
-        console.error(
-
-            "Erro buscando jogos:",
-            error.message
-
-        );
-
-
-        return [];
-
-    }
-
+return [];
 
 }
 
@@ -122,72 +108,119 @@ export async function buscarJogos(){
 
 
 
+const jogos =
 
+resposta.data.response.map(
 
-// ==========================================
-// BUSCAR JOGOS COM IA
-// ==========================================
-
-
-export async function buscarJogosComAnalise(){
-
-
-    const jogos =
-    await buscarJogos();
+(item)=>({
 
 
 
-    return jogos.map(
+id:
 
-
-        jogo => {
-
-
-
-            const analise =
-
-            gerarAnalise({
-
-
-                timeCasa:
-                jogo.casa,
-
-
-                timeFora:
-                jogo.fora,
-
-
-                golsCasaMedia:
-                1.8,
-
-
-                golsForaMedia:
-                1.3
-
-
-            });
+item.fixture.id,
 
 
 
+campeonato:
 
-            return {
-
-
-                ...jogo,
-
-
-                analiseIA:analise
+item.league.name,
 
 
 
-            };
+pais:
+
+item.league.country,
 
 
 
-        }
+casa:
+
+item.teams.home.name,
 
 
-    );
+
+fora:
+
+item.teams.away.name,
+
+
+
+horario:
+
+item.fixture.date,
+
+
+
+estadio:
+
+item.fixture.venue?.name || "-",
+
+
+
+status:
+
+item.fixture.status.long,
+
+
+
+escudos:{
+
+
+casa:
+
+item.teams.home.logo,
+
+
+fora:
+
+item.teams.away.logo
+
+
+}
+
+
+
+})
+
+
+);
+
+
+
+
+console.log(
+
+`⚽ ${jogos.length} jogos reais encontrados`
+
+);
+
+
+
+return jogos;
+
+
+
+}
+
+catch(error){
+
+
+
+console.error(
+
+"Erro API Football Jogos:",
+
+error.message
+
+);
+
+
+
+return [];
+
+
+}
 
 
 }
