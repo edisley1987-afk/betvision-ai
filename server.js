@@ -1056,51 +1056,27 @@ tipo:
 
 
 
-dashboard:{
+dashboard: {
 
+    sistema: "BetVision AI",
 
+    status: "operacional",
 
-jogosHoje:
+    jogosHoje: Number(jogos.rows[0].count),
 
-Number(
-jogos.rows[0].count
-),
+    campeonatos: campeonatos.length,
 
+    analisesIA: Number(analises.rows[0].count),
 
+    valueBets: Number(valuebets.rows[0].count),
 
-campeonatos:
+    roi: 0,
 
-campeonatos.length,
+    precisao: 100,
 
+    modelo: "Probabilidade + Estatística",
 
-
-analisesIA:
-
-Number(
-analises.rows[0].count
-),
-
-
-
-valueBets:
-
-Number(
-valuebets.rows[0].count
-),
-
-
-
-roi:
-
-0,
-
-
-
-precisao:
-
-100
-
-
+    ultimaAtualizacao: new Date()
 
 }
 
