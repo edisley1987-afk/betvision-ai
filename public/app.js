@@ -791,143 +791,137 @@ async function carregarAnalises() {
 // RENDER ANÁLISES IA
 // ==========================================
 
-
-function renderizarValueBets(){
-
-
-const container =
-document.getElementById(
-"listaValueBets"
-);
+function renderizarAnalises() {
 
 
+    const container =
+        document.getElementById(
+            "listaAnalises"
+        );
 
-if(!container) return;
+
+    if (!container) return;
 
 
 
-container.innerHTML="";
+    container.innerHTML = "";
 
 
 
-if(
-estadoSistema.valuebets.length===0
-){
+    if (
+        estadoSistema.analises.length === 0
+    ) {
 
 
-container.innerHTML=`
+        container.innerHTML = `
 
-<div class="empty-state">
+            <div class="empty-state">
 
-Nenhuma Value Bet encontrada
+                Nenhuma análise encontrada
 
-</div>
+            </div>
 
-`;
+        `;
 
 
-return;
+        return;
+
+    }
+
+
+
+
+    estadoSistema.analises.forEach(
+
+        analise => {
+
+
+            const card =
+                document.createElement(
+                    "div"
+                );
+
+
+            card.className =
+                "analise-card";
+
+
+
+            const probabilidade =
+
+                analise.probabilidade_casa ??
+                analise.probabilidadeCasa ??
+                0;
+
+
+
+            card.innerHTML = `
+
+
+                <h3>
+
+                    ${analise.jogo ?? "-"}
+
+                </h3>
+
+
+
+                <p>
+
+                    Probabilidade:
+
+                    <strong>
+
+                    ${probabilidade}%
+
+                    </strong>
+
+                </p>
+
+
+
+                <p>
+
+                    Prognóstico:
+
+                    ${analise.placar_previsto ?? "-"}
+
+                </p>
+
+
+
+                <p>
+
+                    Confiança:
+
+                    ${analise.confianca ?? "-"}
+
+                </p>
+
+
+
+                <p>
+
+                    Modelo:
+
+                    ${analise.algoritmo ?? "-"}
+
+                </p>
+
+
+            `;
+
+
+
+            container.appendChild(card);
+
+
+        }
+
+    );
+
 
 }
-
-
-
-
-
-estadoSistema.valuebets.forEach(aposta=>{
-
-
-const odd =
-
-aposta.odd_mercado ??
-aposta.oddMercado ??
-"-";
-
-
-
-const valor =
-
-aposta.valor_percentual ??
-aposta.valorPercentual ??
-0;
-
-
-
-
-
-const card =
-document.createElement("div");
-
-
-
-card.className =
-"valuebet-card";
-
-
-
-
-card.innerHTML=`
-
-
-<h3>
-
-${aposta.jogo ?? "-"}
-
-</h3>
-
-
-
-<p>
-
-Mercado:
-
-${aposta.mercado ?? "-"}
-
-</p>
-
-
-
-<p>
-
-Valor esperado:
-
-<strong>
-
-${valor}%
-
-</strong>
-
-</p>
-
-
-
-<p>
-
-Confiança:
-
-${aposta.confianca ?? "-"}
-
-</p>
-
-
-`;
-
-
-
-container.appendChild(card);
-
-
-
-});
-
-
-
-}
-
-
-
-
-
 // ==========================================
 // CARREGAR VALUE BETS
 // ==========================================
@@ -1411,27 +1405,17 @@ function processarMensagemWebSocket(
 
 
 
-        if (
+      if (
+    dados.tipo === "dashboard"
+) {
 
-            dados.tipo === "dashboard"
+    estadoSistema.dashboard = dados.dashboard;
 
-        ) {
+    renderizarDashboard(
+        dados.dashboard
+    );
 
-
-
-            estadoSistema.dashboard = dados;
-
-
-
-            renderizarDashboard(
-
-                dados
-
-            );
-
-
-        }
-
+}
 
 
 
