@@ -889,20 +889,6 @@ ${aposta.mercado ?? "-"}
 
 <p>
 
-Odd:
-
-<strong>
-
-${odd}
-
-</strong>
-
-</p>
-
-
-
-<p>
-
 Valor esperado:
 
 <strong>
@@ -937,11 +923,6 @@ container.appendChild(card);
 
 
 }
-    );
-
-
-}
-
 
 
 
