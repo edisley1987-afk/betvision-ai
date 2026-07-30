@@ -1,7 +1,7 @@
 // ==========================================
 // BetVision AI
 // services/futebolService.js
-// API-FOOTBALL REAL
+// API-FOOTBALL REAL v4.1
 // ==========================================
 
 
@@ -20,8 +20,10 @@ process.env.API_FOOTBALL_KEY;
 
 
 
+
+
 // ==========================================
-// BUSCAR JOGOS DO DIA
+// BUSCAR JOGOS REAIS
 // ==========================================
 
 
@@ -35,13 +37,14 @@ if(!API_KEY){
 
 
 console.warn(
-"API_FOOTBALL_KEY não configurada"
+"⚠ API_FOOTBALL_KEY não configurada"
 );
 
 
 return [];
 
 }
+
 
 
 
@@ -53,9 +56,21 @@ new Date()
 
 
 
-const resposta = await axios.get(
+console.log(
+"📅 Buscando jogos:",
+hoje
+);
+
+
+
+
+
+const resposta =
+await axios.get(
+
 
 `${BASE_URL}/fixtures`,
+
 
 {
 
@@ -71,21 +86,38 @@ API_KEY
 },
 
 
-
 params:{
 
 
-date:hoje
+date:
+
+hoje
 
 
 },
 
 
-timeout:15000
+timeout:
+
+15000
 
 
 }
 
+
+
+);
+
+
+
+
+
+
+console.log(
+
+"API STATUS:",
+
+resposta.status
 
 );
 
@@ -95,9 +127,22 @@ timeout:15000
 
 if(
 
-!resposta.data.response
+resposta.data.errors &&
+
+Object.keys(
+resposta.data.errors
+).length
 
 ){
+
+
+console.log(
+
+"Erro API-Football:",
+
+resposta.data.errors
+
+);
 
 
 return [];
@@ -108,9 +153,19 @@ return [];
 
 
 
+
+
+const lista =
+
+resposta.data.response || [];
+
+
+
+
+
 const jogos =
 
-resposta.data.response.map(
+lista.map(
 
 (item)=>({
 
@@ -134,6 +189,12 @@ item.league.country,
 
 
 
+temporada:
+
+item.league.season,
+
+
+
 casa:
 
 item.teams.home.name,
@@ -143,6 +204,18 @@ item.teams.home.name,
 fora:
 
 item.teams.away.name,
+
+
+
+placarCasa:
+
+item.goals.home,
+
+
+
+placarFora:
+
+item.goals.away,
 
 
 
@@ -161,6 +234,12 @@ item.fixture.venue?.name || "-",
 status:
 
 item.fixture.status.long,
+
+
+
+minuto:
+
+item.fixture.status.elapsed || 0,
 
 
 
@@ -183,17 +262,19 @@ item.teams.away.logo
 
 })
 
-
 );
+
+
 
 
 
 
 console.log(
 
-`⚽ ${jogos.length} jogos reais encontrados`
+`⚽ ${jogos.length} jogos encontrados`
 
 );
+
 
 
 
@@ -203,15 +284,20 @@ return jogos;
 
 }
 
-catch(error){
 
+
+catch(error){
 
 
 console.error(
 
-"Erro API Football Jogos:",
+
+"❌ Erro API-Football:",
+
+error.response?.data ||
 
 error.message
+
 
 );
 
@@ -219,8 +305,8 @@ error.message
 
 return [];
 
-
 }
+
 
 
 }
