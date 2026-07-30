@@ -3,423 +3,316 @@
 // public/app.js
 // ==========================================
 
-
 document.addEventListener("DOMContentLoaded", () => {
 
     carregarDashboard();
+    carregarCampeonatos();
     carregarValueBets();
     conectarWebSocket();
 
 });
 
-
-
 // ==========================================
 // DASHBOARD
 // ==========================================
 
+async function carregarDashboard() {
 
-async function carregarDashboard(){
+    try {
 
-try{
+        const resposta = await fetch("/api/dashboard");
 
+        if (!resposta.ok) {
+            throw new Error("Dashboard indisponível");
+        }
 
-const resposta = await fetch("/api/dashboard");
+        const dados = await resposta.json();
 
+        atualizarKPIs(dados);
 
-if(!resposta.ok){
+    } catch (erro) {
 
-throw new Error("Dashboard indisponível");
+        console.error("Erro dashboard:", erro);
 
-}
-
-
-const dados = await resposta.json();
-
-
-
-atualizarKPIs(dados);
-
-
-carregarCampeonatos();
-
-
-
-}catch(erro){
-
-
-console.error(
-"Erro dashboard:",
-erro
-);
-
-
-mostrarMensagem(
-"oportunidades",
-"Servidor indisponível"
-);
-
+    }
 
 }
-
-}
-
-
-
-
 
 // ==========================================
 // KPIs
 // ==========================================
 
+function atualizarKPIs(dados) {
 
-function atualizarKPIs(dados){
+    atualizarElemento(
+        "jogosHoje",
+        dados.jogosHoje ?? 0
+    );
 
+    atualizarElemento(
+        "campeonatos",
+        dados.campeonatos ?? 0
+    );
 
-atualizarElemento(
-"jogosHoje",
-dados.jogosHoje ?? 0
-);
+    atualizarElemento(
+        "analisesIA",
+        dados.analisesIA ?? 0
+    );
 
+    atualizarElemento(
+        "valueBets",
+        dados.valueBets ?? 0
+    );
 
-atualizarElemento(
-"valueBets",
-dados.valueBets ?? 0
-);
+    atualizarElemento(
+        "roiPrevisto",
+        (dados.roi ?? 0) + "%"
+    );
 
+    atualizarElemento(
+        "precisaoIA",
+        (dados.precisao ?? 0) + "%"
+    );
 
-atualizarElemento(
-"analisesIA",
-dados.analisesIA ?? 0
-);
+    atualizarElemento(
+        "nomeSistema",
+        dados.sistema ?? "BetVision AI"
+    );
 
+    atualizarElemento(
+        "statusSistema",
+        dados.status ?? "Operacional"
+    );
 
+    atualizarElemento(
+        "modeloIA",
+        dados.modelo ?? "-"
+    );
 
-atualizarElemento(
-"roiPrevisto",
-(dados.roi ?? 0)+"%"
-);
+    atualizarElemento(
+        "modeloRodape",
+        dados.modelo ?? "-"
+    );
 
+    if (dados.ultimaAtualizacao) {
 
+        const data = new Date(dados.ultimaAtualizacao);
 
-atualizarElemento(
-"precisaoIA",
-(dados.precisao ?? 0)+"%"
-);
+        atualizarElemento(
+            "ultimaAtualizacao",
+            data.toLocaleString("pt-BR")
+        );
 
+        atualizarElemento(
+            "ultimaAtualizacaoCompleta",
+            data.toLocaleString("pt-BR")
+        );
 
+    }
 
 }
-
-
-
-
-
-
 
 // ==========================================
 // CAMPEONATOS
 // ==========================================
 
+async function carregarCampeonatos() {
 
-async function carregarCampeonatos(){
+    try {
 
+        const resposta = await fetch("/api/campeonatos");
 
-try{
+        if (!resposta.ok) {
+            throw new Error();
+        }
 
+        const dados = await resposta.json();
 
-const resposta =
-await fetch("/api/campeonatos");
+        mostrarMensagem(
+            "listaAnalises",
+            `Base carregada com ${dados.total} campeonatos.`
+        );
 
+    } catch {
 
+        mostrarMensagem(
+            "listaAnalises",
+            "Erro carregando campeonatos."
+        );
 
-if(!resposta.ok){
-
-throw new Error();
-
-}
-
-
-
-const dados =
-await resposta.json();
-
-
-
-mostrarMensagem(
-
-"analises",
-
-`Base carregada com ${dados.total ?? dados.length ?? 0} campeonatos.`
-
-);
-
-
-
-}catch(erro){
-
-
-mostrarMensagem(
-
-"analises",
-
-"Erro carregando campeonatos."
-
-);
-
+    }
 
 }
-
-
-}
-
-
-
-
-
-
 
 // ==========================================
 // VALUE BETS
 // ==========================================
 
+async function carregarValueBets() {
 
-async function carregarValueBets(){
+    try {
 
+        const resposta = await fetch("/api/valuebets");
 
-try{
+        if (!resposta.ok) {
 
+            mostrarMensagem(
+                "listaValueBets",
+                "Nenhuma oportunidade encontrada."
+            );
 
-const resposta =
-await fetch("/api/valuebets");
+            return;
 
+        }
 
+        const dados = await resposta.json();
 
-if(!resposta.ok){
+        mostrarMensagem(
+            "listaValueBets",
+            `${dados.length ?? 0} oportunidades encontradas.`
+        );
 
-return;
+    } catch (erro) {
 
-}
+        console.error(erro);
 
+        mostrarMensagem(
+            "listaValueBets",
+            "Erro carregando Value Bets."
+        );
 
-
-const dados =
-await resposta.json();
-
-
-
-mostrarMensagem(
-
-"oportunidades",
-
-`${dados.length ?? 0} oportunidades encontradas.`
-
-);
-
-
-
-}catch(erro){
-
-
-console.error(
-"Erro value bets",
-erro
-);
-
+    }
 
 }
-
-
-}
-
-
-
-
-
-
 
 // ==========================================
 // WEBSOCKET
 // ==========================================
 
-
 let socket;
 
+function conectarWebSocket() {
 
+    const protocolo =
+        location.protocol === "https:"
+            ? "wss"
+            : "ws";
 
-function conectarWebSocket(){
+    socket = new WebSocket(
+        `${protocolo}://${location.host}`
+    );
 
+    socket.onopen = () => {
 
+        console.log(
+            "BetVision AI WebSocket conectado"
+        );
 
-const protocolo =
-location.protocol === "https:"
-?
-"wss"
-:
-"ws";
+        atualizarElemento(
+            "wsStatus",
+            "Conectado"
+        );
 
+    };
 
+    socket.onmessage = (evento) => {
 
-socket =
-new WebSocket(
+        try {
 
-`${protocolo}://${location.host}`
+            const dados = JSON.parse(evento.data);
 
-);
+            console.log(
+                "Atualização IA:",
+                dados
+            );
 
+            if (dados.dashboard) {
 
+                atualizarKPIs({
 
-socket.onopen = ()=>{
+                    ...dados.dashboard,
 
+                    sistema: "BetVision AI",
 
-console.log(
-"BetVision AI WebSocket conectado"
-);
+                    status: "Operacional",
 
+                    modelo: "Probabilidade + Estatística",
 
-};
+                    ultimaAtualizacao:
+                        new Date().toISOString()
 
+                });
 
+            }
 
+            if (dados.tipo === "valuebet") {
 
+                carregarValueBets();
 
-socket.onmessage=(evento)=>{
+            }
 
+        } catch (erro) {
 
-try{
+            console.error(
+                "Mensagem inválida:",
+                erro
+            );
 
+        }
 
-const dados =
-JSON.parse(evento.data);
+    };
 
+    socket.onerror = () => {
 
+        atualizarElemento(
+            "wsStatus",
+            "Erro"
+        );
 
-console.log(
-"Atualização IA:",
-dados
-);
+    };
 
+    socket.onclose = () => {
 
+        atualizarElemento(
+            "wsStatus",
+            "Reconectando..."
+        );
 
-if(dados.dashboard){
+        setTimeout(
+            conectarWebSocket,
+            5000
+        );
 
-atualizarKPIs(
-dados.dashboard
-);
+    };
 
 }
-
-
-
-if(dados.tipo==="valuebet"){
-
-carregarValueBets();
-
-}
-
-
-
-}catch(erro){
-
-
-console.error(
-"Mensagem inválida WS",
-erro
-);
-
-
-}
-
-
-};
-
-
-
-
-
-socket.onerror=()=>{
-
-
-console.log(
-"Erro WebSocket"
-);
-
-
-};
-
-
-
-
-
-socket.onclose=()=>{
-
-
-console.log(
-"Reconectando WebSocket..."
-);
-
-
-
-setTimeout(
-
-conectarWebSocket,
-
-5000
-
-);
-
-
-};
-
-
-
-}
-
-
-
-
-
-
 
 // ==========================================
 // UTILITÁRIOS
 // ==========================================
 
+function atualizarElemento(id, valor) {
 
-function atualizarElemento(id,valor){
+    const elemento =
+        document.getElementById(id);
 
+    if (elemento) {
 
-const elemento =
-document.getElementById(id);
+        elemento.textContent = valor;
 
-
-
-if(elemento){
-
-elemento.textContent = valor;
+    }
 
 }
 
+function mostrarMensagem(id, texto) {
 
-}
+    const elemento =
+        document.getElementById(id);
 
+    if (elemento) {
 
+        elemento.innerHTML = texto;
 
-
-
-function mostrarMensagem(id,texto){
-
-
-const elemento =
-document.getElementById(id);
-
-
-
-if(elemento){
-
-elemento.innerHTML = texto;
-
-}
-
+    }
 
 }
