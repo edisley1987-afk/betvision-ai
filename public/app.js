@@ -792,125 +792,151 @@ async function carregarAnalises() {
 // ==========================================
 
 
-function renderizarAnalises() {
+function renderizarValueBets(){
 
 
-    const container = document.getElementById(
+const container =
+document.getElementById(
+"listaValueBets"
+);
 
-        "listaAnalises"
 
-    );
 
+if(!container) return;
 
 
-    if (!container) return;
 
+container.innerHTML="";
 
 
-    container.innerHTML = "";
 
+if(
+estadoSistema.valuebets.length===0
+){
 
 
-    if (
+container.innerHTML=`
 
-        estadoSistema.analises.length === 0
+<div class="empty-state">
 
-    ) {
+Nenhuma Value Bet encontrada
 
+</div>
 
-        container.innerHTML = `
+`;
 
-            <div class="empty-state">
 
-                Nenhuma análise disponível
+return;
 
-            </div>
+}
 
-        `;
 
 
-        return;
 
 
-    }
+estadoSistema.valuebets.forEach(aposta=>{
 
 
+const odd =
 
+aposta.odd_mercado ??
+aposta.oddMercado ??
+"-";
 
-    estadoSistema.analises.forEach(
 
-        analise => {
 
+const valor =
 
+aposta.valor_percentual ??
+aposta.valorPercentual ??
+0;
 
-            const card = document.createElement(
 
-                "div"
 
-            );
 
 
+const card =
+document.createElement("div");
 
-            card.className =
 
-                "analise-card";
 
+card.className =
+"valuebet-card";
 
 
-            card.innerHTML = `
 
 
-                <h3>
+card.innerHTML=`
 
-                    ${analise.jogo ?? "Jogo"}
 
-                </h3>
+<h3>
 
+${aposta.jogo ?? "-"}
 
-                <p>
+</h3>
 
-                    Probabilidade:
 
-                    <strong>
 
-                        ${analise.probabilidade ?? 0}%
+<p>
 
-                    </strong>
+Mercado:
 
-                </p>
+${aposta.mercado ?? "-"}
 
+</p>
 
-                <p>
 
-                    Prognóstico:
 
-                    ${analise.previsao ?? analise.palpite ?? "-"}
+<p>
 
-                </p>
+Odd:
 
+<strong>
 
-                <p>
+${odd}
 
-                    Confiança:
+</strong>
 
-                    ${analise.confianca ?? "-"}
+</p>
 
-                </p>
 
 
-            `;
+<p>
 
+Valor esperado:
 
+<strong>
 
-            container.appendChild(
+${valor}%
 
-                card
+</strong>
 
-            );
+</p>
 
 
-        }
 
+<p>
+
+Confiança:
+
+${aposta.confianca ?? "-"}
+
+</p>
+
+
+`;
+
+
+
+container.appendChild(card);
+
+
+
+});
+
+
+
+}
     );
 
 
