@@ -1,40 +1,63 @@
 // ==========================================
 // BetVision AI
 // routes/jogos.js
-// Football-Data.org + IA + Value Bets
+// API-Football v3 + IA + Odds + ValueBet
 // ==========================================
 
 import express from "express";
 
-import { buscarJogos } from "../services/futebolService.js";
-import { gerarAnalise } from "../services/iaService.js";
-import { buscarOdds } from "../services/oddsService.js";
-import { calcularValueBet } from "../services/valueBetService.js";
+import {
+    buscarJogosHoje
+} from "../services/partidasService.js";
+
+
+import {
+    gerarAnalise
+} from "../services/iaService.js";
+
+
+import {
+    buscarOdds
+} from "../services/oddsService.js";
+
+
+import {
+    calcularValueBet
+} from "../services/valueBetService.js";
+
 
 const router = express.Router();
 
 
+
 // ==========================================
-// LISTAR JOGOS
+// LISTAR JOGOS DO DIA
 // ==========================================
 
 router.get("/", async (req, res) => {
 
+
     try {
 
-        const jogos = await buscarJogos();
+
+        const jogos = await buscarJogosHoje();
+
+
+
+        const resultado = [];
+
 
 
         for (const jogo of jogos) {
 
 
+
             // ==========================
-            // INTELIGÊNCIA ARTIFICIAL
+            // IA
             // ==========================
 
-            const analise = await gerarAnalise(jogo);
-
-            jogo.analiseIA = analise;
+            const analise =
+                await gerarAnalise(jogo);
 
 
 
@@ -42,9 +65,8 @@ router.get("/", async (req, res) => {
             // ODDS
             // ==========================
 
-            const odds = await buscarOdds(jogo.id);
-
-            jogo.odds = odds;
+            const odds =
+                await buscarOdds(jogo.id);
 
 
 
@@ -52,32 +74,63 @@ router.get("/", async (req, res) => {
             // VALUE BET
             // ==========================
 
-            const oddCasa =
-                odds?.mercado?.vencedor?.casa || 0;
-
-
-            const probabilidadeIA =
-                analise?.probabilidade || 0;
+            let valueBet = null;
 
 
 
-            jogo.valueBet = calcularValueBet({
+            if (odds) {
 
-                jogo:
-                    `${jogo.casa} x ${jogo.fora}`,
 
-                mercado:
-                    "Vencedor",
+                valueBet =
+                    calcularValueBet({
 
-                selecao:
-                    jogo.casa,
 
-                odd:
-                    oddCasa,
+                        jogo:
+                            `${jogo.casa} x ${jogo.fora}`,
 
-                probabilidadeIA
+
+                        mercado:
+                            "Vitória Casa",
+
+
+                        selecao:
+                            jogo.casa,
+
+
+                        odd:
+                            odds.mercado?.vencedor?.casa || 0,
+
+
+                        probabilidadeIA:
+                            analise.probabilidadeVitoriaCasa
+
+
+                    });
+
+
+            }
+
+
+
+            resultado.push({
+
+
+                ...jogo,
+
+
+                analiseIA:
+                    analise,
+
+
+                odds,
+
+
+                valueBet
+
+
 
             });
+
 
 
         }
@@ -86,31 +139,44 @@ router.get("/", async (req, res) => {
 
         res.json({
 
-            total: jogos.length,
 
-            jogos
+            total:
+                resultado.length,
+
+
+            jogos:
+                resultado
+
+
 
         });
 
 
+
     }
+
 
     catch (erro) {
 
 
         console.error(
             "Erro rota jogos:",
-            erro
+            erro.message
         );
+
 
 
         res.status(500).json({
 
+
             erro:
                 "Erro ao buscar jogos",
 
+
             detalhe:
                 erro.message
+
+
 
         });
 
@@ -118,7 +184,11 @@ router.get("/", async (req, res) => {
     }
 
 
+
 });
+
+
+
 
 
 export default router;
