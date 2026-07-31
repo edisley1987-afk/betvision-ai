@@ -1,7 +1,7 @@
 // ==========================================
 // BetVision AI
 // routes/jogos.js
-// Football-Data.org v4
+// Buscar jogos reais
 // ==========================================
 
 import express from "express";
@@ -11,31 +11,64 @@ import {
 } from "../services/futebolService.js";
 
 
+import {
+    salvarListaJogos
+} from "../services/jogoBancoService.js";
+
+
 const router = express.Router();
 
 
 // ==========================================
-// LISTAR JOGOS
+// GET JOGOS DO DIA
 // ==========================================
 
-router.get("/", async (req,res)=>{
+router.get(
+
+"/",
+
+async(req,res)=>{
 
 
     try{
 
 
-        const jogos = await buscarJogos();
+        console.log(
+            "📅 Buscando jogos..."
+        );
+
+
+
+        const jogos =
+
+        await buscarJogos();
+
 
 
         console.log(
-            "⚽ Jogos enviados:",
-            jogos.length
+
+            `⚽ Jogos encontrados API: ${jogos.length}`
+
         );
+
+
+
+        if(jogos.length > 0){
+
+
+            await salvarListaJogos(
+                jogos
+            );
+
+
+        }
+
 
 
         res.json({
 
-            total:jogos.length,
+            total:
+            jogos.length,
 
             jogos
 
@@ -44,18 +77,23 @@ router.get("/", async (req,res)=>{
 
 
     }
+
     catch(error){
 
 
         console.error(
+
             "Erro rota jogos:",
+
             error.message
+
         );
 
 
         res.status(500).json({
 
-            erro:"Erro buscar jogos"
+            erro:
+            error.message
 
         });
 
@@ -63,7 +101,11 @@ router.get("/", async (req,res)=>{
     }
 
 
-});
+}
+
+
+);
+
 
 
 export default router;
