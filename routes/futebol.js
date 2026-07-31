@@ -1,127 +1,143 @@
+// ==========================================
+// BetVision AI
+// routes/jogos.js
+// Integração partidasService
+// ==========================================
+
 import express from "express";
 
-
 import {
-buscarJogosHoje
-}
-from "../services/partidasService.js";
+    buscarJogosHoje
+} from "../services/partidasService.js";
 
 
 import {
-buscarTimes
-}
-from "../services/timesService.js";
+    gerarAnalise
+} from "../services/iaService.js";
 
 
 import {
-buscarJogadores
-}
-from "../services/jogadoresService.js";
+    buscarOdds
+} from "../services/oddsService.js";
 
 
 import {
-buscarOddsReal
-}
-from "../services/oddsRealService.js";
-
+    calcularValueBet
+} from "../services/valueBetService.js";
 
 
 const router = express.Router();
 
 
 
-router.get(
+// ==========================================
+// LISTAR JOGOS DO DIA
+// ==========================================
 
-"/jogos",
-
-async(req,res)=>{
-
-
-    const jogos =
-    await buscarJogosHoje();
+router.get("/", async (req,res)=>{
 
 
-    res.json(jogos);
+    try {
 
 
-}
-
-);
+        const jogos =
+            await buscarJogosHoje();
 
 
 
-router.get(
-
-"/times/:liga",
-
-async(req,res)=>{
-
-
-    const dados =
-
-    await buscarTimes(
-
-        req.params.liga
-
-    );
-
-
-    res.json(dados);
-
-
-}
-
-);
+        for (const jogo of jogos) {
 
 
 
-router.get(
-
-"/jogadores/:time",
-
-async(req,res)=>{
-
-
-    const dados =
-
-    await buscarJogadores(
-
-        req.params.time
-
-    );
-
-
-    res.json(dados);
-
-
-}
-
-);
+            const analise =
+                await gerarAnalise(jogo);
 
 
 
-router.get(
-
-"/odds/:partida",
-
-async(req,res)=>{
+            jogo.analiseIA =
+                analise;
 
 
-    const dados =
 
-    await buscarOddsReal(
-
-        req.params.partida
-
-    );
+            const odds =
+                await buscarOdds(jogo.id);
 
 
-    res.json(dados);
+
+            jogo.odds =
+                odds;
 
 
-}
 
-);
+            jogo.valueBet =
+                calcularValueBet({
+
+
+                    jogo:
+                        jogo.id,
+
+
+                    mercado:
+                        "Vencedor",
+
+
+                    selecao:
+                        jogo.casa,
+
+
+                    odd:
+                        odds?.mercado?.vencedor?.casa || 0,
+
+
+                    probabilidadeIA:
+                        analise.probabilidadeCasa
+
+
+                });
+
+
+
+        }
+
+
+
+        res.json({
+
+
+            total:
+                jogos.length,
+
+
+            jogos
+
+
+        });
+
+
+
+    }
+
+    catch(erro){
+
+
+        console.error(
+            "Erro jogos:",
+            erro.message
+        );
+
+
+        res.status(500).json({
+
+            erro:
+                "Erro ao buscar jogos"
+
+        });
+
+
+    }
+
+
+});
 
 
 
