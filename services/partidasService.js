@@ -1,7 +1,7 @@
 // ==========================================
 // BetVision AI
 // services/partidasService.js
-// DEBUG Football-Data.org
+// API-Football v3
 // ==========================================
 
 
@@ -10,6 +10,11 @@ import {
 } from "./apiFootballService.js";
 
 
+
+
+// ==========================================
+// BUSCAR JOGOS DE HOJE
+// ==========================================
 
 export async function buscarJogosHoje(){
 
@@ -25,23 +30,21 @@ export async function buscarJogosHoje(){
 
 
         console.log(
-            "📅 Data consultada:",
+            "📅 Buscando jogos:",
             data
         );
 
 
 
-        const resposta =
+        const jogosAPI =
 
             await consultarAPI(
 
-                "/matches",
+                "/fixtures",
 
                 {
 
-                    dateFrom:data,
-
-                    dateTo:data
+                    date:data
 
                 }
 
@@ -50,69 +53,93 @@ export async function buscarJogosHoje(){
 
 
         console.log(
-            "📡 Resposta Football:",
-            JSON.stringify(
-                resposta,
-                null,
-                2
-            )
-        );
 
-
-
-        const jogos =
-
-            resposta.matches || [];
-
-
-
-        console.log(
-
-            `⚽ TOTAL JOGOS: ${jogos.length}`
+            `⚽ API retornou ${jogosAPI.length} jogos`
 
         );
 
 
 
-        return jogos.map(jogo=>({
+        const jogos = jogosAPI.map(jogo => ({
+
 
 
             id:
-                jogo.id,
+                jogo.fixture.id,
+
 
 
             campeonato:
-                jogo.competition?.name || "-",
+                jogo.league?.name || "-",
+
+
+
+            pais:
+                jogo.league?.country || "-",
+
 
 
             casa:
-                jogo.homeTeam?.name || "-",
+                jogo.teams?.home?.name || "-",
+
 
 
             fora:
-                jogo.awayTeam?.name || "-",
+                jogo.teams?.away?.name || "-",
+
 
 
             horario:
-                jogo.utcDate,
+                jogo.fixture?.date,
+
 
 
             status:
-                jogo.status
+                jogo.fixture?.status?.long || "-",
+
+
+
+            escudos:{
+
+
+                casa:
+                    jogo.teams?.home?.logo || "",
+
+
+                fora:
+                    jogo.teams?.away?.logo || ""
+
+
+            }
+
 
 
         }));
 
 
 
+        console.log(
+
+            "✅ Jogos formatados:",
+            jogos.length
+
+        );
+
+
+
+        return jogos;
+
+
+
     }
+
 
     catch(erro){
 
 
         console.error(
 
-            "Erro buscarJogosHoje:",
+            "❌ Erro buscarJogosHoje:",
             erro.message
 
         );
@@ -123,4 +150,17 @@ export async function buscarJogosHoje(){
     }
 
 
+
 }
+
+
+
+
+
+export default {
+
+
+    buscarJogosHoje
+
+
+};
