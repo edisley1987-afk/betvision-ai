@@ -1,18 +1,20 @@
 // ==========================================
 // BetVision AI
 // routes/api.js
-// API Central Dashboard
+// API Dashboard Central
 // ==========================================
 
 import express from "express";
 
 import { buscarJogos } from "../services/futebolService.js";
 import { listarCampeonatos } from "../services/bancoService.js";
-import { listarAnalises } from "../services/bancoService.js";
-import { listarValueBets } from "../services/bancoService.js";
+
+import { listarAnalises } from "../services/analiseService.js";
+import { listarValueBets } from "../services/valueBetService.js";
 
 
 const router = express.Router();
+
 
 
 // ==========================================
@@ -23,27 +25,20 @@ router.get("/dashboard", async (req, res) => {
 
     try {
 
+
         const jogos =
             await buscarJogos();
 
 
-        let campeonatos = [];
+
+        const campeonatos =
+            await listarCampeonatos();
+
+
 
         let analises = [];
 
         let valuebets = [];
-
-
-        try {
-
-            campeonatos =
-                await listarCampeonatos();
-
-        } catch {
-
-            campeonatos = [];
-
-        }
 
 
 
@@ -52,7 +47,9 @@ router.get("/dashboard", async (req, res) => {
             analises =
                 await listarAnalises();
 
-        } catch {
+        }
+
+        catch {
 
             analises = [];
 
@@ -65,7 +62,9 @@ router.get("/dashboard", async (req, res) => {
             valuebets =
                 await listarValueBets();
 
-        } catch {
+        }
+
+        catch {
 
             valuebets = [];
 
@@ -73,43 +72,56 @@ router.get("/dashboard", async (req, res) => {
 
 
 
+
         res.json({
+
 
             sistema:
                 "BetVision AI",
+
 
 
             status:
                 "operacional",
 
 
+
             jogosHoje:
                 jogos.length,
+
 
 
             campeonatos:
                 campeonatos.length,
 
 
+
             analisesIA:
                 analises.length,
+
 
 
             valueBets:
                 valuebets.length,
 
 
+
             modelo:
                 "Probabilidade + Estatística",
+
 
 
             ultimaAtualizacao:
                 new Date().toISOString()
 
+
+
         });
 
 
+
     }
+
 
     catch (erro) {
 
@@ -123,8 +135,7 @@ router.get("/dashboard", async (req, res) => {
         res.status(500).json({
 
             erro:
-                "Falha no dashboard"
-
+                "Erro ao carregar dashboard"
 
         });
 
@@ -136,11 +147,13 @@ router.get("/dashboard", async (req, res) => {
 
 
 
+
+
 // ==========================================
-// STATUS
+// PING
 // ==========================================
 
-router.get("/status", (req,res)=>{
+router.get("/ping", (req,res)=>{
 
 
     res.json({
