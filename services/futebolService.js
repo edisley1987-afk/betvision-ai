@@ -27,7 +27,7 @@ function formatarData(data) {
 }
 
 // ==========================================
-// MONTAR OBJETO DO JOGO
+// FORMATAR JOGO
 // ==========================================
 
 function converterPartida(match) {
@@ -50,6 +50,8 @@ function converterPartida(match) {
 
         rodada: match.matchday || null,
 
+        estadio: match.venue || "-",
+
         escudos: {
 
             casa: match.homeTeam?.crest || "",
@@ -70,33 +72,29 @@ export async function buscarJogos() {
 
     try {
 
-        console.log("======================================");
-        console.log("⚽ FOOTBALL-DATA");
-        console.log("======================================");
+        console.log("====================================");
+        console.log("⚽ BETVISION AI - FOOTBALL DATA");
+        console.log("====================================");
 
         if (!API_KEY) {
 
-            console.error("❌ FOOTBALL_DATA_KEY não configurada.");
+            console.error("❌ API KEY não configurada.");
 
             return [];
 
         }
 
-        console.log("✅ API KEY carregada.");
-
-        console.log("🌍 URL:", BASE_URL);
+        console.log("✅ API KEY carregada");
 
         const hoje = new Date();
 
-        const daqui7dias = new Date();
-        daqui7dias.setDate(hoje.getDate() + 7);
+        const fim = new Date();
+        fim.setDate(fim.getDate() + 7);
 
         const dataInicial = formatarData(hoje);
-        const dataFinal = formatarData(daqui7dias);
+        const dataFinal = formatarData(fim);
 
-        console.log("📅 Buscando partidas:");
-        console.log("De:", dataInicial);
-        console.log("Até:", dataFinal);
+        console.log("📅 Período:", dataInicial, "até", dataFinal);
 
         const resposta = await axios.get(
 
@@ -124,35 +122,95 @@ export async function buscarJogos() {
 
         );
 
-        console.log("HTTP:", resposta.status);
-
         const partidas = resposta.data.matches || [];
 
-        console.log(`⚽ API retornou ${partidas.length} partidas.`);
+        console.log(`📦 API retornou ${partidas.length} partidas.`);
 
-        const jogos = partidas.map(converterPartida);
+        // =====================================
+        // STATUS VÁLIDOS
+        // =====================================
 
-        return jogos;
+        const STATUS_VALIDOS = [
 
-    }
-    catch (error) {
+            "SCHEDULED",
+            "TIMED",
+            "LIVE",
+            "IN_PLAY",
+            "PAUSED"
 
-        console.error("======================================");
-        console.error("❌ ERRO FOOTBALL-DATA");
-        console.error("======================================");
+        ];
 
-        if (error.response) {
+        let jogos = partidas.filter(partida =>
+            STATUS_VALIDOS.includes(partida.status)
+        );
 
-            console.error("Status:", error.response.status);
-            console.error("Resposta:", error.response.data);
+        console.log(`✅ Jogos válidos: ${jogos.length}`);
 
-        } else {
+        // =====================================
+        // ORDENAR
+        // =====================================
 
-            console.error("Mensagem:", error.message);
+        jogos.sort((a, b) =>
+            new Date(a.utcDate) - new Date(b.utcDate)
+        );
+
+        // =====================================
+        // FILTRAR APENAS HOJE
+        // =====================================
+
+        const hojeString = formatarData(new Date());
+
+        let jogosHoje = jogos.filter(jogo =>
+
+            jogo.utcDate.startsWith(hojeString)
+
+        );
+
+        // =====================================
+        // SE NÃO TIVER HOJE
+        // RETORNA O PRÓXIMO DIA DISPONÍVEL
+        // =====================================
+
+        if (jogosHoje.length === 0 && jogos.length > 0) {
+
+            const primeiraData = jogos[0].utcDate.substring(0, 10);
+
+            jogosHoje = jogos.filter(jogo =>
+
+                jogo.utcDate.startsWith(primeiraData)
+
+            );
+
+            console.log(
+                "ℹ Não há jogos hoje. Retornando jogos de",
+                primeiraData
+            );
 
         }
 
-        console.error("======================================");
+        const resultado = jogosHoje.map(converterPartida);
+
+        console.log(`⚽ Jogos enviados: ${resultado.length}`);
+
+        return resultado;
+
+    }
+    catch (erro) {
+
+        console.error("====================================");
+        console.error("❌ ERRO FOOTBALL DATA");
+        console.error("====================================");
+
+        if (erro.response) {
+
+            console.error("Status:", erro.response.status);
+            console.error("Resposta:", erro.response.data);
+
+        } else {
+
+            console.error(erro.message);
+
+        }
 
         return [];
 
