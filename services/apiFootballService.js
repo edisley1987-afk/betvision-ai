@@ -58,7 +58,17 @@ export async function consultarAPI(
         );
 
 
-        return resposta.data;
+       console.log(
+    "📡 RESPOSTA FOOTBALL-DATA:",
+    JSON.stringify(
+        resposta.data,
+        null,
+        2
+    )
+);
+
+
+return resposta.data;
 
 
     }
