@@ -1,77 +1,125 @@
+// ==========================================
+// BetVision AI
+// services/apiFootballService.js
+// Football-Data.org Adapter
+// ==========================================
+
+
 import axios from "axios";
-import fs from "fs";
 
 
-const config = JSON.parse(
 
-    fs.readFileSync(
-        "./config/providers.json"
-    )
+const BASE_URL =
 
-);
+    process.env.API_FOOTBALL_URL ||
+
+    "https://api.football-data.org/v4";
+
+
+
+const API_KEY =
+
+    process.env.API_FOOTBALL_KEY;
+
 
 
 
 const api = axios.create({
 
-    baseURL:
-    config.futebolApi.baseUrl,
 
-    timeout:
-    config.futebolApi.timeout,
+    baseURL: BASE_URL,
+
+
+    timeout: 15000,
+
 
     headers:{
 
-        "x-apisports-key":
 
-        config.futebolApi.apiKey
+        "X-Auth-Token":
+            API_KEY
+
 
     }
+
 
 });
 
 
 
-export async function consultarAPI(endpoint,params={}){
+
+
+// ==========================================
+// CONSULTAR API
+// ==========================================
+
+export async function consultarAPI(
+
+    endpoint,
+
+    params = {}
+
+){
 
 
     try{
 
 
         const resposta =
-        await api.get(
 
-            endpoint,
+            await api.get(
 
-            {
-                params
-            }
+                endpoint,
 
-        );
+                {
+
+                    params
+
+                }
+
+            );
 
 
-        return resposta.data.response;
+
+        return resposta.data;
 
 
 
     }
+
 
     catch(error){
 
 
         console.error(
 
-            "Erro API Futebol",
+
+            "Erro Football-Data:",
+
+
+            error.response?.data ||
 
             error.message
+
 
         );
 
 
-        return [];
-
+        return {};
 
     }
 
 
 }
+
+
+
+
+
+export default {
+
+
+    consultarAPI
+
+
+};
