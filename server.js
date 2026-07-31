@@ -1158,19 +1158,16 @@ await criarTabelas();
 
 
 
-const campeonatos =
+const resultadoSync =
 
 await sincronizarSistema();
 
 
-
-
 console.log(
 
-`🌎 ${campeonatos.length} campeonatos sincronizados`
+`🌎 ${resultadoSync.total} campeonatos sincronizados`
 
 );
-
 
 
 
