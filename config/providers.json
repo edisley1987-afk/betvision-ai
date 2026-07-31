@@ -3,20 +3,20 @@
 
         "ativo": true,
 
-        "baseUrl": "https://v3.football.api-sports.io",
+        "baseUrl": "https://api.football-data.org/v4",
 
         "apiKey": "",
 
-        "timeout":10000
+        "timeout": 15000
 
     },
+
 
     "atualizacao": {
 
         "sincronizarCampeonatos": true,
 
-        "intervaloHoras":24
+        "intervaloHoras": 24
 
     }
-
 }
