@@ -1,16 +1,14 @@
 // ==========================================
 // BetVision AI
 // routes/jogos.js
-// API-Football + IA + Odds + ValueBet + Banco
+// Football-Data.org v4
 // ==========================================
-
 
 import express from "express";
 
-
 import {
-    buscarJogosHoje
-} from "../services/partidasService.js";
+    buscarJogos
+} from "../services/futebolService.js";
 
 
 import {
@@ -28,110 +26,79 @@ import {
 } from "../services/valueBetService.js";
 
 
-import {
-    salvarListaJogos
-} from "../services/jogoBancoService.js";
-
-
 
 const router = express.Router();
 
 
 
-
 // ==========================================
-// LISTAR JOGOS DO DIA
+// LISTAR JOGOS
 // ==========================================
 
-router.get("/", async (req, res) => {
+router.get("/", async(req,res)=>{
 
 
-    try {
+    try{
 
 
-        // Buscar jogos reais API-Football
-
-        const jogos = await buscarJogosHoje();
-
-
-
-        // Salvar jogos no PostgreSQL
-
-        await salvarListaJogos(jogos);
+        const jogos =
+            await buscarJogos();
 
 
 
-        const resultado = [];
+        const lista = [];
 
 
 
-        for (const jogo of jogos) {
+        for(const jogo of jogos){
 
 
-
-            // ==============================
-            // ANALISE IA
-            // ==============================
 
             const analise =
                 await gerarAnalise(jogo);
 
 
 
-
-            // ==============================
-            // ODDS
-            // ==============================
-
             const odds =
                 await buscarOdds(jogo.id);
 
 
 
-
-            // ==============================
-            // VALUE BET
-            // ==============================
-
             let valueBet = null;
 
 
 
-            if (odds) {
+            if(odds?.mercado?.vencedor){
+
 
 
                 valueBet =
-                    calcularValueBet({
+                calcularValueBet({
 
 
-                        jogo:
-                            `${jogo.casa} x ${jogo.fora}`,
+                    jogo:
+                        `${jogo.casa} x ${jogo.fora}`,
+
+
+                    mercado:
+                        "Vencedor",
+
+
+                    selecao:
+                        "Casa",
+
+
+                    odd:
+                        odds.mercado.vencedor.casa,
+
+
+                    probabilidadeIA:
+                        analise.probabilidadeCasa
 
 
 
-                        mercado:
-                            "Vitória Casa",
+                });
 
-
-
-                        selecao:
-                            jogo.casa,
-
-
-
-                        odd:
-                            odds.mercado
-                                ?.vencedor
-                                ?.casa || 0,
-
-
-
-                        probabilidadeIA:
-                            analise
-                                .probabilidadeVitoriaCasa
-
-
-                    });
 
 
             }
@@ -139,47 +106,20 @@ router.get("/", async (req, res) => {
 
 
 
-
-            resultado.push({
-
-
-                id:
-                    jogo.id,
+            lista.push({
 
 
-                campeonato:
-                    jogo.campeonato,
-
-
-                casa:
-                    jogo.casa,
-
-
-                fora:
-                    jogo.fora,
-
-
-                horario:
-                    jogo.horario,
-
-
-                status:
-                    jogo.status,
-
+                ...jogo,
 
 
                 analiseIA:
                     analise,
 
 
-
-                odds:
-                    odds,
+                odds,
 
 
-
-                valueBet:
-                    valueBet
+                valueBet
 
 
 
@@ -191,17 +131,15 @@ router.get("/", async (req, res) => {
 
 
 
-
-
         res.json({
 
 
             total:
-                resultado.length,
+                lista.length,
 
 
             jogos:
-                resultado
+                lista
 
 
 
@@ -209,21 +147,15 @@ router.get("/", async (req, res) => {
 
 
 
-
     }
 
-
-    catch (erro) {
+    catch(error){
 
 
         console.error(
-
-            "❌ Erro rota jogos:",
-
-            erro.message
-
+            "Erro jogos:",
+            error.message
         );
-
 
 
         res.status(500).json({
@@ -233,10 +165,8 @@ router.get("/", async (req, res) => {
                 "Erro ao buscar jogos",
 
 
-
             detalhe:
-                erro.message
-
+                error.message
 
 
         });
@@ -248,8 +178,6 @@ router.get("/", async (req, res) => {
 
 
 });
-
-
 
 
 
