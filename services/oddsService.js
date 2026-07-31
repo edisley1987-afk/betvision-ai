@@ -1,55 +1,69 @@
-import axios from "axios";
+// ==========================================
+// BetVision AI
+// services/oddsService.js
+// Versão 5.0
+// ==========================================
 
 
-/*
- Serviço de odds
-*/
+// ==========================================
+// BUSCAR ODDS
+// (Simulação inteligente)
+// ==========================================
 
+export async function buscarOdds(idJogo) {
 
-export async function buscarOdds(idJogo){
+    // Futuramente poderá ser substituído
+    // por uma API real de odds.
 
+    const oddCasa = Number((1.60 + Math.random() * 1.40).toFixed(2));
+
+    const oddEmpate = Number((2.80 + Math.random() * 1.20).toFixed(2));
+
+    const oddFora = Number((2.20 + Math.random() * 2.30).toFixed(2));
+
+    const over25 = Number((1.60 + Math.random() * 0.60).toFixed(2));
+
+    const under25 = Number((1.60 + Math.random() * 0.60).toFixed(2));
 
     return {
 
+        jogo: idJogo,
 
-        jogo:idJogo,
+        atualizadoEm: new Date().toISOString(),
 
+        mercado: {
 
-        mercado:{
+            vencedor: {
 
+                casa: oddCasa,
 
-            vencedor:
+                empate: oddEmpate,
 
-
-            {
-
-
-                casa:2.10,
-
-                empate:3.20,
-
-                fora:3.80
-
+                fora: oddFora
 
             },
 
+            gols: {
 
-            gols:
+                over25: over25,
 
-
-            {
-
-                over25:1.90,
-
-                under25:1.85
+                under25: under25
 
             }
 
-
         }
-
 
     };
 
-
 }
+
+
+// ==========================================
+// EXPORTAÇÃO
+// ==========================================
+
+export default {
+
+    buscarOdds
+
+};
