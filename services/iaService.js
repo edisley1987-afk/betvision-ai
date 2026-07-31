@@ -1,298 +1,123 @@
 // ==========================================
 // BetVision AI
 // services/iaService.js
-// Motor IA Probabilidade + Estatística
-// Versão 4.0
+// Motor IA v5.0
 // ==========================================
 
 
+// ==========================================
+// GERAR ANÁLISE IA
+// ==========================================
 
-export async function gerarAnalise(dados){
+export async function gerarAnalise(jogo) {
 
+    const casa = jogo.casa;
+    const fora = jogo.fora;
 
+    // -----------------------------
+    // Probabilidade base
+    // -----------------------------
 
-    const {
+    let probCasa = 45;
+    let probEmpate = 28;
+    let probFora = 27;
 
+    // -----------------------------
+    // Ajuste simples
+    // -----------------------------
 
-        timeCasa,
+    if (casa && fora) {
 
-        timeFora,
+        if (casa.length > fora.length) {
 
-        golsCasaMedia = 1.5,
+            probCasa += 5;
+            probFora -= 5;
 
-        golsForaMedia = 1.2
+        }
 
+        if (fora.length > casa.length + 5) {
 
-    } = dados;
+            probCasa -= 5;
+            probFora += 5;
 
-
-
-
-
-    let probCasa = 50;
-
-
-
-    /*
-    ======================================
-    MODELO BASE
-    ======================================
-    */
-
-
-    if(golsCasaMedia > golsForaMedia){
-
-
-        probCasa += 15;
-
+        }
 
     }
 
+    // Garantir soma = 100
 
+    const soma = probCasa + probEmpate + probFora;
 
-    if(golsForaMedia > golsCasaMedia){
+    probCasa = Number((probCasa * 100 / soma).toFixed(1));
+    probEmpate = Number((probEmpate * 100 / soma).toFixed(1));
+    probFora = Number((100 - probCasa - probEmpate).toFixed(1));
 
+    // -----------------------------
+    // Placar previsto
+    // -----------------------------
 
-        probCasa -= 10;
+    let placar = "1x1";
 
+    if (probCasa >= 60)
+        placar = "2x1";
 
-    }
+    else if (probCasa >= 70)
+        placar = "3x1";
 
+    else if (probFora >= 50)
+        placar = "1x2";
 
-
-
-
-
-    /*
-    ======================================
-    AJUSTE LIMITES
-    ======================================
-    */
-
-
-    if(probCasa > 85){
-
-        probCasa = 85;
-
-    }
-
-
-
-    if(probCasa < 20){
-
-        probCasa = 20;
-
-    }
-
-
-
-
-
-
-
-    const probEmpate = 25;
-
-
-
-    const probFora =
-
-    100 -
-    probCasa -
-    probEmpate;
-
-
-
-
-
-
-
-
-    /*
-    ======================================
-    GOLS ESPERADOS
-    ======================================
-    */
-
-
-    const golsEsperados =
-
-
-        Number(
-
-            (
-
-            (
-
-                golsCasaMedia +
-
-                golsForaMedia
-
-            )
-
-            /
-
-            2
-
-            )
-
-            .toFixed(2)
-
-        );
-
-
-
-
-
-
-
-    /*
-    ======================================
-    PLACAR PROVÁVEL
-    ======================================
-    */
-
-
-    let placarCasa = 1;
-
-    let placarFora = 0;
-
-
-
-    if(golsEsperados >= 2){
-
-
-        placarCasa = 2;
-
-        placarFora = 1;
-
-
-    }
-
-
-
-    if(probFora > probCasa){
-
-
-        placarCasa = 1;
-
-        placarFora = 2;
-
-
-    }
-
-
-
-
-
-
-
-    /*
-    ======================================
-    CONFIANÇA IA
-    ======================================
-    */
-
+    // -----------------------------
+    // Confiança
+    // -----------------------------
 
     let confianca = "Baixa";
 
-
-
-    if(probCasa >= 65){
-
-        confianca = "Alta";
-
-    }
-
-
-    else if(probCasa >= 50){
-
-
+    if (probCasa >= 55)
         confianca = "Média";
 
+    if (probCasa >= 65)
+        confianca = "Alta";
 
-    }
+    // -----------------------------
+    // Value Bet estimado
+    // -----------------------------
 
-
-
-
-
-
-
-
-
-    /*
-    ======================================
-    RESULTADO FINAL IA
-    ======================================
-    */
-
+    const valueBet = probCasa >= 58;
 
     return {
 
+        jogo: `${casa} x ${fora}`,
 
+        probabilidadeCasa: probCasa,
 
-        jogo:
+        probabilidadeEmpate: probEmpate,
 
-        `${timeCasa} x ${timeFora}`,
+        probabilidadeFora: probFora,
 
+        probabilidadeVitoriaCasa: probCasa,
 
+        golsEsperados: 2.6,
 
+        placarPrevisto: placar,
 
+        valueBet: valueBet,
 
-        probabilidadeCasa:
+        confianca: confianca,
 
-        probCasa,
-
-
-
-
-        probabilidadeEmpate:
-
-        probEmpate,
-
-
-
-
-        probabilidadeFora:
-
-        probFora,
-
-
-
-
-        golsEsperados,
-
-
-
-
-        placarPrevisto:
-
-        `${placarCasa}x${placarFora}`,
-
-
-
-
-        valueBet:
-
-        probCasa >= 65,
-
-
-
-
-        confianca,
-
-
-
-
-        algoritmo:
-
-        "Probabilidade + Estatística BetVision AI v4.0"
-
-
-
+        algoritmo: "BetVision AI v5.0"
 
     };
 
-
-
 }
+
+
+// ==========================================
+// EXPORTAÇÃO
+// ==========================================
+
+export default {
+
+    gerarAnalise
+
+};
