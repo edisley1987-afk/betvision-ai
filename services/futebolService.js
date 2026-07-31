@@ -107,8 +107,6 @@ export default {
 // Football-Data.org
 // ==========================================
 
-import axios from "axios";
-
 const API_KEY = process.env.API_FOOTBALL_KEY;
 
 const BASE_URL =
