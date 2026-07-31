@@ -1,312 +1,229 @@
 // ==========================================
 // BetVision AI
 // services/futebolService.js
-// API-FOOTBALL REAL v4.1
+// Football-Data.org
 // ==========================================
-
 
 import axios from "axios";
 
+const API_KEY = process.env.API_FOOTBALL_KEY;
+const BASE_URL = process.env.API_FOOTBALL_URL || "https://api.football-data.org/v4";
 
+// ==========================================
+// Buscar jogos do dia
+// ==========================================
+
+export async function buscarJogos() {
+
+    try {
+
+        if (!API_KEY) {
+
+            console.warn("API_FOOTBALL_KEY não configurada.");
+
+            return [];
+
+        }
+
+        const hoje = new Date().toISOString().split("T")[0];
+
+        const resposta = await axios.get(
+
+            `${BASE_URL}/matches`,
+
+            {
+
+                headers: {
+
+                    "X-Auth-Token": API_KEY
+
+                },
+
+                params: {
+
+                    dateFrom: hoje,
+                    dateTo: hoje
+
+                },
+
+                timeout: 15000
+
+            }
+
+        );
+
+        const partidas = resposta.data.matches || [];
+
+        console.log(`⚽ ${partidas.length} jogos encontrados`);
+
+        return partidas.map(jogo => ({
+
+            id: jogo.id,
+
+            campeonato: jogo.competition?.name || "-",
+
+            pais: jogo.area?.name || "-",
+
+            casa: jogo.homeTeam?.name || "-",
+
+            fora: jogo.awayTeam?.name || "-",
+
+            horario: jogo.utcDate,
+
+            estadio: "-",
+
+            status: jogo.status,
+
+            escudos: {
+
+                casa: jogo.homeTeam?.crest || "",
+
+                fora: jogo.awayTeam?.crest || ""
+
+            }
+
+        }));
+
+    }
+
+    catch (erro) {
+
+        console.error("Erro Football-Data:", erro.response?.data || erro.message);
+
+        return [];
+
+    }
+
+}
+
+export default {
+
+    buscarJogos
+
+};
+// ==========================================
+// BetVision AI
+// services/futebolService.js
+// Football-Data.org
+// ==========================================
+
+import axios from "axios";
+
+const API_KEY = process.env.API_FOOTBALL_KEY;
 
 const BASE_URL =
-process.env.API_FOOTBALL_URL ||
-"https://v3.football.api-sports.io";
-
-
-
-const API_KEY =
-process.env.API_FOOTBALL_KEY;
-
-
-
+    process.env.API_FOOTBALL_URL ||
+    "https://api.football-data.org/v4";
 
 
 // ==========================================
-// BUSCAR JOGOS REAIS
+// BUSCAR JOGOS DO DIA
 // ==========================================
 
+export async function buscarJogos() {
 
-export async function buscarJogos(){
+    try {
 
+        if (!API_KEY) {
 
-try{
+            console.warn("API_FOOTBALL_KEY não configurada.");
 
+            return [];
 
-if(!API_KEY){
+        }
 
+        const hoje = new Date().toISOString().split("T")[0];
 
-console.warn(
-"⚠ API_FOOTBALL_KEY não configurada"
-);
+        const resposta = await axios.get(
 
+            `${BASE_URL}/matches`,
 
-return [];
+            {
+
+                headers: {
+
+                    "X-Auth-Token": API_KEY
+
+                },
+
+                params: {
+
+                    dateFrom: hoje,
+                    dateTo: hoje
+
+                },
+
+                timeout: 15000
+
+            }
+
+        );
+
+        const partidas = resposta.data.matches || [];
+
+        const jogos = partidas.map(match => ({
+
+            id: match.id,
+
+            campeonato:
+                match.competition?.name || "-",
+
+            pais:
+                match.area?.name || "-",
+
+            casa:
+                match.homeTeam?.name || "-",
+
+            fora:
+                match.awayTeam?.name || "-",
+
+            horario:
+                match.utcDate,
+
+            estadio:
+                match.venue || "-",
+
+            status:
+                match.status,
+
+            escudos: {
+
+                casa:
+                    match.homeTeam?.crest || "",
+
+                fora:
+                    match.awayTeam?.crest || ""
+
+            }
+
+        }));
+
+        console.log(`⚽ ${jogos.length} jogos encontrados`);
+
+        return jogos;
+
+    }
+
+    catch (erro) {
+
+        console.error(
+            "Erro Football-Data:",
+            erro.response?.data || erro.message
+        );
+
+        return [];
+
+    }
 
 }
 
 
+// ==========================================
+// EXPORTAÇÃO
+// ==========================================
 
+export default {
 
-const hoje =
-new Date()
-.toISOString()
-.split("T")[0];
+    buscarJogos
 
-
-
-
-console.log(
-"📅 Buscando jogos:",
-hoje
-);
-
-
-
-
-
-const resposta =
-await axios.get(
-
-
-`${BASE_URL}/fixtures`,
-
-
-{
-
-
-headers:{
-
-
-"x-apisports-key":
-
-API_KEY
-
-
-},
-
-
-params:{
-
-
-date:
-
-hoje
-
-
-},
-
-
-timeout:
-
-15000
-
-
-}
-
-
-
-);
-
-
-
-
-
-
-console.log(
-
-"API STATUS:",
-
-resposta.status
-
-);
-
-
-
-
-
-if(
-
-resposta.data.errors &&
-
-Object.keys(
-resposta.data.errors
-).length
-
-){
-
-
-console.log(
-
-"Erro API-Football:",
-
-resposta.data.errors
-
-);
-
-
-return [];
-
-}
-
-
-
-
-
-
-
-const lista =
-
-resposta.data.response || [];
-
-
-
-
-
-const jogos =
-
-lista.map(
-
-(item)=>({
-
-
-
-id:
-
-item.fixture.id,
-
-
-
-campeonato:
-
-item.league.name,
-
-
-
-pais:
-
-item.league.country,
-
-
-
-temporada:
-
-item.league.season,
-
-
-
-casa:
-
-item.teams.home.name,
-
-
-
-fora:
-
-item.teams.away.name,
-
-
-
-placarCasa:
-
-item.goals.home,
-
-
-
-placarFora:
-
-item.goals.away,
-
-
-
-horario:
-
-item.fixture.date,
-
-
-
-estadio:
-
-item.fixture.venue?.name || "-",
-
-
-
-status:
-
-item.fixture.status.long,
-
-
-
-minuto:
-
-item.fixture.status.elapsed || 0,
-
-
-
-escudos:{
-
-
-casa:
-
-item.teams.home.logo,
-
-
-fora:
-
-item.teams.away.logo
-
-
-}
-
-
-
-})
-
-);
-
-
-
-
-
-
-console.log(
-
-`⚽ ${jogos.length} jogos encontrados`
-
-);
-
-
-
-
-return jogos;
-
-
-
-}
-
-
-
-catch(error){
-
-
-console.error(
-
-
-"❌ Erro API-Football:",
-
-error.response?.data ||
-
-error.message
-
-
-);
-
-
-
-return [];
-
-}
-
-
-
-}
+};
