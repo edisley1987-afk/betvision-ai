@@ -1,24 +1,26 @@
 // ==========================================
 // BetVision AI
 // services/websocketService.js
-// WebSocket Real Time v1.0
+// WebSocket Real Time
 // ==========================================
 
 import { WebSocketServer } from "ws";
 
-import { buscarJogos } from "./futebolService.js";
+import {
+    buscarJogosHoje
+} from "./partidasService.js";
 
-import { listarCampeonatos } from "./bancoService.js";
+import {
+    listarCampeonatos
+} from "./bancoService.js";
 
-
-// clientes conectados
 
 let clientes = [];
 
 
 
 // ==========================================
-// INICIAR WEBSOCKET
+// START WEBSOCKET
 // ==========================================
 
 export function startWS(server) {
@@ -37,7 +39,7 @@ export function startWS(server) {
 
     wss.on(
         "connection",
-        (socket) => {
+        socket => {
 
 
             console.log(
@@ -73,13 +75,14 @@ export function startWS(server) {
 
             socket.on(
                 "close",
-                () => {
+                ()=>{
 
 
                     clientes =
-                        clientes.filter(
-                            c => c !== socket
-                        );
+                    clientes.filter(
+                        cliente =>
+                        cliente !== socket
+                    );
 
 
                     console.log(
@@ -91,24 +94,23 @@ export function startWS(server) {
             );
 
 
-
         }
     );
 
 
 
-    // Atualiza dashboard
+
+    // Atualização automática
 
     setInterval(
+        async()=>{
 
-        async () => {
 
-
-            try {
+            try{
 
 
                 const jogos =
-                    await buscarJogos();
+                    await buscarJogosHoje();
 
 
 
@@ -117,50 +119,41 @@ export function startWS(server) {
 
 
 
-                const dados = {
-
+                enviarTodos({
 
                     tipo:
                         "dashboard",
 
 
-
-                    dashboard: {
+                    dashboard:{
 
 
                         sistema:
                             "BetVision AI",
 
 
-
                         status:
                             "operacional",
-
 
 
                         jogosHoje:
                             jogos.length,
 
 
-
                         campeonatos:
                             campeonatos.length,
-
 
 
                         analisesIA:
                             6,
 
 
-
                         valueBets:
                             1,
 
 
-
                         modelo:
                             "Probabilidade + Estatística",
-
 
 
                         ultimaAtualizacao:
@@ -170,28 +163,22 @@ export function startWS(server) {
                     }
 
 
-                };
-
-
-
-                enviarTodos(dados);
+                });
 
 
 
             }
-
-            catch (erro) {
+            catch(erro){
 
 
                 console.error(
-
                     "Erro WebSocket:",
                     erro.message
-
                 );
 
 
             }
+
 
 
         },
@@ -207,10 +194,10 @@ export function startWS(server) {
 
 
 // ==========================================
-// ENVIAR PARA TODOS
+// ENVIO GLOBAL
 // ==========================================
 
-function enviarTodos(dados) {
+function enviarTodos(dados){
 
 
     const mensagem =
@@ -218,27 +205,22 @@ function enviarTodos(dados) {
 
 
 
-    clientes.forEach(
-
-        cliente => {
+    clientes.forEach(cliente=>{
 
 
-            if (
-                cliente.readyState === 1
-            ) {
+        if(cliente.readyState === 1){
 
 
-                cliente.send(
-                    mensagem
-                );
-
-
-            }
+            cliente.send(
+                mensagem
+            );
 
 
         }
 
-    );
+
+    });
+
 
 }
 
