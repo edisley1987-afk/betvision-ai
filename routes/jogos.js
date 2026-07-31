@@ -1,243 +1,78 @@
 // ==========================================
 // BetVision AI
 // routes/jogos.js
-// Versão 4.0 corrigida
-// Jogos reais API-Football
+// Versão Football-Data.org
 // ==========================================
-
 
 import express from "express";
 
-import {
-    buscarJogos
-} from "../services/futebolService.js";
-
-
-import db from "../database/database.js";
-
-
+import { buscarJogos } from "../services/futebolService.js";
+import { gerarAnalise } from "../services/iaService.js";
+import { buscarOdds } from "../services/oddsService.js";
+import { calcularValueBet } from "../services/valueBetService.js";
 
 const router = express.Router();
 
 
-
-
 // ==========================================
-// LISTAR JOGOS REAIS
-// API-FOOTBALL
+// LISTAR JOGOS
 // ==========================================
 
-
-router.get("/", async (req,res)=>{
-
+router.get("/", async (req, res) => {
 
     try {
 
-
-
         const jogos = await buscarJogos();
 
+        for (const jogo of jogos) {
 
+            // IA
+            const analise = await gerarAnalise(jogo);
 
+            jogo.analiseIA = analise;
 
-        // ==================================
-        // SALVAR JOGOS NO BANCO
-        // ==================================
+            // Odds
+            const odds = await buscarOdds(jogo.id);
 
+            jogo.odds = odds;
 
-        for(const jogo of jogos){
+            // Value Bet
+            const value = await calcularValueBet(
 
+                jogo,
+                analise,
+                odds
 
-            try {
+            );
 
-
-
-                await db.query(
-
-                `
-                INSERT INTO jogos
-
-                (
-
-                    api_id,
-
-                    campeonato,
-
-                    time_casa,
-
-                    time_fora,
-
-                    data_jogo,
-
-                    estadio,
-
-                    status
-
-                )
-
-
-                VALUES
-
-                ($1,$2,$3,$4,$5,$6,$7)
-
-
-                ON CONFLICT(api_id)
-
-                DO UPDATE SET
-
-
-                    campeonato =
-                    EXCLUDED.campeonato,
-
-
-                    time_casa =
-                    EXCLUDED.time_casa,
-
-
-                    time_fora =
-                    EXCLUDED.time_fora,
-
-
-                    data_jogo =
-                    EXCLUDED.data_jogo,
-
-
-                    estadio =
-                    EXCLUDED.estadio,
-
-
-                    status =
-                    EXCLUDED.status
-
-                `,
-
-
-                [
-
-
-                    jogo.id,
-
-
-                    jogo.campeonato,
-
-
-                    jogo.casa,
-
-
-                    jogo.fora,
-
-
-                    jogo.horario,
-
-
-                    jogo.estadio,
-
-
-                    jogo.status || "Agendado"
-
-
-                ]
-
-
-                );
-
-
-
-            }
-
-
-            catch(error){
-
-
-                console.log(
-
-                    "Erro salvando jogo:",
-
-                    error.message
-
-                );
-
-
-            }
-
-
+            jogo.valueBet = value;
 
         }
 
-
-
-
-
-
-
         res.json({
 
-
-
-            total:
-
-            jogos.length,
-
-
+            total: jogos.length,
 
             jogos
 
-
-
         });
-
-
-
-
 
     }
 
+    catch (erro) {
 
-    catch(error){
-
-
-
-        console.error(
-
-            "Erro rota jogos:",
-
-            error.message
-
-        );
-
-
+        console.error(erro);
 
         res.status(500).json({
 
+            erro: "Erro ao buscar jogos",
 
-
-            erro:
-
-            "Erro ao carregar jogos",
-
-
-
-            detalhe:
-
-            error.message
-
-
+            detalhe: erro.message
 
         });
 
-
-
     }
 
-
-
-
 });
-
-
-
-
-
-
 
 export default router;
