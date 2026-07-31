@@ -1,27 +1,15 @@
 // ==========================================
 // BetVision AI
 // services/partidasService.js
-// Football-Data.org
+// DEBUG Football-Data.org
 // ==========================================
 
 
-import axios from "axios";
+import {
+    consultarAPI
+} from "./apiFootballService.js";
 
 
-const API_KEY =
-    process.env.API_FOOTBALL_KEY;
-
-
-const BASE_URL =
-    process.env.API_FOOTBALL_URL ||
-    "https://api.football-data.org/v4";
-
-
-
-
-// ==========================================
-// BUSCAR JOGOS DE HOJE
-// ==========================================
 
 export async function buscarJogosHoje(){
 
@@ -29,62 +17,31 @@ export async function buscarJogosHoje(){
     try{
 
 
-        if(!API_KEY){
-
-
-            console.warn(
-                "API_FOOTBALL_KEY não configurada"
-            );
-
-
-            return [];
-
-
-        }
-
-
-
         const data =
-
             new Date()
             .toISOString()
             .slice(0,10);
 
 
 
+        console.log(
+            "📅 Data consultada:",
+            data
+        );
+
+
 
         const resposta =
 
-            await axios.get(
+            await consultarAPI(
 
-                `${BASE_URL}/matches`,
+                "/matches",
 
                 {
 
-                    headers:{
+                    dateFrom:data,
 
-                        "X-Auth-Token":
-                            API_KEY
-
-                    },
-
-
-                    params:{
-
-
-                        dateFrom:
-                            data,
-
-
-                        dateTo:
-                            data
-
-
-                    },
-
-
-                    timeout:
-                        15000
+                    dateTo:data
 
                 }
 
@@ -92,60 +49,56 @@ export async function buscarJogosHoje(){
 
 
 
+        console.log(
+            "📡 Resposta Football:",
+            JSON.stringify(
+                resposta,
+                null,
+                2
+            )
+        );
+
+
 
         const jogos =
 
-            resposta.data.matches || [];
-
+            resposta.matches || [];
 
 
 
         console.log(
 
-            `⚽ ${jogos.length} jogos encontrados`
+            `⚽ TOTAL JOGOS: ${jogos.length}`
 
         );
-
 
 
 
         return jogos.map(jogo=>({
 
 
-
             id:
                 jogo.id,
-
 
 
             campeonato:
                 jogo.competition?.name || "-",
 
 
-
-            pais:
-                jogo.area?.name || "-",
-
-
-
             casa:
                 jogo.homeTeam?.name || "-",
-
 
 
             fora:
                 jogo.awayTeam?.name || "-",
 
 
-
             horario:
                 jogo.utcDate,
 
 
-
             status:
                 jogo.status
-
 
 
         }));
@@ -154,20 +107,15 @@ export async function buscarJogosHoje(){
 
     }
 
-
     catch(erro){
-
 
 
         console.error(
 
-            "Erro buscar jogos:",
-
-            erro.response?.data ||
+            "Erro buscarJogosHoje:",
             erro.message
 
         );
-
 
 
         return [];
@@ -175,16 +123,4 @@ export async function buscarJogosHoje(){
     }
 
 
-
 }
-
-
-
-
-export default {
-
-
-    buscarJogosHoje
-
-
-};
