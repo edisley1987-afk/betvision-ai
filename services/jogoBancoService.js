@@ -1,163 +1,117 @@
 // ==========================================
 // BetVision AI
-// routes/jogos.js
-// Football-Data.org + PostgreSQL
-// Versão corrigida
+// services/jogoBancoService.js
+// Salvar jogos PostgreSQL
 // ==========================================
 
-import express from "express";
 
-import {
-    buscarJogos
-} from "../services/futebolService.js";
-
-
-import {
-    salvarListaJogos
-} from "../services/jogoBancoService.js";
-
-
-import {
-    gerarAnalise
-} from "../services/iaService.js";
-
-
-import {
-    buscarOdds
-} from "../services/oddsService.js";
-
-
-import {
-    calcularValueBet
-} from "../services/valueBetService.js";
-
-
-
-const router = express.Router();
+import db from "../database/database.js";
 
 
 
 // ==========================================
-// LISTAR JOGOS
+// SALVAR UM JOGO
 // ==========================================
 
-
-router.get("/", async (req,res)=>{
-
-
-    try {
+export async function salvarJogo(jogo){
 
 
-        console.log(
-            "⚽ Buscando jogos Football-Data..."
-        );
+    try{
 
 
+        await db.query(
 
-        const jogos = await buscarJogos();
+        `
 
+        INSERT INTO jogos
 
+        (
 
-        console.log(
+            api_id,
 
-            `⚽ ${jogos.length} jogos encontrados`
+            campeonato,
 
-        );
+            time_casa,
 
+            time_fora,
 
+            data_jogo,
 
-        // ==================================
-        // SALVAR NO POSTGRESQL
-        // ==================================
+            status
 
-
-        await salvarListaJogos(jogos);
-
-
-
-
-        // ==================================
-        // PROCESSAR IA + ODDS + VALUE BET
-        // ==================================
+        )
 
 
-        for(const jogo of jogos){
+        VALUES
+
+        (
+
+            $1,
+
+            $2,
+
+            $3,
+
+            $4,
+
+            $5,
+
+            $6
+
+        )
 
 
+        ON CONFLICT(api_id)
 
-            // IA
-
-            const analise =
-
-            await gerarAnalise(jogo);
+        DO UPDATE SET
 
 
-
-            jogo.analiseIA = analise;
-
+            campeonato = EXCLUDED.campeonato,
 
 
-
-            // ODDS
-
-            const odds =
-
-            await buscarOdds(
-                jogo.id
-            );
+            time_casa = EXCLUDED.time_casa,
 
 
-
-            jogo.odds = odds;
-
+            time_fora = EXCLUDED.time_fora,
 
 
-
-            // VALUE BET
-
-            const value =
-
-            await calcularValueBet(
-
-                jogo,
-
-                analise,
-
-                odds
-
-            );
+            data_jogo = EXCLUDED.data_jogo,
 
 
-
-            jogo.valueBet = value;
-
+            status = EXCLUDED.status
 
 
-        }
+        `,
 
 
+        [
 
 
-        console.log(
+            jogo.id,
 
-            `🤖 ${jogos.length} jogos analisados`
+
+            jogo.campeonato || "-",
+
+
+            jogo.casa || "-",
+
+
+            jogo.fora || "-",
+
+
+            jogo.horario || null,
+
+
+            jogo.status || "agendado"
+
+
+        ]
 
         );
 
 
 
-
-
-        res.json({
-
-            total:jogos.length,
-
-            jogos
-
-
-        });
-
-
+        return true;
 
 
 
@@ -166,40 +120,172 @@ router.get("/", async (req,res)=>{
     catch(error){
 
 
-
         console.error(
 
-            "❌ Erro rota jogos:",
+            "❌ Erro salvar jogo:",
 
             error.message
 
         );
 
 
-
-        res.status(500).json({
-
-
-            erro:
-            "Erro ao buscar jogos",
+        return false;
 
 
-            detalhe:
-            error.message
+    }
 
 
-        });
+}
 
+
+
+
+
+// ==========================================
+// SALVAR LISTA DE JOGOS
+// ==========================================
+
+export async function salvarListaJogos(
+
+    jogos = []
+
+){
+
+
+    if(
+
+        !Array.isArray(jogos)
+
+    ){
+
+
+        console.log(
+
+            "⚠ Lista de jogos inválida"
+
+        );
+
+
+        return 0;
 
 
     }
 
 
 
-});
+    let total = 0;
+
+
+
+    for(
+
+        const jogo of jogos
+
+    ){
+
+
+        const salvo =
+
+        await salvarJogo(jogo);
+
+
+
+        if(salvo){
+
+            total++;
+
+        }
+
+
+    }
+
+
+
+    console.log(
+
+        `⚽ ${total} jogos salvos no PostgreSQL`
+
+    );
+
+
+
+    return total;
+
+
+}
 
 
 
 
 
-export default router;
+// ==========================================
+// LISTAR JOGOS BANCO
+// ==========================================
+
+export async function listarJogos(){
+
+
+    try{
+
+
+        const resultado =
+
+        await db.query(
+
+        `
+
+        SELECT
+
+            *
+
+        FROM jogos
+
+        ORDER BY data_jogo ASC
+
+        `
+
+        );
+
+
+
+        return resultado.rows;
+
+
+
+    }
+
+    catch(error){
+
+
+        console.error(
+
+            "❌ Erro listar jogos:",
+
+            error.message
+
+        );
+
+
+        return [];
+
+
+    }
+
+
+}
+
+
+
+
+
+export default {
+
+
+    salvarJogo,
+
+    salvarListaJogos,
+
+    listarJogos
+
+
+};
