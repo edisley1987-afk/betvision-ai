@@ -5,18 +5,17 @@
 
         "baseUrl": "https://api.football-data.org/v4",
 
-        "apiKey": "",
+        "apiKey": "e1c7bc2ac97d48c9ab3d14e4469e4aa1",
 
         "timeout": 15000
 
     },
 
-
     "atualizacao": {
 
         "sincronizarCampeonatos": true,
 
-        "intervaloHoras": 24
+        "intervaloHoras":24
 
     }
 }
