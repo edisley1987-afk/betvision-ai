@@ -1,3 +1,9 @@
+// ==========================================
+// BetVision AI
+// services/campeonatoService.js
+// Football-Data.org v4
+// ==========================================
+
 import axios from "axios";
 import fs from "fs";
 import path from "path";
@@ -6,28 +12,32 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// ==========================================
+// CONFIGURAÇÃO PADRÃO
+// ==========================================
+
 let config = {
     futebolApi: {
-        baseUrl: "https://v3.football.api-sports.io",
+        baseUrl: "https://api.football-data.org/v4",
         apiKey: ""
     }
 };
 
-// ====================================
-// CARREGA providers.json
-// ====================================
+// ==========================================
+// CARREGAR providers.json (opcional)
+// ==========================================
 
 try {
 
-    const caminho = path.join(
+    const arquivo = path.join(
         __dirname,
         "../config/providers.json"
     );
 
-    if (fs.existsSync(caminho)) {
+    if (fs.existsSync(arquivo)) {
 
         config = JSON.parse(
-            fs.readFileSync(caminho, "utf8")
+            fs.readFileSync(arquivo, "utf8")
         );
 
     }
@@ -35,14 +45,10 @@ try {
 } catch {
 
     console.warn(
-        "⚠ providers.json não encontrado. Utilizando configuração padrão."
+        "⚠ providers.json não encontrado."
     );
 
 }
-
-// ====================================
-// CONFIGURAÇÕES
-// ====================================
 
 const API_KEY =
     process.env.API_FOOTBALL_KEY ||
@@ -52,25 +58,18 @@ const BASE_URL =
     process.env.API_FOOTBALL_URL ||
     config.futebolApi.baseUrl;
 
-
-// ====================================
+// ==========================================
 // BUSCAR CAMPEONATOS
-// ====================================
+// ==========================================
 
 export async function buscarCampeonatos() {
 
     try {
 
-        // Sem chave da API
         if (!API_KEY) {
 
-            console.warn(
-                "⚠ API_KEY não configurada."
-            );
-
-            console.warn(
-                "📦 Utilizando campeonatos locais."
-            );
+            console.warn("⚠ API_FOOTBALL_KEY não configurada.");
+            console.warn("📦 Utilizando campeonatos locais.");
 
             return campeonatosBase();
 
@@ -80,13 +79,13 @@ export async function buscarCampeonatos() {
 
         const resposta = await axios.get(
 
-            `${BASE_URL}/leagues`,
+            `${BASE_URL}/competitions`,
 
             {
 
                 headers: {
 
-                    "x-apisports-key": API_KEY
+                    "X-Auth-Token": API_KEY
 
                 },
 
@@ -96,105 +95,42 @@ export async function buscarCampeonatos() {
 
         );
 
-        console.log("STATUS:", resposta.status);
+        const competicoes =
+            resposta.data?.competitions || [];
 
-        console.log(
-            "BODY:",
-            JSON.stringify(resposta.data, null, 2)
-        );
-
-        // API retornou erro
-        if (
-
-            resposta.data.errors &&
-            Object.keys(resposta.data.errors).length > 0
-
-        ) {
+        if (!competicoes.length) {
 
             console.warn(
-                "⚠ Erro retornado pela API:"
-            );
-
-            console.warn(
-                resposta.data.errors
-            );
-
-            console.warn(
-                "📦 Utilizando campeonatos locais."
+                "⚠ Nenhum campeonato retornado."
             );
 
             return campeonatosBase();
 
         }
 
-        // Sem array de resposta
-        if (
+        const lista = competicoes.map(comp => ({
 
-            !Array.isArray(
-                resposta.data.response
-            )
+            id: comp.id,
 
-        ) {
+            nome: comp.name,
 
-            console.warn(
-                "⚠ Resposta inválida."
-            );
+            pais: comp.area?.name || "",
 
-            return campeonatosBase();
+            continente:
+                comp.area?.code || "",
 
-        }
+            logo: null,
 
-        // Array vazio
-        if (
+            tipo: comp.type,
 
-            resposta.data.response.length === 0
+            temporada:
+                comp.currentSeason?.startDate
+                    ? new Date(
+                        comp.currentSeason.startDate
+                    ).getFullYear()
+                    : new Date().getFullYear()
 
-        ) {
-
-            console.warn(
-                "⚠ API retornou 0 campeonatos."
-            );
-
-            console.warn(
-                "📦 Utilizando campeonatos locais."
-            );
-
-            return campeonatosBase();
-
-        }
-
-        const lista = resposta.data.response.map(
-
-            (liga) => ({
-
-                id: liga.league.id,
-
-                nome: liga.league.name,
-
-                pais: liga.country.name,
-
-                continente:
-                    liga.country.code || "",
-
-                logo:
-                    liga.league.logo,
-
-                tipo:
-                    liga.league.type,
-
-                temporada:
-
-                    liga.seasons?.length
-
-                        ? liga.seasons[
-                            liga.seasons.length - 1
-                        ].year
-
-                        : new Date().getFullYear()
-
-            })
-
-        );
+        }));
 
         console.log(
             `✅ ${lista.length} campeonatos encontrados`
@@ -202,13 +138,11 @@ export async function buscarCampeonatos() {
 
         return lista;
 
-    }
-
-    catch (erro) {
+    } catch (erro) {
 
         console.error(
-            "❌ Erro API Football:",
-            erro.message
+            "❌ Erro Football-Data:",
+            erro.response?.data || erro.message
         );
 
         console.warn(
@@ -221,10 +155,9 @@ export async function buscarCampeonatos() {
 
 }
 
-
-// ====================================
+// ==========================================
 // BUSCAR POR ID
-// ====================================
+// ==========================================
 
 export async function buscarCampeonato(id) {
 
@@ -232,21 +165,14 @@ export async function buscarCampeonato(id) {
         await buscarCampeonatos();
 
     return (
-
-        lista.find(
-
-            campeonato => campeonato.id == id
-
-        ) || null
-
+        lista.find(c => c.id == id) || null
     );
 
 }
 
-
-// ====================================
+// ==========================================
 // BUSCAR POR NOME
-// ====================================
+// ==========================================
 
 export async function buscarCampeonatoNome(nome) {
 
@@ -257,16 +183,12 @@ export async function buscarCampeonatoNome(nome) {
 
         lista.find(
 
-            campeonato =>
+            c =>
 
-                campeonato.nome
-
+                c.nome
                     .toLowerCase()
-
                     .includes(
-
                         nome.toLowerCase()
-
                     )
 
         ) || null
@@ -275,117 +197,120 @@ export async function buscarCampeonatoNome(nome) {
 
 }
 
-
-// ====================================
+// ==========================================
 // CAMPEONATOS LOCAIS
-// ====================================
+// ==========================================
 
 function campeonatosBase() {
 
     return [
 
         {
-            id: 71,
+            id: 2013,
             nome: "Brasileirão Série A",
-            pais: "Brasil",
-            continente: "South America",
+            pais: "Brazil",
+            continente: "BRA",
             temporada: 2026,
-            tipo: "League"
+            tipo: "LEAGUE"
         },
 
         {
-            id: 72,
+            id: 2014,
             nome: "Brasileirão Série B",
-            pais: "Brasil",
-            continente: "South America",
+            pais: "Brazil",
+            continente: "BRA",
             temporada: 2026,
-            tipo: "League"
+            tipo: "LEAGUE"
         },
 
         {
-            id: 39,
+            id: 2021,
             nome: "Premier League",
-            pais: "Inglaterra",
-            continente: "Europe",
+            pais: "England",
+            continente: "ENG",
             temporada: 2026,
-            tipo: "League"
+            tipo: "LEAGUE"
         },
 
         {
-            id: 140,
+            id: 2014,
             nome: "La Liga",
-            pais: "Espanha",
-            continente: "Europe",
+            pais: "Spain",
+            continente: "ESP",
             temporada: 2026,
-            tipo: "League"
+            tipo: "LEAGUE"
         },
 
         {
-            id: 135,
+            id: 2019,
             nome: "Serie A",
-            pais: "Itália",
-            continente: "Europe",
+            pais: "Italy",
+            continente: "ITA",
             temporada: 2026,
-            tipo: "League"
+            tipo: "LEAGUE"
         },
 
         {
-            id: 78,
+            id: 2002,
             nome: "Bundesliga",
-            pais: "Alemanha",
-            continente: "Europe",
+            pais: "Germany",
+            continente: "GER",
             temporada: 2026,
-            tipo: "League"
+            tipo: "LEAGUE"
         },
 
         {
-            id: 61,
+            id: 2015,
             nome: "Ligue 1",
-            pais: "França",
-            continente: "Europe",
+            pais: "France",
+            continente: "FRA",
             temporada: 2026,
-            tipo: "League"
+            tipo: "LEAGUE"
         },
 
         {
-            id: 94,
+            id: 2017,
             nome: "Primeira Liga",
             pais: "Portugal",
-            continente: "Europe",
+            continente: "POR",
             temporada: 2026,
-            tipo: "League"
+            tipo: "LEAGUE"
         },
 
         {
-            id: 88,
+            id: 2003,
             nome: "Eredivisie",
-            pais: "Holanda",
-            continente: "Europe",
+            pais: "Netherlands",
+            continente: "NED",
             temporada: 2026,
-            tipo: "League"
+            tipo: "LEAGUE"
         },
 
         {
-            id: 2,
-            nome: "Champions League",
-            pais: "Europa",
-            continente: "Europe",
+            id: 2001,
+            nome: "UEFA Champions League",
+            pais: "Europe",
+            continente: "EUR",
             temporada: 2026,
-            tipo: "Cup"
+            tipo: "CUP"
         },
 
         {
-            id: 3,
-            nome: "Europa League",
-            pais: "Europa",
-            continente: "Europe",
+            id: 2146,
+            nome: "UEFA Europa League",
+            pais: "Europe",
+            continente: "EUR",
             temporada: 2026,
-            tipo: "Cup"
+            tipo: "CUP"
         }
 
     ];
 
 }
+
+// ==========================================
+// EXPORTAÇÃO
+// ==========================================
 
 export default {
 
