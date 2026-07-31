@@ -34,7 +34,6 @@ export function probabilidadeMercado(odd) {
     }
 
     return 100 / odd;
-
 }
 
 // ==========================================
