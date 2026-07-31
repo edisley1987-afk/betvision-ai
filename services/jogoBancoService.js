@@ -1,164 +1,205 @@
 // ==========================================
 // BetVision AI
-// services/jogoBancoService.js
-// Salvar jogos PostgreSQL
+// routes/jogos.js
+// Football-Data.org + PostgreSQL
+// Versão corrigida
 // ==========================================
 
-import db from "../database/database.js";
+import express from "express";
+
+import {
+    buscarJogos
+} from "../services/futebolService.js";
+
+
+import {
+    salvarListaJogos
+} from "../services/jogoBancoService.js";
+
+
+import {
+    gerarAnalise
+} from "../services/iaService.js";
+
+
+import {
+    buscarOdds
+} from "../services/oddsService.js";
+
+
+import {
+    calcularValueBet
+} from "../services/valueBetService.js";
+
+
+
+const router = express.Router();
+
 
 
 // ==========================================
-// SALVAR JOGO
+// LISTAR JOGOS
 // ==========================================
 
-export async function salvarJogo(jogo) {
+
+router.get("/", async (req,res)=>{
 
 
     try {
 
 
-        await db.query(
-
-            `
-            INSERT INTO jogos
-            (
-                api_id,
-                campeonato,
-                time_casa,
-                time_fora,
-                data_jogo,
-                status
-            )
-
-            VALUES
-
-            ($1,$2,$3,$4,$5,$6)
-
-            ON CONFLICT (api_id)
-
-            DO UPDATE SET
-
-            campeonato = EXCLUDED.campeonato,
-
-            time_casa = EXCLUDED.time_casa,
-
-            time_fora = EXCLUDED.time_fora,
-
-            data_jogo = EXCLUDED.data_jogo,
-
-            status = EXCLUDED.status
-
-            `,
+        console.log(
+            "⚽ Buscando jogos Football-Data..."
+        );
 
 
-            [
 
-                jogo.id,
+        const jogos = await buscarJogos();
 
-                jogo.campeonato || "",
 
-                jogo.casa || "",
 
-                jogo.fora || "",
+        console.log(
 
-                jogo.horario,
-
-                jogo.status || "agendado"
-
-            ]
+            `⚽ ${jogos.length} jogos encontrados`
 
         );
 
 
-        return true;
+
+        // ==================================
+        // SALVAR NO POSTGRESQL
+        // ==================================
+
+
+        await salvarListaJogos(jogos);
+
+
+
+
+        // ==================================
+        // PROCESSAR IA + ODDS + VALUE BET
+        // ==================================
+
+
+        for(const jogo of jogos){
+
+
+
+            // IA
+
+            const analise =
+
+            await gerarAnalise(jogo);
+
+
+
+            jogo.analiseIA = analise;
+
+
+
+
+            // ODDS
+
+            const odds =
+
+            await buscarOdds(
+                jogo.id
+            );
+
+
+
+            jogo.odds = odds;
+
+
+
+
+            // VALUE BET
+
+            const value =
+
+            await calcularValueBet(
+
+                jogo,
+
+                analise,
+
+                odds
+
+            );
+
+
+
+            jogo.valueBet = value;
+
+
+
+        }
+
+
+
+
+        console.log(
+
+            `🤖 ${jogos.length} jogos analisados`
+
+        );
+
+
+
+
+
+        res.json({
+
+            total:jogos.length,
+
+            jogos
+
+
+        });
+
+
+
 
 
     }
 
-
     catch(error){
+
 
 
         console.error(
 
-            "Erro salvar jogo:",
+            "❌ Erro rota jogos:",
 
             error.message
 
         );
 
 
-        return false;
+
+        res.status(500).json({
 
 
-    }
+            erro:
+            "Erro ao buscar jogos",
 
 
-}
+            detalhe:
+            error.message
 
 
+        });
 
-// ==========================================
-// SALVAR LISTA DE JOGOS
-// ==========================================
-
-export async function salvarListaJogos(lista = []) {
-
-
-    if(!Array.isArray(lista)){
-
-
-        return 0;
 
 
     }
 
 
 
-    let total = 0;
+});
 
 
 
-    for(const jogo of lista){
 
 
-        const salvo =
-            await salvarJogo(jogo);
-
-
-
-        if(salvo){
-
-            total++;
-
-        }
-
-
-    }
-
-
-
-    console.log(
-
-        `⚽ ${total} jogos salvos no banco`
-
-    );
-
-
-
-    return total;
-
-
-}
-
-
-
-export default {
-
-
-    salvarJogo,
-
-    salvarListaJogos
-
-
-};
+export default router;
