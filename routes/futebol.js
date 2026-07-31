@@ -1,29 +1,14 @@
 // ==========================================
 // BetVision AI
-// routes/jogos.js
-// Integração partidasService
+// routes/futebol.js
+// Football-Data.org v4
 // ==========================================
 
 import express from "express";
 
 import {
-    buscarJogosHoje
-} from "../services/partidasService.js";
-
-
-import {
-    gerarAnalise
-} from "../services/iaService.js";
-
-
-import {
-    buscarOdds
-} from "../services/oddsService.js";
-
-
-import {
-    calcularValueBet
-} from "../services/valueBetService.js";
+    buscarJogos
+} from "../services/futebolService.js";
 
 
 const router = express.Router();
@@ -31,73 +16,17 @@ const router = express.Router();
 
 
 // ==========================================
-// LISTAR JOGOS DO DIA
+// JOGOS DO DIA
 // ==========================================
 
-router.get("/", async (req,res)=>{
+router.get("/jogos", async(req,res)=>{
 
 
-    try {
+    try{
 
 
         const jogos =
-            await buscarJogosHoje();
-
-
-
-        for (const jogo of jogos) {
-
-
-
-            const analise =
-                await gerarAnalise(jogo);
-
-
-
-            jogo.analiseIA =
-                analise;
-
-
-
-            const odds =
-                await buscarOdds(jogo.id);
-
-
-
-            jogo.odds =
-                odds;
-
-
-
-            jogo.valueBet =
-                calcularValueBet({
-
-
-                    jogo:
-                        jogo.id,
-
-
-                    mercado:
-                        "Vencedor",
-
-
-                    selecao:
-                        jogo.casa,
-
-
-                    odd:
-                        odds?.mercado?.vencedor?.casa || 0,
-
-
-                    probabilidadeIA:
-                        analise.probabilidadeCasa
-
-
-                });
-
-
-
-        }
+            await buscarJogos();
 
 
 
@@ -111,30 +40,38 @@ router.get("/", async (req,res)=>{
             jogos
 
 
+
         });
 
 
 
     }
-
-    catch(erro){
+    catch(error){
 
 
         console.error(
-            "Erro jogos:",
-            erro.message
+            "Erro futebol:",
+            error.message
         );
 
 
         res.status(500).json({
 
+
             erro:
-                "Erro ao buscar jogos"
+                "Erro ao buscar jogos",
+
+
+            detalhe:
+                error.message
+
 
         });
 
 
+
     }
+
 
 
 });
