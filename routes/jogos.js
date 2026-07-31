@@ -1,7 +1,7 @@
 // ==========================================
 // BetVision AI
 // routes/jogos.js
-// Versão Football-Data.org
+// Football-Data.org + IA + Value Bets
 // ==========================================
 
 import express from "express";
@@ -24,30 +24,65 @@ router.get("/", async (req, res) => {
 
         const jogos = await buscarJogos();
 
+
         for (const jogo of jogos) {
 
-            // IA
+
+            // ==========================
+            // INTELIGÊNCIA ARTIFICIAL
+            // ==========================
+
             const analise = await gerarAnalise(jogo);
 
             jogo.analiseIA = analise;
 
-            // Odds
+
+
+            // ==========================
+            // ODDS
+            // ==========================
+
             const odds = await buscarOdds(jogo.id);
 
             jogo.odds = odds;
 
-            // Value Bet
-            const value = await calcularValueBet(
 
-                jogo,
-                analise,
-                odds
 
-            );
+            // ==========================
+            // VALUE BET
+            // ==========================
 
-            jogo.valueBet = value;
+            const oddCasa =
+                odds?.mercado?.vencedor?.casa || 0;
+
+
+            const probabilidadeIA =
+                analise?.probabilidade || 0;
+
+
+
+            jogo.valueBet = calcularValueBet({
+
+                jogo:
+                    `${jogo.casa} x ${jogo.fora}`,
+
+                mercado:
+                    "Vencedor",
+
+                selecao:
+                    jogo.casa,
+
+                odd:
+                    oddCasa,
+
+                probabilidadeIA
+
+            });
+
 
         }
+
+
 
         res.json({
 
@@ -57,22 +92,33 @@ router.get("/", async (req, res) => {
 
         });
 
+
     }
 
     catch (erro) {
 
-        console.error(erro);
+
+        console.error(
+            "Erro rota jogos:",
+            erro
+        );
+
 
         res.status(500).json({
 
-            erro: "Erro ao buscar jogos",
+            erro:
+                "Erro ao buscar jogos",
 
-            detalhe: erro.message
+            detalhe:
+                erro.message
 
         });
 
+
     }
 
+
 });
+
 
 export default router;
