@@ -10,7 +10,6 @@ import {
     buscarJogos
 } from "../services/futebolService.js";
 
-
 import {
     salvarListaJogos
 } from "../services/jogoBancoService.js";
