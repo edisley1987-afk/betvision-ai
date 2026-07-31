@@ -1,29 +1,24 @@
 // ==========================================
 // BetVision AI
 // services/oddsService.js
-// Versão 5.0
+// Football-Data.org Compatible
+// Versão 6.0
 // ==========================================
 
+/**
+ * Gera odds simuladas.
+ * Pode ser substituído futuramente por uma API de odds.
+ */
+
+function gerarOdd(min, max) {
+    return Number((Math.random() * (max - min) + min).toFixed(2));
+}
 
 // ==========================================
 // BUSCAR ODDS
-// (Simulação inteligente)
 // ==========================================
 
-export async function buscarOdds(idJogo) {
-
-    // Futuramente poderá ser substituído
-    // por uma API real de odds.
-
-    const oddCasa = Number((1.60 + Math.random() * 1.40).toFixed(2));
-
-    const oddEmpate = Number((2.80 + Math.random() * 1.20).toFixed(2));
-
-    const oddFora = Number((2.20 + Math.random() * 2.30).toFixed(2));
-
-    const over25 = Number((1.60 + Math.random() * 0.60).toFixed(2));
-
-    const under25 = Number((1.60 + Math.random() * 0.60).toFixed(2));
+export async function buscarOdds(idJogo = null) {
 
     return {
 
@@ -35,19 +30,19 @@ export async function buscarOdds(idJogo) {
 
             vencedor: {
 
-                casa: oddCasa,
+                casa: gerarOdd(1.60, 3.00),
 
-                empate: oddEmpate,
+                empate: gerarOdd(2.80, 4.00),
 
-                fora: oddFora
+                fora: gerarOdd(2.20, 4.50)
 
             },
 
             gols: {
 
-                over25: over25,
+                over25: gerarOdd(1.60, 2.20),
 
-                under25: under25
+                under25: gerarOdd(1.60, 2.20)
 
             }
 
@@ -57,6 +52,35 @@ export async function buscarOdds(idJogo) {
 
 }
 
+// ==========================================
+// BUSCAR ODDS DE VÁRIOS JOGOS
+// ==========================================
+
+export async function buscarOddsJogos(listaJogos = []) {
+
+    if (!Array.isArray(listaJogos)) {
+        return [];
+    }
+
+    const resultado = [];
+
+    for (const jogo of listaJogos) {
+
+        const odds = await buscarOdds(jogo.id);
+
+        resultado.push({
+
+            ...jogo,
+
+            odds
+
+        });
+
+    }
+
+    return resultado;
+
+}
 
 // ==========================================
 // EXPORTAÇÃO
@@ -64,6 +88,7 @@ export async function buscarOdds(idJogo) {
 
 export default {
 
-    buscarOdds
+    buscarOdds,
+    buscarOddsJogos
 
 };
