@@ -581,170 +581,157 @@ function renderizarCampeonatos() {
 // CARREGAR JOGOS
 // ==========================================
 
-
 async function carregarJogos() {
 
+    try {
 
-    const dados = await apiRequest(
+        const dados = await apiRequest("/api/jogos");
 
-        "/api/jogos"
+        console.log("Resposta /api/jogos:", dados);
 
-    );
+        if (!dados) {
 
+            estadoSistema.jogos = [];
 
+            renderizarJogos();
 
-    if (!dados) {
+            return;
 
+        }
 
-        return;
+        // API retorna:
+        // { total: X, jogos: [...] }
 
+        estadoSistema.jogos = Array.isArray(dados)
+            ? dados
+            : (dados.jogos || []);
+
+        console.log("Jogos carregados:", estadoSistema.jogos);
+
+        renderizarJogos();
+
+    } catch (erro) {
+
+        console.error("Erro ao carregar jogos:", erro);
+
+        estadoSistema.jogos = [];
+
+        renderizarJogos();
 
     }
 
-
-
-    estadoSistema.jogos =
-
-        Array.isArray(dados)
-
-            ? dados
-
-            : dados.jogos || [];
-
-
-
-    renderizarJogos();
-
-
 }
-
-
-
 
 
 // ==========================================
 // RENDER JOGOS
 // ==========================================
 
-
 function renderizarJogos() {
 
+    const container = document.getElementById("listaJogos");
 
-    const container = document.getElementById(
+    if (!container) {
 
-        "listaJogos"
-
-    );
-
-
-
-    if (!container) return;
-
-
-
-    container.innerHTML = "";
-
-
-
-    if (estadoSistema.jogos.length === 0) {
-
-
-        container.innerHTML = `
-
-            <div class="empty-state">
-
-                Nenhum jogo encontrado
-
-            </div>
-
-        `;
-
+        console.warn("Elemento listaJogos não encontrado");
 
         return;
 
+    }
+
+    container.innerHTML = "";
+
+    if (!estadoSistema.jogos || estadoSistema.jogos.length === 0) {
+
+        container.innerHTML = `
+            <div class="empty-state">
+                Nenhum jogo encontrado
+            </div>
+        `;
+
+        return;
 
     }
 
-
-
-
     estadoSistema.jogos.forEach(jogo => {
 
+        const card = document.createElement("div");
 
-
-        const card = document.createElement(
-
-            "div"
-
-        );
-
-
-
-        card.className =
-
-            "jogo-card";
-
-
+        card.className = "jogo-card";
 
         card.innerHTML = `
 
-            <div class="jogo-times">
+            <div class="jogo-header">
+                <div class="time casa">
+                    ${jogo.escudos?.casa
+                        ? `<img src="${jogo.escudos.casa}" class="escudo" alt="Casa">`
+                        : ""}
+                    <strong>${jogo.casa || "-"}</strong>
+                </div>
 
-                <strong>
+                <div class="versus">X</div>
 
-                    ${jogo.casa ?? jogo.timeCasa ?? "-"}
-
-                </strong>
-
-                <span>
-
-                    x
-
-                </span>
-
-                <strong>
-
-                    ${jogo.fora ?? jogo.timeFora ?? "-"}
-
-                </strong>
-
+                <div class="time fora">
+                    ${jogo.escudos?.fora
+                        ? `<img src="${jogo.escudos.fora}" class="escudo" alt="Fora">`
+                        : ""}
+                    <strong>${jogo.fora || "-"}</strong>
+                </div>
             </div>
-
 
             <div class="jogo-info">
-
-                Campeonato:
-
-                ${jogo.campeonato ?? "-"}
-
+                🏆 ${jogo.campeonato || "-"}
             </div>
 
+            <div class="jogo-info">
+                🌍 ${jogo.pais || "-"}
+            </div>
 
-            <div class="jogo-data">
+            <div class="jogo-info">
+                📅 ${formatarData(jogo.horario)}
+            </div>
 
-                ${formatarData(jogo.data)}
-
+            <div class="jogo-info">
+                ⏱ ${jogo.status || "-"}
             </div>
 
         `;
 
-
-
-        container.appendChild(
-
-            card
-
-        );
-
-
+        container.appendChild(card);
 
     });
-
 
 }
 
 
+// ==========================================
+// FORMATA DATA
+// ==========================================
 
+function formatarData(data) {
+
+    if (!data) return "-";
+
+    try {
+
+        return new Date(data).toLocaleString(
+            "pt-BR",
+            {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit"
+            }
+        );
+
+    } catch {
+
+        return data;
+
+    }
+
+}
 
 
 
