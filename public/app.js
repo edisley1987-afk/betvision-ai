@@ -982,15 +982,13 @@ console.log("✅ Parte 2B carregada");
 // WebSocket + Atualização em Tempo Real
 // ==========================================
 
-// ==========================================
-// CONECTAR WEBSOCKET
-// ==========================================
 
-fu// ==========================================
+// ==========================================
 // CONECTAR WEBSOCKET
 // ==========================================
 
 function conectarWebSocket() {
+
 
     const protocolo =
 
@@ -1000,12 +998,13 @@ function conectarWebSocket() {
 
 
     const url =
+
         protocolo + window.location.host;
 
 
 
     console.log(
-        "🔌 Conectando WebSocket...",
+        "🔌 Conectando WebSocket:",
         url
     );
 
@@ -1014,8 +1013,7 @@ function conectarWebSocket() {
     try {
 
 
-        estado.websocket =
-            new WebSocket(url);
+        estado.websocket = new WebSocket(url);
 
 
 
@@ -1043,10 +1041,13 @@ function conectarWebSocket() {
             );
 
 
+            if(typeof adicionarLog === "function"){
 
-            adicionarLog(
-                "WebSocket conectado em tempo real."
-            );
+                adicionarLog(
+                    "WebSocket conectado."
+                );
+
+            }
 
 
         };
@@ -1062,17 +1063,16 @@ function conectarWebSocket() {
 
 
                 const dados =
+
                     JSON.parse(
                         evento.data
                     );
 
 
-
                 console.log(
-                    "📨 WS:",
+                    "📨 Mensagem WS:",
                     dados
                 );
-
 
 
                 processarMensagemWS(
@@ -1082,13 +1082,12 @@ function conectarWebSocket() {
 
             }
 
-
             catch(erro){
 
 
                 console.error(
 
-                    "Mensagem WS inválida:",
+                    "Erro processando WS:",
                     erro
 
                 );
@@ -1107,15 +1106,19 @@ function conectarWebSocket() {
 
 
             console.error(
+
                 "❌ Erro WebSocket:",
                 erro
+
             );
 
 
-
             atualizarTexto(
+
                 "wsStatus",
+
                 "Erro"
+
             );
 
 
@@ -1129,7 +1132,9 @@ function conectarWebSocket() {
 
 
             console.warn(
+
                 "⚪ WebSocket desconectado"
+
             );
 
 
@@ -1138,31 +1143,40 @@ function conectarWebSocket() {
 
 
             atualizarTexto(
+
                 "wsStatus",
+
                 "Reconectando..."
+
             );
 
 
 
             atualizarStatus(
+
                 "offline"
+
             );
 
 
 
-            adicionarLog(
-                "WebSocket desconectado. Tentando reconectar..."
-            );
+            if(typeof adicionarLog === "function"){
+
+
+                adicionarLog(
+
+                    "WebSocket desconectado."
+
+                );
+
+
+            }
 
 
 
             setTimeout(
 
-                () => {
-
-                    conectarWebSocket();
-
-                },
+                conectarWebSocket,
 
                 CONFIG.websocketReconnect
 
@@ -1181,15 +1195,18 @@ function conectarWebSocket() {
 
         console.error(
 
-            "Falha ao iniciar WebSocket:",
+            "Falha WebSocket:",
             erro
 
         );
 
 
         atualizarTexto(
+
             "wsStatus",
+
             "Indisponível"
+
         );
 
 
@@ -1198,145 +1215,165 @@ function conectarWebSocket() {
 
 }
 
-    estado.websocket.onerror = (erro) => {
 
-        console.error(
-
-            "Erro WebSocket",
-
-            erro
-
-        );
-
-    };
-
-    estado.websocket.onclose = () => {
-
-        console.warn(
-
-            "WebSocket desconectado"
-
-        );
-
-        estado.conectado = false;
-
-        atualizarStatus("offline");
-
-        setTimeout(
-
-            conectarWebSocket,
-
-            CONFIG.websocketReconnect
-
-        );
-
-    };
-
-}
 
 // ==========================================
-// PROCESSAR EVENTOS
+// PROCESSAR EVENTOS WS
 // ==========================================
 
-function processarMensagemWS(msg) {
+function processarMensagemWS(msg){
 
-    if (!msg) return;
 
-    console.log("📨 WS:", msg);
+    if(!msg) return;
 
-    switch (msg.tipo) {
 
-       case "dashboard":
 
-    estado.dashboard =
-        msg.dashboard || msg;
+    switch(msg.tipo){
 
-    renderDashboard();
 
-break;
+        case "dashboard":
+
+
+            estado.dashboard =
+
+                msg.dashboard || msg;
+
+
+
+            renderDashboard();
+
+
+        break;
+
+
+
         case "jogo":
 
-            atualizarJogo(msg.jogo);
 
-            break;
+            atualizarJogo(
+                msg.jogo
+            );
+
+
+        break;
+
+
 
         case "analise":
 
-            estado.analises.unshift(msg.analise);
+
+            estado.analises.unshift(
+                msg.analise
+            );
+
 
             renderAnalises();
 
-            break;
+
+        break;
+
+
 
         case "valuebet":
 
-            estado.valueBets.unshift(msg.valuebet);
+
+            estado.valueBets.unshift(
+                msg.valuebet
+            );
+
 
             renderValueBets();
 
-            break;
+
+        break;
+
+
 
         case "refresh":
 
+
             atualizarTudo();
 
-            break;
+
+        break;
+
+
 
         default:
 
+
             console.log(
-
                 "Evento WS:",
-
                 msg.tipo
-
             );
+
 
     }
 
+
 }
 
+
+
 // ==========================================
-// ATUALIZA JOGO
+// ATUALIZAR JOGO
 // ==========================================
 
-function atualizarJogo(jogo) {
+function atualizarJogo(jogo){
 
-    const indice = estado.jogos.findIndex(
 
-        j => j.id === jogo.id
+    const indice =
 
-    );
+        estado.jogos.findIndex(
 
-    if (indice >= 0) {
+            j => j.id === jogo.id
+
+        );
+
+
+
+    if(indice >= 0){
+
 
         estado.jogos[indice] = {
+
 
             ...estado.jogos[indice],
 
             ...jogo
 
+
         };
+
 
     }
 
-    else {
+    else{
+
 
         estado.jogos.push(jogo);
 
+
     }
+
+
 
     renderJogos();
 
+
 }
+
+
 
 // ==========================================
 // ATUALIZAÇÃO COMPLETA
 // ==========================================
 
-async function atualizarTudo() {
+async function atualizarTudo(){
+
 
     await Promise.all([
+
 
         carregarDashboard(),
 
@@ -1346,10 +1383,17 @@ async function atualizarTudo() {
 
         carregarValueBets()
 
+
     ]);
 
+
 }
-console.log("✅ Parte 3A carregada");
+
+
+
+console.log(
+    "✅ Parte 3A carregada"
+);
 // ==========================================
 // BetVision AI
 // Frontend v5.0
