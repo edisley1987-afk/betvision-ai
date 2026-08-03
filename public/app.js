@@ -986,6 +986,10 @@ console.log("✅ Parte 2B carregada");
 // CONECTAR WEBSOCKET
 // ==========================================
 
+fu// ==========================================
+// CONECTAR WEBSOCKET
+// ==========================================
+
 function conectarWebSocket() {
 
     const protocolo =
@@ -994,45 +998,205 @@ function conectarWebSocket() {
             ? "wss://"
             : "ws://";
 
-    const url = protocolo + window.location.host;
 
-    console.log("🔌 Conectando WebSocket...");
+    const url =
+        protocolo + window.location.host;
 
-    estado.websocket = new WebSocket(url);
 
-    estado.websocket.onopen = () => {
 
-        console.log("✅ WebSocket conectado");
+    console.log(
+        "🔌 Conectando WebSocket...",
+        url
+    );
 
-        estado.conectado = true;
 
-        atualizarStatus("operacional");
 
-    };
+    try {
 
-    estado.websocket.onmessage = (evento) => {
 
-        try {
+        estado.websocket =
+            new WebSocket(url);
 
-            const dados = JSON.parse(evento.data);
 
-            processarMensagemWS(dados);
 
-        }
+        estado.websocket.onopen = () => {
 
-        catch (erro) {
+
+            console.log(
+                "✅ WebSocket conectado"
+            );
+
+
+            estado.conectado = true;
+
+
+
+            atualizarStatus(
+                "operacional"
+            );
+
+
+
+            atualizarTexto(
+                "wsStatus",
+                "Conectado"
+            );
+
+
+
+            adicionarLog(
+                "WebSocket conectado em tempo real."
+            );
+
+
+        };
+
+
+
+
+
+        estado.websocket.onmessage = (evento) => {
+
+
+            try {
+
+
+                const dados =
+                    JSON.parse(
+                        evento.data
+                    );
+
+
+
+                console.log(
+                    "📨 WS:",
+                    dados
+                );
+
+
+
+                processarMensagemWS(
+                    dados
+                );
+
+
+            }
+
+
+            catch(erro){
+
+
+                console.error(
+
+                    "Mensagem WS inválida:",
+                    erro
+
+                );
+
+
+            }
+
+
+        };
+
+
+
+
+
+        estado.websocket.onerror = (erro) => {
+
 
             console.error(
-
-                "Mensagem WS inválida",
-
+                "❌ Erro WebSocket:",
                 erro
+            );
+
+
+
+            atualizarTexto(
+                "wsStatus",
+                "Erro"
+            );
+
+
+        };
+
+
+
+
+
+        estado.websocket.onclose = () => {
+
+
+            console.warn(
+                "⚪ WebSocket desconectado"
+            );
+
+
+            estado.conectado = false;
+
+
+
+            atualizarTexto(
+                "wsStatus",
+                "Reconectando..."
+            );
+
+
+
+            atualizarStatus(
+                "offline"
+            );
+
+
+
+            adicionarLog(
+                "WebSocket desconectado. Tentando reconectar..."
+            );
+
+
+
+            setTimeout(
+
+                () => {
+
+                    conectarWebSocket();
+
+                },
+
+                CONFIG.websocketReconnect
 
             );
 
-        }
 
-    };
+        };
+
+
+
+    }
+
+
+    catch(erro){
+
+
+        console.error(
+
+            "Falha ao iniciar WebSocket:",
+            erro
+
+        );
+
+
+        atualizarTexto(
+            "wsStatus",
+            "Indisponível"
+        );
+
+
+    }
+
+
+}
 
     estado.websocket.onerror = (erro) => {
 
@@ -1082,14 +1246,14 @@ function processarMensagemWS(msg) {
 
     switch (msg.tipo) {
 
-        case "dashboard":
+       case "dashboard":
 
-            estado.dashboard = msg.dados || msg;
+    estado.dashboard =
+        msg.dashboard || msg;
 
-            renderDashboard();
+    renderDashboard();
 
-            break;
-
+break;
         case "jogo":
 
             atualizarJogo(msg.jogo);
