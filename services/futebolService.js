@@ -2,7 +2,7 @@
 // BetVision AI
 // services/futebolService.js
 // Football-Data.org v4
-// Jogos do dia - Plano Free
+// Serviço central de partidas
 // ==========================================
 
 import axios from "axios";
@@ -22,30 +22,31 @@ const BASE_URL =
     "https://api.football-data.org/v4";
 
 
+
 // ==========================================
-// COMPETIÇÕES DISPONÍVEIS FREE
+// COMPETIÇÕES FREE
 // ==========================================
 
 const COMPETICOES_FREE = [
 
-    "PL",     // Premier League
-    "BL1",    // Bundesliga
-    "BSA",    // Brasileirão Série A
-    "CL",     // Champions League
-    "SA",     // Serie A Itália
-    "PD",     // La Liga
-    "FL1",    // Ligue 1
-    "PPL",    // Portugal
+    "PL",
+    "BL1",
+    "BSA",
+    "CL",
+    "SA",
+    "PD",
+    "FL1",
+    "PPL"
 
 ];
 
 
 
 // ==========================================
-// FORMATAR DATA
+// DATA
 // ==========================================
 
-function formatarData(data) {
+function dataISO(data){
 
     return data
         .toISOString()
@@ -56,57 +57,12 @@ function formatarData(data) {
 
 
 // ==========================================
-// DATA BRASIL
+// CONVERTER JOGO
 // ==========================================
 
-function dataBrasil(dataUTC) {
-
-
-    return new Date(dataUTC)
-        .toLocaleDateString(
-            "pt-BR",
-            {
-                timeZone:
-                    "America/Sao_Paulo"
-            }
-        );
-
-}
-
-
-
-// ==========================================
-// VERIFICAR SE É HOJE
-// ==========================================
-
-function ehHoje(dataUTC) {
-
-
-    const hoje = new Date()
-        .toLocaleDateString(
-            "pt-BR",
-            {
-                timeZone:
-                    "America/Sao_Paulo"
-            }
-        );
-
-
-    return dataBrasil(dataUTC) === hoje;
-
-}
-
-
-
-// ==========================================
-// CONVERTER PARTIDA
-// ==========================================
-
-function converterPartida(match) {
-
+function converter(match){
 
     return {
-
 
         id:
             match.id,
@@ -137,7 +93,7 @@ function converterPartida(match) {
 
 
         status:
-            match.status,
+            match.status || "SCHEDULED",
 
 
         rodada:
@@ -148,9 +104,7 @@ function converterPartida(match) {
             match.venue || "-",
 
 
-
         escudos:{
-
 
             casa:
                 match.homeTeam?.crest || "",
@@ -158,6 +112,18 @@ function converterPartida(match) {
 
             fora:
                 match.awayTeam?.crest || ""
+
+        },
+
+
+        placar:{
+
+            casa:
+                match.score?.fullTime?.home ?? null,
+
+
+            fora:
+                match.score?.fullTime?.away ?? null
 
         }
 
@@ -172,27 +138,22 @@ function converterPartida(match) {
 // BUSCAR JOGOS
 // ==========================================
 
-export async function buscarJogos() {
+export async function buscarJogos(){
 
 
-    try {
+    try{
 
 
-        console.log("");
-        console.log("====================================");
-        console.log("⚽ BETVISION AI");
-        console.log("📅 BUSCANDO JOGOS DE HOJE");
-        console.log("====================================");
-
+        console.log(
+            "⚽ Buscando jogos Football-Data"
+        );
 
 
         if(!API_KEY){
 
-
             console.error(
-                "❌ API KEY não encontrada"
+                "❌ API KEY ausente"
             );
-
 
             return [];
 
@@ -200,48 +161,27 @@ export async function buscarJogos() {
 
 
 
-        console.log(
-            "✅ API KEY carregada"
-        );
-
-
-
         const hoje =
-            formatarData(
-                new Date()
-            );
-
-
-
-        console.log(
-            "📅 Data consulta:",
-            hoje
-        );
+            dataISO(new Date());
 
 
 
         const resposta =
             await axios.get(
 
-
                 `${BASE_URL}/matches`,
-
 
                 {
 
-
                     headers:{
-
 
                         "X-Auth-Token":
                             API_KEY
-
 
                     },
 
 
                     params:{
-
 
                         competitions:
                             COMPETICOES_FREE.join(","),
@@ -254,19 +194,15 @@ export async function buscarJogos() {
                         dateTo:
                             hoje
 
-
                     },
 
 
                     timeout:
                         30000
 
-
                 }
 
-
             );
-
 
 
 
@@ -276,14 +212,12 @@ export async function buscarJogos() {
 
 
         console.log(
-            `📦 API retornou ${partidas.length} partidas`
+            `📦 Partidas API: ${partidas.length}`
         );
 
 
 
-
-
-        const STATUS_VALIDOS = [
+        const validos = [
 
             "SCHEDULED",
             "TIMED",
@@ -295,114 +229,43 @@ export async function buscarJogos() {
 
 
 
+        const jogos =
 
-        let jogos =
-            partidas.filter(
-                partida =>
-                    STATUS_VALIDOS.includes(
-                        partida.status
-                    )
-            );
+            partidas
 
+            .filter(
 
-
-        console.log(
-            `✅ Após status: ${jogos.length}`
-        );
-
-
-
-
-
-        jogos =
-            jogos.filter(
                 jogo =>
-                    ehHoje(
-                        jogo.utcDate
-                    )
-            );
+                validos.includes(
+                    jogo.status
+                )
+
+            )
+
+            .map(converter);
 
 
 
         console.log(
-            `🇧🇷 Jogos hoje Brasil: ${jogos.length}`
+            `✅ Jogos enviados: ${jogos.length}`
         );
 
 
 
-
-
-        jogos.sort(
-            (a,b)=>
-                new Date(a.utcDate)
-                -
-                new Date(b.utcDate)
-        );
-
-
-
-
-
-        const resultado =
-            jogos.map(
-                converterPartida
-            );
-
-
-
-
-
-        console.log(
-            `⚽ Jogos enviados: ${resultado.length}`
-        );
-
-
-        console.log(
-            "===================================="
-        );
-
-
-
-        return resultado;
+        return jogos;
 
 
 
     }
-    catch(erro){
-
+    catch(error){
 
 
         console.error(
-            "❌ ERRO FOOTBALL DATA"
+
+            "❌ Erro Football-Data:",
+            error.message
+
         );
-
-
-
-        if(erro.response){
-
-
-            console.error(
-                "Status:",
-                erro.response.status
-            );
-
-
-            console.error(
-                erro.response.data
-            );
-
-
-        }
-        else{
-
-
-            console.error(
-                erro.message
-            );
-
-
-        }
-
 
 
         return [];
@@ -415,11 +278,25 @@ export async function buscarJogos() {
 
 
 // ==========================================
-// EXPORT
+// COMPATIBILIDADE WEBSOCKET
+// ==========================================
+
+export async function buscarJogosHoje(){
+
+    return await buscarJogos();
+
+}
+
+
+
+// ==========================================
+// EXPORT DEFAULT
 // ==========================================
 
 export default {
 
-    buscarJogos
+    buscarJogos,
+
+    buscarJogosHoje
 
 };
