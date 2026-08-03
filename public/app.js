@@ -1518,73 +1518,6 @@ function renderAnalisesIA(){
 
 
 // ==========================================
-// VALUE BETS
-// ==========================================
-
-async function carregarValueBets(){
-
-
-    try{
-
-
-        const resposta =
-        await fetch(
-
-            `${CONFIG.apiBase}/api/valuebets`
-
-        );
-
-
-
-        if(!resposta.ok){
-
-            throw new Error(
-                "Erro value bets"
-            );
-
-        }
-
-
-
-        const dados =
-        await resposta.json();
-
-
-
-        estado.valuebets =
-        dados.valuebets ||
-        dados;
-
-
-
-        renderValueBets();
-
-
-
-    }
-
-
-    catch(erro){
-
-
-        console.error(
-            erro
-        );
-
-
-        adicionarLog(
-            "Erro carregando Value Bets"
-        );
-
-
-    }
-
-
-}
-
-
-
-// ==========================================
 // RENDER VALUE BETS
 // ==========================================
 
@@ -1597,7 +1530,6 @@ function renderValueBets(){
     );
 
 
-
     if(!container)
         return;
 
@@ -1605,7 +1537,7 @@ function renderValueBets(){
 
     if(
         !estado.valuebets ||
-        estado.valuebets.length===0
+        estado.valuebets.length === 0
     ){
 
 
@@ -1633,16 +1565,32 @@ function renderValueBets(){
     .map(v=>{
 
 
+        const jogo =
+        v.jogo ||
+        `${v.casa || "Time"} x ${v.fora || "Time"}`;
+
+
+
         const odd =
         Number(
-            v.odd || 0
-        );
+            v.odd_mercado || v.odd || 0
+        ).toFixed(2);
+
 
 
         const prob =
         Number(
-            v.probabilidade || 0
+            v.valor_percentual ||
+            v.probabilidade ||
+            0
         );
+
+
+
+        const confianca =
+        v.confianca ||
+        "Média";
+
 
 
         return `
@@ -1653,11 +1601,7 @@ function renderValueBets(){
 
             <h3>
 
-            ${v.casa}
-
-            x
-
-            ${v.fora}
+            ${jogo}
 
             </h3>
 
@@ -1668,7 +1612,7 @@ function renderValueBets(){
             Mercado:
 
             <b>
-            ${v.mercado}
+            ${v.mercado || "Não informado"}
             </b>
 
             </p>
@@ -1699,6 +1643,20 @@ function renderValueBets(){
 
 
 
+            <p>
+
+            Confiança:
+
+            <strong>
+
+            ${confianca}
+
+            </strong>
+
+            </p>
+
+
+
             <span class="badge-value">
 
             VALUE BET
@@ -1718,7 +1676,6 @@ function renderValueBets(){
     .join("");
 
 }
-
 
 
 // ==========================================
