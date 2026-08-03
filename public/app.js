@@ -1868,6 +1868,4 @@ window.BetVisionAI = {
 
 };
 
-);
-
 console.log("🚀 BetVision AI Frontend v5 carregado com sucesso.");
