@@ -171,23 +171,14 @@ export async function buscarJogos() {
         // RETORNA O PRÓXIMO DIA DISPONÍVEL
         // =====================================
 
-        if (jogosHoje.length === 0 && jogos.length > 0) {
+if (jogosHoje.length === 0) {
 
-            const primeiraData = jogos[0].utcDate.substring(0, 10);
+    console.log(
+        "ℹ Nenhum jogo encontrado para hoje:",
+        hojeString
+    );
 
-            jogosHoje = jogos.filter(jogo =>
-
-                jogo.utcDate.startsWith(primeiraData)
-
-            );
-
-            console.log(
-                "ℹ Não há jogos hoje. Retornando jogos de",
-                primeiraData
-            );
-
-        }
-
+}
         const resultado = jogosHoje.map(converterPartida);
 
         console.log(`⚽ Jogos enviados: ${resultado.length}`);
