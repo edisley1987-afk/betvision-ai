@@ -2,6 +2,7 @@
 // BetVision AI
 // services/partidasService.js
 // Football-Data.org v4
+// Buscar partidas reais
 // ==========================================
 
 
@@ -15,7 +16,7 @@ import {
 // FORMATAR DATA
 // ==========================================
 
-function formatarData(data){
+function formatarData(data) {
 
     return data
         .toISOString()
@@ -29,21 +30,22 @@ function formatarData(data){
 // BUSCAR JOGOS DE HOJE
 // ==========================================
 
-export async function buscarJogosHoje(){
+export async function buscarJogosHoje() {
 
 
-    try{
+    try {
 
 
         const hoje = new Date();
 
 
-        const data = formatarData(hoje);
+        const data =
+            formatarData(hoje);
 
 
 
         console.log(
-            "📅 Buscando jogos:",
+            "📅 Consultando jogos:",
             data
         );
 
@@ -55,9 +57,10 @@ export async function buscarJogosHoje(){
 
             {
 
-                dateFrom:data,
+                dateFrom: data,
 
-                dateTo:data
+                dateTo: data
+
 
             }
 
@@ -65,15 +68,28 @@ export async function buscarJogosHoje(){
 
 
 
-        const partidas =
+        if (!resposta) {
 
+
+            console.log(
+                "⚠️ API sem resposta"
+            );
+
+
+            return [];
+
+        }
+
+
+
+        const partidas =
             resposta.matches || [];
 
 
 
         console.log(
 
-            `⚽ Football-Data retornou ${partidas.length} jogos`
+            `⚽ Football-Data encontrou ${partidas.length} partidas`
 
         );
 
@@ -91,6 +107,11 @@ export async function buscarJogosHoje(){
 
                 campeonato:
                     jogo.competition?.name || "-",
+
+
+
+                codigoCompeticao:
+                    jogo.competition?.code || "-",
 
 
 
@@ -120,24 +141,25 @@ export async function buscarJogosHoje(){
 
 
                 rodada:
-                    jogo.matchday || null,
+                    jogo.matchday || "-",
 
 
 
-                placar: {
+                placar:{
 
 
                     casa:
 
-                        jogo.score?.fullTime?.home ?? null,
+                        jogo.score?.fullTime?.home ?? 0,
 
 
                     fora:
 
-                        jogo.score?.fullTime?.away ?? null
+                        jogo.score?.fullTime?.away ?? 0
 
 
                 },
+
 
 
                 escudos:{
@@ -170,12 +192,13 @@ export async function buscarJogosHoje(){
     }
 
 
-    catch(error){
+
+    catch(error) {
 
 
         console.error(
 
-            "❌ Erro buscarJogosHoje:",
+            "❌ Erro partidasService:",
 
             error.message
 
@@ -191,11 +214,12 @@ export async function buscarJogosHoje(){
 
 
 
+
 // ==========================================
 // BUSCAR TODOS OS JOGOS
 // ==========================================
 
-export async function buscarTodosJogos(){
+export async function buscarTodosJogos() {
 
 
     return await buscarJogosHoje();
