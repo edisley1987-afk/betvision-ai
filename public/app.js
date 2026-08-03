@@ -187,10 +187,9 @@ function renderDashboard() {
 
     atualizarTexto("valueBets", d.valueBets ?? 0);
 
-    atualizarTexto("roiPrevisto", `${d.roi ?? 0}%`);
+    atualizarTexto("roi", `${d.roi ?? 0}%`);
 
-    atualizarTexto("precisaoIA", `${d.precisao ?? 0}%`);
-
+atualizarTexto("precisao", `${d.precisao ?? 0}%`);
     atualizarTexto("nomeSistema", d.sistema ?? "BetVision AI");
 
     atualizarTexto("modeloIA", d.modelo ?? "-");
