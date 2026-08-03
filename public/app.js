@@ -1810,8 +1810,9 @@ console.log("✅ Parte 3B carregada");
 // Frontend v5.0
 // public/app.js
 // PARTE 4
-// Finalização do Sistema
+// Finalização do Sistema CORRIGIDA
 // ==========================================
+
 
 // ==========================================
 // LOADER
@@ -1829,6 +1830,7 @@ function mostrarLoader() {
 
 }
 
+
 function esconderLoader() {
 
     const loader = $("loader");
@@ -1841,25 +1843,38 @@ function esconderLoader() {
 
 }
 
+
+
 // ==========================================
 // LOGS
 // ==========================================
 
 function adicionarLog(texto) {
 
+
     const area = $("logsSistema");
+
 
     if (!area) return;
 
-    const linha = document.createElement("div");
 
-    linha.className = "log-item";
+
+    const linha =
+        document.createElement("div");
+
+
+
+    linha.className =
+        "log-item";
+
+
 
     linha.innerHTML = `
 
         <span class="hora">
 
-            ${new Date().toLocaleTimeString("pt-BR")}
+            ${new Date()
+                .toLocaleTimeString("pt-BR")}
 
         </span>
 
@@ -1871,202 +1886,372 @@ function adicionarLog(texto) {
 
     `;
 
+
+
     area.prepend(linha);
 
-    while (area.children.length > 100) {
 
-        area.removeChild(area.lastChild);
+
+    while(area.children.length > 100){
+
+        area.removeChild(
+            area.lastChild
+        );
 
     }
 
+
 }
+
+
 
 // ==========================================
 // NOTIFICAÇÕES
 // ==========================================
 
-function notificar(mensagem, tipo = "info") {
+function notificar(
+    mensagem,
+    tipo="info"
+){
 
-    const area = $("notificacoes");
 
-    if (!area) {
+    const area =
+        $("notificacoes");
 
-        console.log(mensagem);
+
+
+    if(!area){
+
+        console.log(
+            mensagem
+        );
 
         return;
 
     }
 
-    const div = document.createElement("div");
 
-    div.className = `notificacao ${tipo}`;
 
-    div.textContent = mensagem;
+    const div =
+        document.createElement("div");
+
+
+
+    div.className =
+        `notificacao ${tipo}`;
+
+
+
+    div.textContent =
+        mensagem;
+
+
 
     area.appendChild(div);
 
-    setTimeout(() => {
+
+
+    setTimeout(()=>{
 
         div.remove();
 
-    }, 4000);
+    },4000);
+
 
 }
 
+
+
+
 // ==========================================
-// MONITORAMENTO DA CONEXÃO
+// MONITORAMENTO INTERNET
 // ==========================================
 
-window.addEventListener("online", () => {
 
-    notificar("Conexão restabelecida", "sucesso");
+window.addEventListener(
+"online",
+()=>{
+
+
+    notificar(
+        "Conexão restabelecida",
+        "sucesso"
+    );
+
 
     atualizarTudo();
 
-});
-
-window.addEventListener("offline", () => {
-
-    notificar("Sem conexão com a internet", "erro");
 
 });
 
-// ==========================================
-// TRATAMENTO GLOBAL DE ERROS
-// ==========================================
 
-window.addEventListener("error", (evento) => {
 
-    console.error(evento.error);
 
-    adicionarLog("Erro: " + evento.message);
+window.addEventListener(
+"offline",
+()=>{
 
-});
 
-window.addEventListener("unhandledrejection", (evento) => {
+    notificar(
+        "Sem conexão com internet",
+        "erro"
+    );
 
-    console.error(evento.reason);
-
-    adicionarLog("Promise rejeitada");
 
 });
 
+
+
+
+
 // ==========================================
-// INICIALIZAÇÃO
+// ERROS GLOBAIS
 // ==========================================
 
-async function iniciarSistema() {
 
-    try {
+window.addEventListener(
+"error",
+(evento)=>{
+
+
+    console.error(
+        evento.error
+    );
+
+
+    adicionarLog(
+        "Erro: "
+        +
+        evento.message
+    );
+
+
+});
+
+
+
+
+
+window.addEventListener(
+"unhandledrejection",
+(evento)=>{
+
+
+    console.error(
+        evento.reason
+    );
+
+
+    adicionarLog(
+        "Promise rejeitada"
+    );
+
+
+});
+
+
+
+
+// ==========================================
+// INICIALIZAÇÃO ÚNICA
+// ==========================================
+
+
+async function iniciarSistemaFinal(){
+
+
+    try{
+
 
         mostrarLoader();
 
-        adicionarLog("Inicializando BetVision AI...");
-
-        await atualizarTudo();
-
-        conectarWebSocket();
-
-        esconderLoader();
-
-        adicionarLog("Sistema iniciado com sucesso.");
-
-        notificar("BetVision AI conectado", "sucesso");
-
-    }
-
-    catch (erro) {
-
-        esconderLoader();
-
-        console.error(erro);
-
-        adicionarLog("Falha na inicialização.");
-
-        notificar("Erro ao iniciar o sistema", "erro");
-
-    }
-
-}
-
-// ==========================================
-// ATUALIZAÇÃO MANUAL
-// ==========================================
-
-$("btnAtualizar")?.addEventListener(
-
-    "click",
-
-    async () => {
-
-        mostrarLoader();
-
-        await atualizarTudo();
-
-        esconderLoader();
-
-        adicionarLog("Atualização manual concluída.");
-
-    }
-
-);
-
-// ==========================================
-// ATALHOS GLOBAIS
-// ==========================================
-
-window.BetVisionAI = {
-
-    estado,
-
-    atualizarTudo,
-
-    carregarDashboard,
-
-    carregarJogos,
-
-    carregarAnalises,
-
-    carregarValueBets,
-
-    conectarWebSocket,
-
-    abrirModalIA,
-
-    filtrarJogos,
-
-    ordenarJogos
-
-};
-
-// ==========================================
-// START FINAL DO SISTEMA
-// ==========================================
-
-document.addEventListener(
-    "DOMContentLoaded",
-    async () => {
-
-        console.log(
-            "🚀 Inicializando BetVision AI..."
-        );
-
-
-        await atualizarTudo();
-
-
-        conectarWebSocket();
 
 
         adicionarLog(
-            "Sistema carregado com sucesso."
+            "Inicializando BetVision AI..."
+        );
+
+
+
+        console.log(
+            "🚀 Carregando dashboard..."
+        );
+
+
+
+        await atualizarTudo();
+
+
+
+        console.log(
+            "📊 Dashboard carregado",
+            estado.dashboard
+        );
+
+
+
+        conectarWebSocket();
+
+
+
+        esconderLoader();
+
+
+
+        adicionarLog(
+            "Sistema iniciado com sucesso."
+        );
+
+
+
+        notificar(
+            "BetVision AI conectado",
+            "sucesso"
+        );
+
+
+
+    }
+
+
+    catch(erro){
+
+
+        console.error(
+            "Erro inicialização:",
+            erro
+        );
+
+
+
+        esconderLoader();
+
+
+
+        adicionarLog(
+            "Falha ao iniciar sistema."
+        );
+
+
+
+        notificar(
+            "Erro ao iniciar BetVision AI",
+            "erro"
         );
 
 
     }
+
+
+}
+
+
+
+
+
+// ==========================================
+// BOTÃO ATUALIZAR
+// ==========================================
+
+
+$("btnAtualizar")?.addEventListener(
+
+"click",
+
+async()=>{
+
+
+    mostrarLoader();
+
+
+
+    await atualizarTudo();
+
+
+
+    esconderLoader();
+
+
+
+    adicionarLog(
+        "Atualização manual concluída."
+    );
+
+
+}
+
 );
 
 
+
+
+// ==========================================
+// START FINAL
+// ==========================================
+
+
+document.addEventListener(
+
+"DOMContentLoaded",
+
+()=>{
+
+
+    iniciarSistemaFinal();
+
+
+}
+
+);
+
+
+
+
+
+// ==========================================
+// EXPORTAÇÃO GLOBAL
+// ==========================================
+
+
+window.BetVisionAI = {
+
+
+    estado,
+
+
+    atualizarTudo,
+
+
+    carregarDashboard,
+
+
+    carregarJogos,
+
+
+    carregarAnalises,
+
+
+    carregarValueBets,
+
+
+    conectarWebSocket,
+
+
+    abrirModalIA,
+
+
+    filtrarJogos,
+
+
+    ordenarJogos
+
+
+};
+
+
+
+
+
 console.log(
-    "🚀 BetVision AI Frontend v5 carregado com sucesso."
+"🚀 BetVision AI Frontend v5 carregado com sucesso."
 );
