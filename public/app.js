@@ -1258,26 +1258,55 @@ function atualizarCardsIA(dados){
 
     Object.entries(mapa)
 
-    .forEach(([campo,valor])=>{
+.forEach(([campo,valor])=>{
 
 
-        const elemento =
-        document.querySelector(
-            `[data-metrica="${campo}"]`
-        );
+const ids = {
+
+jogosHoje:"jogosHoje",
+
+campeonatos:"campeonatos",
+
+analisesIA:"analisesIA",
+
+valueBets:"valueBets",
+
+roi:"roi",
+
+precisao:"precisao"
 
 
-        if(elemento){
-
-            elemento.innerHTML =
-            formatarNumero(valor);
-
-        }
+};
 
 
-    });
+const elemento =
+document.getElementById(
+ids[campo]
+);
 
 
+
+if(elemento){
+
+
+elemento.innerHTML =
+campo==="roi" ||
+campo==="precisao"
+
+?
+
+formatarNumero(valor)+"%"
+
+:
+
+formatarNumero(valor);
+
+
+
+}
+
+
+});
 }
 
 
