@@ -236,42 +236,6 @@ function conectarWebSocket() {}
 // INICIALIZAÇÃO
 // ==========================================
 
-async function iniciarSistema() {
-
-    console.log("🚀 BetVision AI iniciado");
-
-    await carregarDashboard();
-
-    await carregarJogos();
-
-    await carregarAnalises();
-
-    await carregarValueBets();
-
-    conectarWebSocket();
-
-    setInterval(async () => {
-
-        await carregarDashboard();
-
-        await carregarJogos();
-
-        await carregarAnalises();
-
-        await carregarValueBets();
-
-    }, CONFIG.refreshDashboard);
-
-}
-
-document.addEventListener(
-
-    "DOMContentLoaded",
-
-    iniciarSistema
-
-);
-
 console.log("✅ app.js Parte 1A carregada");
 // ==========================================
 // BetVision AI
