@@ -1222,7 +1222,7 @@ async function atualizarTudo() {
     ]);
 
 }
-    }
+
 
 }, CONFIG.refreshDashboard);
 
