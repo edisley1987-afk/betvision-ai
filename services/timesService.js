@@ -1,56 +1,202 @@
-import {
-    consultarAPI
+// ==========================================
+// BetVision AI
+// services/timesService.js
+// Football-Data.org v4
+// ==========================================
+
+import { consultarAPI } from "./apiFootballService.js";
+
+// ==========================================
+// BUSCAR TIMES DA COMPETIÇÃO
+// ==========================================
+
+export async function buscarTimes(codigoCompeticao) {
+
+    try {
+
+        console.log(
+            `⚽ Buscando times da competição ${codigoCompeticao}`
+        );
+
+        const resposta = await consultarAPI(
+
+            `/competitions/${codigoCompeticao}/teams`
+
+        );
+
+        const times = resposta.teams || [];
+
+        console.log(
+            `✅ ${times.length} times encontrados`
+        );
+
+        return times.map(time => ({
+
+            id: time.id,
+
+            nome: time.name,
+
+            nomeCurto: time.shortName || time.name,
+
+            sigla: time.tla || "",
+
+            pais: time.area?.name || "",
+
+            fundacao: time.founded || null,
+
+            estadio: time.venue || "",
+
+            treinador: time.coach?.name || "",
+
+            website: time.website || "",
+
+            email: time.email || "",
+
+            cores: time.clubColors || "",
+
+            logo: time.crest || ""
+
+        }));
+
+    }
+
+    catch (erro) {
+
+        console.error(
+            "❌ Erro ao buscar times:",
+            erro.message
+        );
+
+        return [];
+
+    }
+
 }
-from "./apiFootballService.js";
 
+// ==========================================
+// BUSCAR UM TIME
+// ==========================================
 
+export async function buscarTime(idTime) {
 
-export async function buscarTimes(
-    campeonato
-){
+    try {
 
+        const resposta = await consultarAPI(
 
-    const times =
+            `/teams/${idTime}`
 
-    await consultarAPI(
+        );
 
-        "/teams",
+        return {
 
-        {
+            id: resposta.id,
 
-            league:
-            campeonato,
+            nome: resposta.name,
 
-            season:
-            2026
+            nomeCurto: resposta.shortName,
 
-        }
+            sigla: resposta.tla,
 
-    );
+            pais: resposta.area?.name,
 
+            fundacao: resposta.founded,
 
+            estadio: resposta.venue,
 
-    return times.map(item=>({
+            treinador: resposta.coach?.name || "",
 
+            website: resposta.website,
 
-        id:
-        item.team.id,
+            cores: resposta.clubColors,
 
+            logo: resposta.crest
 
-        nome:
-        item.team.name,
+        };
 
+    }
 
-        pais:
-        item.team.country,
+    catch (erro) {
 
+        console.error(
+            "❌ Erro ao buscar time:",
+            erro.message
+        );
 
-        logo:
-        item.team.logo
+        return null;
 
-
-
-    }));
-
+    }
 
 }
+
+// ==========================================
+// ÚLTIMOS JOGOS DO TIME
+// ==========================================
+
+export async function buscarUltimosJogos(idTime, limite = 10) {
+
+    try {
+
+        const resposta = await consultarAPI(
+
+            `/teams/${idTime}/matches`,
+
+            {
+
+                limit: limite
+
+            }
+
+        );
+
+        return resposta.matches || [];
+
+    }
+
+    catch (erro) {
+
+        console.error(
+            "❌ Erro ao buscar histórico:",
+            erro.message
+        );
+
+        return [];
+
+    }
+
+}
+
+// ==========================================
+// RESUMO DO TIME
+// ==========================================
+
+export async function buscarResumoTime(idTime) {
+
+    const time = await buscarTime(idTime);
+
+    const jogos = await buscarUltimosJogos(idTime);
+
+    return {
+
+        time,
+
+        jogos
+
+    };
+
+}
+
+// ==========================================
+// EXPORT
+// ==========================================
+
+export default {
+
+    buscarTimes,
+
+    buscarTime,
+
+    buscarUltimosJogos,
+
+    buscarResumoTime
+
+};
