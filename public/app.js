@@ -2039,4 +2039,34 @@ window.BetVisionAI = {
 
 };
 
-console.log("🚀 BetVision AI Frontend v5 carregado com sucesso.");
+// ==========================================
+// START FINAL DO SISTEMA
+// ==========================================
+
+document.addEventListener(
+    "DOMContentLoaded",
+    async () => {
+
+        console.log(
+            "🚀 Inicializando BetVision AI..."
+        );
+
+
+        await atualizarTudo();
+
+
+        conectarWebSocket();
+
+
+        adicionarLog(
+            "Sistema carregado com sucesso."
+        );
+
+
+    }
+);
+
+
+console.log(
+    "🚀 BetVision AI Frontend v5 carregado com sucesso."
+);
