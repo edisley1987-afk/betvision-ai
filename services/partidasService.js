@@ -5,7 +5,6 @@
 // Buscar partidas reais
 // ==========================================
 
-
 import {
     consultarAPI
 } from "./apiFootballService.js";
