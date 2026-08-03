@@ -1867,7 +1867,6 @@ window.BetVisionAI = {
     ordenarJogos
 
 };
-    }
 
 );
 
