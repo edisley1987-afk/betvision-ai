@@ -3,6 +3,7 @@
 // services/futebolService.js
 // Football-Data.org v4
 // Serviço central de partidas
+// Versão corrigida
 // ==========================================
 
 import axios from "axios";
@@ -43,7 +44,7 @@ const COMPETICOES_FREE = [
 
 
 // ==========================================
-// DATA
+// DATA ISO
 // ==========================================
 
 function dataISO(data){
@@ -57,7 +58,7 @@ function dataISO(data){
 
 
 // ==========================================
-// CONVERTER JOGO
+// CONVERTER PARTIDA
 // ==========================================
 
 function converter(match){
@@ -104,7 +105,9 @@ function converter(match){
             match.venue || "-",
 
 
+
         escudos:{
+
 
             casa:
                 match.homeTeam?.crest || "",
@@ -118,6 +121,7 @@ function converter(match){
 
         placar:{
 
+
             casa:
                 match.score?.fullTime?.home ?? null,
 
@@ -125,10 +129,71 @@ function converter(match){
             fora:
                 match.score?.fullTime?.away ?? null
 
+
         }
 
 
     };
+
+}
+
+
+
+// ==========================================
+// CONSULTAR FOOTBALL DATA
+// ==========================================
+
+async function consultarPeriodo(
+    inicio,
+    fim
+){
+
+    const resposta =
+        await axios.get(
+
+            `${BASE_URL}/matches`,
+
+            {
+
+
+                headers:{
+
+
+                    "X-Auth-Token":
+                        API_KEY
+
+
+                },
+
+
+                params:{
+
+
+                    competitions:
+                        COMPETICOES_FREE.join(","),
+
+
+                    dateFrom:
+                        inicio,
+
+
+                    dateTo:
+                        fim
+
+
+                },
+
+
+                timeout:
+                    30000
+
+
+            }
+
+        );
+
+
+    return resposta.data.matches || [];
 
 }
 
@@ -144,16 +209,20 @@ export async function buscarJogos(){
     try{
 
 
-        console.log(
-            "⚽ Buscando jogos Football-Data"
-        );
+        console.log("");
+        console.log("==============================");
+        console.log("⚽ BUSCANDO JOGOS FOOTBALL DATA");
+        console.log("==============================");
+
 
 
         if(!API_KEY){
 
+
             console.error(
                 "❌ API KEY ausente"
             );
+
 
             return [];
 
@@ -161,88 +230,139 @@ export async function buscarJogos(){
 
 
 
+
         const hoje =
-            dataISO(new Date());
+            new Date();
 
 
 
-        const resposta =
-            await axios.get(
-
-                `${BASE_URL}/matches`,
-
-                {
-
-                    headers:{
-
-                        "X-Auth-Token":
-                            API_KEY
-
-                    },
+        const dataHoje =
+            dataISO(hoje);
 
 
-                    params:{
 
-                        competitions:
-                            COMPETICOES_FREE.join(","),
-
-
-                        dateFrom:
-                            hoje,
+        console.log(
+            "📅 Hoje:",
+            dataHoje
+        );
 
 
-                        dateTo:
-                            hoje
 
-                    },
+        let partidas =
+            await consultarPeriodo(
 
+                dataHoje,
 
-                    timeout:
-                        30000
-
-                }
+                dataHoje
 
             );
 
 
 
-        const partidas =
-            resposta.data.matches || [];
-
-
-
         console.log(
-            `📦 Partidas API: ${partidas.length}`
+            `📦 Jogos hoje: ${partidas.length}`
         );
 
 
 
-        const validos = [
+        // =====================================
+        // FALLBACK 3 DIAS
+        // =====================================
+
+
+        if(partidas.length === 0){
+
+
+            const futuro =
+                new Date();
+
+
+            futuro.setDate(
+                futuro.getDate()+3
+            );
+
+
+
+            const dataFutura =
+                dataISO(
+                    futuro
+                );
+
+
+
+            console.log(
+                "🔎 Nenhum jogo hoje."
+            );
+
+
+            console.log(
+                "📅 Buscando próximos dias:",
+                dataFutura
+            );
+
+
+
+            partidas =
+                await consultarPeriodo(
+
+                    dataHoje,
+
+                    dataFutura
+
+                );
+
+
+
+            console.log(
+                `📦 Próximos jogos encontrados: ${partidas.length}`
+            );
+
+
+        }
+
+
+
+
+        const STATUS_VALIDOS = [
+
 
             "SCHEDULED",
+
             "TIMED",
+
             "LIVE",
+
             "IN_PLAY",
+
             "PAUSED"
+
 
         ];
 
 
 
+
         const jogos =
 
+
             partidas
+
 
             .filter(
 
                 jogo =>
-                validos.includes(
+
+                STATUS_VALIDOS.includes(
                     jogo.status
                 )
 
             )
 
-            .map(converter);
+
+            .map(
+                converter
+            );
+
 
 
 
@@ -257,18 +377,23 @@ export async function buscarJogos(){
 
 
     }
+
+
     catch(error){
 
 
         console.error(
 
             "❌ Erro Football-Data:",
+
+            error.response?.data ||
             error.message
 
         );
 
 
         return [];
+
 
     }
 
@@ -278,7 +403,7 @@ export async function buscarJogos(){
 
 
 // ==========================================
-// COMPATIBILIDADE WEBSOCKET
+// COMPATIBILIDADE
 // ==========================================
 
 export async function buscarJogosHoje(){
@@ -290,13 +415,15 @@ export async function buscarJogosHoje(){
 
 
 // ==========================================
-// EXPORT DEFAULT
+// EXPORT
 // ==========================================
 
 export default {
 
+
     buscarJogos,
 
     buscarJogosHoje
+
 
 };
