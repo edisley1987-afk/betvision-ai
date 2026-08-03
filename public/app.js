@@ -1222,10 +1222,6 @@ async function atualizarTudo() {
     ]);
 
 }
-
-
-}, CONFIG.refreshDashboard);
-
 console.log("✅ Parte 3A carregada");
 // ==========================================
 // BetVision AI
