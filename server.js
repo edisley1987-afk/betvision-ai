@@ -83,7 +83,6 @@ const HOST =
 // MIDDLEWARES
 // ==========================================
 
-
 app.use(
 
     helmet({
@@ -92,60 +91,36 @@ app.use(
 
             directives: {
 
-
-                defaultSrc:[
+                defaultSrc: [
                     "'self'"
                 ],
 
-
-
-                scriptSrc:[
-
+                scriptSrc: [
                     "'self'",
-
-                    "https://cdn.jsdelivr.net"
-
-                ],
-
-
-
-                styleSrc:[
-
-                    "'self'",
-
                     "'unsafe-inline'",
-
                     "https://cdn.jsdelivr.net"
-
                 ],
 
-
-
-                imgSrc:[
-
+                styleSrc: [
                     "'self'",
+                    "'unsafe-inline'",
+                    "https://cdn.jsdelivr.net"
+                ],
 
+                imgSrc: [
+                    "'self'",
                     "data:",
-
-                    "blob:"
-
+                    "blob:",
+                    "https://crests.football-data.org"
                 ],
 
-
-
-                connectSrc:[
-
+                connectSrc: [
                     "'self'",
-
                     "ws:",
-
                     "wss:",
-
-                    "https://cdn.jsdelivr.net"
-
+                    "https://cdn.jsdelivr.net",
+                    "https://api.football-data.org"
                 ]
-
-
 
             }
 
@@ -154,8 +129,6 @@ app.use(
     })
 
 );
-
-
 
 
 
