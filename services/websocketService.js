@@ -1,21 +1,37 @@
 // ==========================================
 // BetVision AI
 // services/websocketService.js
-// WebSocket Real Time
+// WebSocket Real Time v2
 // ==========================================
 
-import { WebSocketServer } from "ws";
+import {
+    WebSocketServer
+} from "ws";
+
 
 import {
-    buscarJogosHoje
-} from "./partidasService.js";
+    buscarJogos
+} from "./futebolService.js";
+
 
 import {
     listarCampeonatos
 } from "./bancoService.js";
 
 
+import {
+    listarAnalises
+} from "./analiseService.js";
+
+
+import {
+    listarValueBets
+} from "./valueBetService.js";
+
+
+
 let clientes = [];
+
 
 
 
@@ -33,7 +49,9 @@ export function startWS(server) {
 
 
 
-    console.log("🔵 WebSocket iniciado");
+    console.log(
+        "🔵 WebSocket iniciado"
+    );
 
 
 
@@ -58,14 +76,18 @@ export function startWS(server) {
                     tipo:
                         "status",
 
+
                     sistema:
                         "BetVision AI",
+
 
                     mensagem:
                         "IA tempo real ativa",
 
+
                     data:
-                        new Date().toISOString()
+                        new Date()
+                        .toISOString()
 
                 })
 
@@ -100,9 +122,14 @@ export function startWS(server) {
 
 
 
-    // Atualização automática
+
+    // ======================================
+    // ATUALIZAÇÃO AUTOMÁTICA
+    // ======================================
+
 
     setInterval(
+
         async()=>{
 
 
@@ -110,7 +137,7 @@ export function startWS(server) {
 
 
                 const jogos =
-                    await buscarJogosHoje();
+                    await buscarJogos();
 
 
 
@@ -119,48 +146,109 @@ export function startWS(server) {
 
 
 
+                let analises = [];
+
+                let valuebets = [];
+
+
+
+                try{
+
+                    analises =
+                        await listarAnalises();
+
+                }
+                catch{
+
+                    analises = [];
+
+                }
+
+
+
+                try{
+
+                    valuebets =
+                        await listarValueBets();
+
+                }
+                catch{
+
+                    valuebets = [];
+
+                }
+
+
+
+
+
                 enviarTodos({
+
 
                     tipo:
                         "dashboard",
 
 
+
                     dashboard:{
+
 
 
                         sistema:
                             "BetVision AI",
 
 
+
                         status:
                             "operacional",
+
 
 
                         jogosHoje:
                             jogos.length,
 
 
+
                         campeonatos:
                             campeonatos.length,
 
 
+
                         analisesIA:
-                            6,
+                            analises.length,
+
 
 
                         valueBets:
-                            1,
+                            valuebets.length,
+
+
+
+                        roi:
+                            0,
+
+
+
+                        precisao:
+                            analises.length > 0
+                            ? 100
+                            : 0,
+
 
 
                         modelo:
                             "Probabilidade + Estatística",
 
 
+
                         ultimaAtualizacao:
-                            new Date().toISOString()
+                            new Date()
+                            .toISOString()
+
 
 
                     }
+
 
 
                 });
@@ -172,8 +260,11 @@ export function startWS(server) {
 
 
                 console.error(
-                    "Erro WebSocket:",
+
+                    "❌ Erro WebSocket:",
+
                     erro.message
+
                 );
 
 
@@ -201,28 +292,35 @@ function enviarTodos(dados){
 
 
     const mensagem =
-        JSON.stringify(dados);
+        JSON.stringify(
+            dados
+        );
 
 
 
-    clientes.forEach(cliente=>{
+    clientes.forEach(
+        cliente=>{
 
 
-        if(cliente.readyState === 1){
+            if(
+                cliente.readyState === 1
+            ){
 
 
-            cliente.send(
-                mensagem
-            );
+                cliente.send(
+                    mensagem
+                );
+
+
+            }
 
 
         }
-
-
-    });
+    );
 
 
 }
+
 
 
 
