@@ -157,43 +157,25 @@ export async function analisarMercado(){
             // ==================================
 
 
-            const previsao =
+          const previsao =
 
+    previsaoRapida({
 
-                preverPartida({
+        id: jogo.id,
 
+        casa: jogo.casa,
 
+        fora: jogo.fora,
 
-                    jogo:{
+        campeonato: jogo.esporte,
 
+        horario: jogo.horario,
 
-                        id:
+        historicoCasa,
 
-                        jogo.id,
+        historicoFora
 
-
-                        casa:
-
-                        jogo.casa,
-
-
-                        fora:
-
-                        jogo.fora,
-
-
-                        campeonato:
-
-                        jogo.esporte,
-
-
-                        horario:
-
-                        jogo.horario
-
-
-
-                    },
+    });
 
 
 
