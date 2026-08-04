@@ -1,8 +1,8 @@
 // ==========================================
 // BetVision AI
 // routes/valuebets.js
-// Versão 8.0
-// Geração automática de Value Bets
+// Versão 9.0
+// Value Bets usando Odds reais
 // ==========================================
 
 
@@ -12,20 +12,21 @@ import db from "../database/database.js";
 
 import {
 
-    gerarValueBets
+    buscarOddsJogos
 
-} from "../services/valueBetService.js";
+} from "../services/oddsService.js";
 
 
 import {
 
-    buscarJogos
+    calcularValueBet
 
-} from "../services/futebolService.js";
+} from "../services/valueBetService.js";
 
 
 
 const router = express.Router();
+
 
 
 
@@ -43,23 +44,21 @@ router.get("/", async(req,res)=>{
 
 
         console.log(
-            "💎 Gerando Value Bets..."
+            "💎 Calculando Value Bets..."
         );
 
 
 
-        // Buscar jogos reais
-
         const jogos =
 
-            await buscarJogos();
+            await buscarOddsJogos();
 
 
 
 
 
         if(
-            !jogos ||
+            !Array.isArray(jogos) ||
             jogos.length === 0
         ){
 
@@ -81,42 +80,36 @@ router.get("/", async(req,res)=>{
 
 
 
-
-
-        // ==================================
-        // GERAR PROBABILIDADE IA
-        // ==================================
-
-        const jogosIA =
-
-            jogos.map(jogo=>{
-
-
-                const probabilidade =
-
-                    45 +
-
-                    Math.floor(
-                        Math.random()*20
-                    );
-
-
-
-                const odd =
-
-                    (
-
-                        1.50 +
-
-                        Math.random()*2
-
-                    )
-                    .toFixed(2);
+        const oportunidades = [];
 
 
 
 
-                return {
+
+        for(
+            const jogo of jogos
+        ){
+
+
+
+            const odd =
+
+                jogo.odds?.casa || 0;
+
+
+
+            const probabilidade =
+
+                jogo.probabilidades?.casa || 0;
+
+
+
+
+
+
+            const resultado =
+
+                calcularValueBet({
 
 
                     id:
@@ -138,11 +131,9 @@ router.get("/", async(req,res)=>{
                     jogo.horario,
 
 
-
                     mercado:
 
                     "Vitória Casa",
-
 
 
                     selecao:
@@ -150,11 +141,7 @@ router.get("/", async(req,res)=>{
                     jogo.casa,
 
 
-
-                    odd:
-
-                    Number(odd),
-
+                    odd,
 
 
                     probabilidadeIA:
@@ -162,122 +149,126 @@ router.get("/", async(req,res)=>{
                     probabilidade
 
 
-                };
-
-
-            });
+                });
 
 
 
 
 
 
+            if(
+                resultado.valueBet
+            ){
 
-        // ==================================
-        // CALCULAR VALUE BETS
-        // ==================================
-
-
-        const valuebets =
-
-            gerarValueBets(
-
-                jogosIA
-
-            );
-
-
-
-
-
-
-
-
-        // ==================================
-        // SALVAR NO BANCO
-        // ==================================
-
-
-        for(
-            const item of valuebets
-        ){
-
-
-            try{
-
-
-                await db.query(
-
-                `
-
-                INSERT INTO valuebets
-
-                (
-
-                    jogo,
-
-                    mercado,
-
-                    odd_mercado,
-
-                    odd_justa,
-
-                    valor_percentual,
-
-                    confianca
-
-                )
-
-
-                VALUES
-
-                ($1,$2,$3,$4,$5,$6)
-
-                `,
-
-
-                [
-
-
-                    item.jogo,
-
-
-                    item.mercado,
-
-
-                    item.odd,
-
-
-                    item.oddJusta,
-
-
-                    item.edge,
-
-
-                    item.classificacao
-
-
-                ]
-
-
+                oportunidades.push(
+                    resultado
                 );
-
 
             }
 
-            catch(error){
+
+
+        }
+
+
+
+
+
+
+
+        // ordenar melhores primeiro
+
+        oportunidades.sort(
+
+            (a,b)=>
+
+            b.edge-a.edge
+
+        );
+
+
+
+
+
+
+
+
+        // salvar banco
+
+        for(
+            const item of oportunidades
+        ){
+
+
+            await db.query(
+
+            `
+
+            INSERT INTO valuebets
+
+            (
+
+                jogo,
+
+                mercado,
+
+                odd_mercado,
+
+                odd_justa,
+
+                valor_percentual,
+
+                confianca
+
+            )
+
+
+            VALUES
+
+            ($1,$2,$3,$4,$5,$6)
+
+            `,
+
+
+            [
+
+
+                item.jogo,
+
+
+                item.mercado,
+
+
+                item.odd,
+
+
+                item.oddJusta,
+
+
+                item.edge,
+
+
+                item.classificacao
+
+
+            ]
+
+            )
+
+            .catch(err=>{
 
 
                 console.log(
 
-                    "⚠️ Erro salvando ValueBet:",
+                "Erro banco ValueBet:",
 
-                    error.message
+                err.message
 
                 );
 
 
-            }
+            });
+
 
 
         }
@@ -289,7 +280,8 @@ router.get("/", async(req,res)=>{
 
 
 
-        return res.json({
+
+        res.json({
 
 
             sucesso:true,
@@ -297,10 +289,12 @@ router.get("/", async(req,res)=>{
 
             total:
 
-            valuebets.length,
+            oportunidades.length,
 
 
-            valuebets,
+            valuebets:
+
+            oportunidades,
 
 
 
@@ -311,7 +305,10 @@ router.get("/", async(req,res)=>{
             .toISOString()
 
 
+
         });
+
+
 
 
 
@@ -322,10 +319,9 @@ router.get("/", async(req,res)=>{
     catch(error){
 
 
-
         console.error(
 
-            "❌ Erro Value Bets:",
+            "Erro Value Bets:",
 
             error.message
 
@@ -339,16 +335,14 @@ router.get("/", async(req,res)=>{
             sucesso:false,
 
 
-            erro:
-
-            error.message
+            erro:error.message
 
 
         });
 
 
-
     }
+
 
 
 });
@@ -356,10 +350,6 @@ router.get("/", async(req,res)=>{
 
 
 
-
-// ==========================================
-// EXPORT
-// ==========================================
 
 
 export default router;
