@@ -50,7 +50,9 @@ import {
     listarCampeonatos
 } from "./services/bancoService.js";
 
-
+import {
+ analisarMercado
+} from "./services/inteligenciaService.js";
 
 dotenv.config();
 
@@ -1147,14 +1149,16 @@ console.log(
 
 // Atualização IA a cada 30 segundos
 
-setInterval(
+setInterval(async()=>{
 
-enviarDashboardTempoReal,
 
-30000
+ await analisarMercado();
 
-);
 
+ await enviarDashboardTempoReal();
+
+
+},30000);
 
 
 
