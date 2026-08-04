@@ -12,9 +12,8 @@ const API_KEY =
 
 
 const BASE_URL =
-    "https://api.the-odds-api.com/v4";
-
-
+    process.env.ODDS_API_URL ||
+    "https://api.theoddsapi.com";
 
 // ==========================================
 // BUSCAR ESPORTES DISPONÍVEIS
