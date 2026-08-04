@@ -16,7 +16,6 @@ import {
 } from "../services/futebolService.js";
 
 const router = express.Router();
-
 // ==========================================
 // TODAS AS ODDS DOS JOGOS DO DIA
 // GET /api/odds
