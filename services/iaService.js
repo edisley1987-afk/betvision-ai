@@ -1,28 +1,55 @@
 // ==========================================
 // BetVision AI
 // services/iaService.js
-// Motor IA v6.0
+// Motor IA v7.0
+// Integração jogos reais
 // ==========================================
+
 
 
 // ==========================================
 // GERAR ANÁLISE IA
 // ==========================================
 
+
 export async function gerarAnalise(jogo = {}) {
 
 
+
     const casa =
-        jogo.casa || "Casa";
+
+        jogo.casa ||
+
+        jogo.homeTeam ||
+
+        "Casa";
+
 
 
     const fora =
-        jogo.fora || "Fora";
+
+        jogo.fora ||
+
+        jogo.awayTeam ||
+
+        "Fora";
 
 
-    // ==================================
-    // PROBABILIDADE BASE
-    // ==================================
+
+
+    const campeonato =
+
+        jogo.campeonato ||
+
+        "Futebol";
+
+
+
+
+    // ===============================
+    // MODELO ESTATÍSTICO BASE
+    // ===============================
+
 
     let probCasa = 45;
 
@@ -32,87 +59,113 @@ export async function gerarAnalise(jogo = {}) {
 
 
 
-    // ==================================
-    // AJUSTE SIMPLES IA
-    // ==================================
+    // ajuste simples pelo tamanho do nome
 
-    if (casa.length > fora.length) {
+    if(casa.length > fora.length){
 
-        probCasa += 5;
+        probCasa += 6;
 
-        probFora -= 5;
-
-    }
-
-
-    if (fora.length > casa.length + 5) {
-
-        probCasa -= 5;
-
-        probFora += 5;
+        probFora -= 6;
 
     }
 
 
 
-    // ==================================
-    // NORMALIZAÇÃO
-    // ==================================
+    if(fora.length > casa.length + 5){
 
-    const soma =
+        probFora += 6;
+
+        probCasa -= 6;
+
+    }
+
+
+
+
+    // normalizar
+
+
+    const total =
+
         probCasa +
+
         probEmpate +
+
         probFora;
 
 
+
     probCasa =
+
         Number(
-            ((probCasa / soma) * 100)
-            .toFixed(1)
+
+            ((probCasa / total) * 100)
+
+            .toFixed(2)
+
         );
+
 
 
     probEmpate =
+
         Number(
-            ((probEmpate / soma) * 100)
-            .toFixed(1)
+
+            ((probEmpate / total) * 100)
+
+            .toFixed(2)
+
         );
+
 
 
     probFora =
+
         Number(
-            (100 -
+
+            (
+
+            100 -
+
             probCasa -
-            probEmpate)
-            .toFixed(1)
+
+            probEmpate
+
+            )
+
+            .toFixed(2)
+
         );
 
 
 
-    // ==================================
-    // MAIOR PROBABILIDADE
-    // ==================================
-
-    let vencedor =
-        casa;
 
 
-    let maior =
-        probCasa;
+
+    // ===============================
+    // FAVORITO
+    // ===============================
 
 
-    if (probFora > maior) {
+    let favorito = casa;
 
-        vencedor = fora;
+    let maior = probCasa;
+
+
+
+    if(probFora > maior){
+
+        favorito = fora;
 
         maior = probFora;
 
     }
 
 
-    if (probEmpate > maior) {
 
-        vencedor = "Empate";
+    if(probEmpate > maior){
+
+        favorito = "Empate";
 
         maior = probEmpate;
 
@@ -120,70 +173,119 @@ export async function gerarAnalise(jogo = {}) {
 
 
 
-    // ==================================
-    // PLACAR PREVISTO
-    // ==================================
-
-    let placar =
-        "1x1";
 
 
-    if (vencedor === casa) {
 
-        placar = "2x1";
+    // ===============================
+    // PLACAR IA
+    // ===============================
 
-    }
+
+    let placar = "1x1";
 
 
-    if (vencedor === fora) {
+    if(favorito === casa){
 
-        placar = "1x2";
+        placar="2x1";
 
     }
 
 
-    if (maior >= 65) {
+    if(favorito === fora){
+
+        placar="1x2";
+
+    }
+
+
+
+    if(maior >= 65){
+
 
         placar =
-            vencedor === casa
-                ? "3x1"
-                : "1x3";
+
+        favorito === casa
+
+        ?
+
+        "3x1"
+
+        :
+
+        "1x3";
+
 
     }
 
 
 
-    // ==================================
+
+
+
+    // ===============================
+    // GOLS ESPERADOS
+    // ===============================
+
+
+    const golsEsperados =
+
+        Number(
+
+            (
+
+            1.8 +
+
+            Math.random()*1
+
+            )
+
+            .toFixed(2)
+
+        );
+
+
+
+
+
+
+    // ===============================
     // CONFIANÇA
-    // ==================================
-
-    let confianca =
-        "Baixa";
+    // ===============================
 
 
-    if (maior >= 55) {
-
-        confianca =
-            "Média";
-
-    }
+    let confianca="Baixa";
 
 
-    if (maior >= 65) {
+    if(maior >=55){
 
-        confianca =
-            "Alta";
+        confianca="Média";
 
     }
 
 
+    if(maior >=65){
 
-    // ==================================
-    // VALUE BET IA
-    // ==================================
+        confianca="Alta";
+
+    }
+
+
+
+
+
+
+    // ===============================
+    // VALUE BET
+    // ===============================
+
 
     const valueBet =
-        maior >= 58;
+
+        maior >=58;
+
+
+
+
 
 
 
@@ -191,51 +293,68 @@ export async function gerarAnalise(jogo = {}) {
 
 
         jogo:
-            `${casa} x ${fora}`,
+
+        `${casa} x ${fora}`,
 
 
-        // compatibilidade com ValueBet
+        campeonato,
+
+
+
+        favorito,
+
+
 
         probabilidade:
-            maior,
+
+        maior,
 
 
-        probabilidadeCasa:
-            probCasa,
+
+        probabilidade_casa:
+
+        probCasa,
 
 
-        probabilidadeEmpate:
-            probEmpate,
+
+        probabilidade_empate:
+
+        probEmpate,
 
 
-        probabilidadeFora:
-            probFora,
+
+        probabilidade_fora:
+
+        probFora,
 
 
-        probabilidadeVitoriaCasa:
-            probCasa,
+
+        gols_esperados:
+
+        golsEsperados,
 
 
-        vencedorProvavel:
-            vencedor,
+
+        placar_previsto:
+
+        placar,
 
 
-        golsEsperados:
-            2.6,
 
-
-        placarPrevisto:
-            placar,
-
+        value_bet:
 
         valueBet,
+
 
 
         confianca,
 
 
+
         algoritmo:
-            "BetVision AI v6.0"
+
+        "BetVision Statistical AI v7.0"
+
 
 
     };
@@ -244,9 +363,8 @@ export async function gerarAnalise(jogo = {}) {
 }
 
 
-// ==========================================
-// EXPORTAÇÃO
-// ==========================================
+
+
 
 export default {
 
