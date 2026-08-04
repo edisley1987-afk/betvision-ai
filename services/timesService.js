@@ -2,7 +2,7 @@
 // BetVision AI
 // services/timesService.js
 // Football-Data.org v4
-// Versão 8.0
+// Versão 9.0
 // ==========================================
 
 
@@ -38,29 +38,20 @@ export async function buscarTimes(codigoCompeticao){
 
 
         console.log(
-
             `⚽ Buscando times da competição ${codigoCompeticao}`
+        );
+
+
+
+        const resposta = await consultarAPI(
+
+            `/competitions/${codigoCompeticao}/teams`
 
         );
 
 
 
-        const resposta =
-
-            await consultarAPI(
-
-                `/competitions/${codigoCompeticao}/teams`
-
-            );
-
-
-
-
-        const times =
-
-            resposta.teams || [];
-
-
+        const times = resposta.teams || [];
 
 
 
@@ -72,106 +63,66 @@ export async function buscarTimes(codigoCompeticao){
 
 
 
-
-
         return times.map(time => ({
 
 
-
             id:
-
                 time.id,
 
 
-
             nome:
-
                 time.name,
 
 
-
             nomeCurto:
-
                 time.shortName || time.name,
 
 
-
             sigla:
-
                 time.tla || "",
 
 
-
             pais:
-
                 time.area?.name || "",
 
 
-
             fundacao:
-
                 time.founded || null,
 
 
-
             estadio:
-
                 time.venue || "",
 
 
-
             treinador:
-
                 time.coach?.name || "",
 
 
-
-            website:
-
-                time.website || "",
-
-
-
-            cores:
-
-                time.clubColors || "",
-
-
-
             logo:
-
                 time.crest || "",
 
 
-
             elenco:
-
                 time.squad || []
-
 
 
         }));
 
 
 
-    }catch(error){
+    }
+    catch(error){
 
 
-
-        if(
-            error.response?.status === 429
-        ){
+        if(error.response?.status === 429){
 
 
             console.warn(
-
-                "⏳ Limite Football-Data atingido. Aguardando..."
-
+                "⏳ Football-Data limite atingido"
             );
 
 
-            await esperar(12000);
-
+            await esperar(15000);
 
 
         }
@@ -181,7 +132,6 @@ export async function buscarTimes(codigoCompeticao){
         console.error(
 
             "❌ Erro buscar times:",
-
             error.response?.data ||
             error.message
 
@@ -191,14 +141,10 @@ export async function buscarTimes(codigoCompeticao){
 
         return [];
 
-
-
     }
 
 
-
 }
-
 
 
 
@@ -214,118 +160,76 @@ export async function buscarTime(idTime){
     try{
 
 
-        const resposta =
+        const resposta = await consultarAPI(
 
-            await consultarAPI(
+            `/teams/${idTime}`
 
-                `/teams/${idTime}`
-
-            );
-
-
+        );
 
 
 
         return {
 
 
-
             id:
-
                 resposta.id,
 
 
-
             nome:
-
                 resposta.name,
 
 
-
             nomeCurto:
-
                 resposta.shortName || "",
 
 
-
             sigla:
-
                 resposta.tla || "",
 
 
-
             pais:
-
                 resposta.area?.name || "",
 
 
-
             fundacao:
-
                 resposta.founded || null,
 
 
-
             estadio:
-
                 resposta.venue || "",
 
 
-
             treinador:
-
                 resposta.coach?.name || "",
 
 
-
-            website:
-
-                resposta.website || "",
-
-
-
-            cores:
-
-                resposta.clubColors || "",
-
-
-
             logo:
-
                 resposta.crest || "",
 
 
-
             elenco:
-
                 resposta.squad || []
-
-
 
         };
 
 
 
-    }catch(error){
-
+    }
+    catch(error){
 
 
         console.error(
 
             "❌ Erro buscar time:",
-
             error.message
 
         );
 
 
-
         return null;
 
 
-
     }
-
 
 
 }
@@ -345,11 +249,7 @@ export async function buscarElenco(idTime){
     try{
 
 
-        const time =
-
-            await buscarTime(
-                idTime
-            );
+        const time = await buscarTime(idTime);
 
 
 
@@ -365,20 +265,19 @@ export async function buscarElenco(idTime){
 
 
 
-    }catch(error){
+    }
+    catch(error){
 
 
         console.error(
 
             "Erro buscar elenco:",
-
             error.message
 
         );
 
 
         return [];
-
 
     }
 
@@ -388,9 +287,8 @@ export async function buscarElenco(idTime){
 
 
 
-
 // ==========================================
-// BUSCAR ÚLTIMOS JOGOS
+// ÚLTIMOS JOGOS
 // ==========================================
 
 
@@ -403,25 +301,20 @@ export async function buscarUltimosJogos(
 ){
 
 
-
     try{
 
 
+        const resposta = await consultarAPI(
 
-        const resposta =
+            `/teams/${idTime}/matches`,
 
-            await consultarAPI(
+            {
 
-                `/teams/${idTime}/matches`,
+                limit: limite
 
-                {
+            }
 
-                    limit: limite
-
-                }
-
-            );
-
+        );
 
 
 
@@ -429,19 +322,16 @@ export async function buscarUltimosJogos(
 
 
 
-
-    }catch(error){
-
+    }
+    catch(error){
 
 
         console.error(
 
-            "❌ Erro buscar histórico:",
-
+            "Erro histórico:",
             error.message
 
         );
-
 
 
         return [];
@@ -449,7 +339,6 @@ export async function buscarUltimosJogos(
     }
 
 
-
 }
 
 
@@ -457,42 +346,28 @@ export async function buscarUltimosJogos(
 
 
 // ==========================================
-// RESUMO COMPLETO DO TIME
+// RESUMO TIME
 // ==========================================
 
 
 export async function buscarResumoTime(idTime){
 
 
-
-    const time =
-
-        await buscarTime(
-            idTime
-        );
-
+    const time = await buscarTime(idTime);
 
 
     const jogos =
-
-        await buscarUltimosJogos(
-            idTime
-        );
+        await buscarUltimosJogos(idTime);
 
 
 
     return {
 
-
         time,
-
 
         jogos
 
-
-
     };
-
 
 
 }
@@ -502,7 +377,8 @@ export async function buscarResumoTime(idTime){
 
 
 // ==========================================
-// PREPARAR JOGADORES PARA BANCO
+// PREPARAR JOGADORES
+// COMPATÍVEL COM PostgreSQL
 // ==========================================
 
 
@@ -519,32 +395,34 @@ export function prepararJogadores(
 
 
         id:
-
             jogador.id,
 
 
         time_id:
-
             timeId,
 
 
         nome:
-
             jogador.name,
 
 
-        posicao:
+        gols:
+            0,
 
+
+        assistencias:
+            0,
+
+
+        posicao:
             jogador.position || "",
 
 
         nacionalidade:
-
             jogador.nationality || "",
 
 
         nascimento:
-
             jogador.dateOfBirth || null
 
 
@@ -560,31 +438,24 @@ export function prepararJogadores(
 
 
 // ==========================================
-// EXPORT DEFAULT
+// EXPORT
 // ==========================================
 
 
 export default {
 
 
-
     buscarTimes,
-
 
     buscarTime,
 
-
     buscarElenco,
-
 
     buscarUltimosJogos,
 
-
     buscarResumoTime,
 
-
     prepararJogadores
-
 
 
 };
