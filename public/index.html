@@ -8,374 +8,314 @@
 <meta name="viewport"
 content="width=device-width, initial-scale=1.0">
 
-
-<title>
-BetVision AI
-</title>
-
+<title>BetVision AI</title>
 
 <meta name="description"
-content="Plataforma de Inteligência Artificial para análise de apostas esportivas">
+content="Plataforma de Inteligência Artificial para análise profissional de apostas esportivas">
 
+<meta name="theme-color"
+content="#0f172a">
 
 <link rel="icon"
 href="favicon.ico">
 
-
 <link rel="manifest"
 href="pwa-manifest.json">
-
 
 <link rel="stylesheet"
 href="style.css">
 
-
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
 
 </head>
 
-
 <body>
 
-
-<!-- ======================================
-LOADER GLOBAL
-====================================== -->
+<!-- =====================================
+LOADER
+===================================== -->
 
 <div
 id="loading"
 class="loader oculto">
 
+    <div class="spinner"></div>
 
-<div class="spinner"></div>
-
-
-<p>
-Carregando informações...
-</p>
-
+    <p>
+        Carregando BetVision AI...
+    </p>
 
 </div>
 
-
-
-<!-- ======================================
+<!-- =====================================
 NOTIFICAÇÕES
-====================================== -->
+===================================== -->
 
-
-<div
-id="notificacoes">
-</div>
-
-
+<div id="notificacoes"></div>
 
 <div class="layout">
 
-
-
-<!-- ======================================
+<!-- =====================================
 SIDEBAR
-====================================== -->
-
+===================================== -->
 
 <aside class="sidebar">
 
+    <div class="logo">
 
-<div class="logo">
+        <h1>
+            ⚽ BetVision AI
+        </h1>
 
+        <p>
+            Inteligência Artificial
+        </p>
 
-<h1>
-⚽ BetVision AI
-</h1>
+    </div>
 
+    <nav>
 
-<p>
-Inteligência Artificial
-</p>
+        <a href="#dashboard">
+            📊 Dashboard
+        </a>
 
+        <a href="#jogos">
+            ⚽ Jogos
+        </a>
 
-</div>
+        <a href="#analises">
+            🤖 IA
+        </a>
 
+        <a href="#valuebets">
+            💎 Value Bets
+        </a>
 
+        <a href="#estatisticas">
+            📈 Estatísticas
+        </a>
 
-<nav>
+    </nav>
 
+    <div class="sidebar-footer">
 
-<a href="#dashboard">
+        <small>
 
-📊 Dashboard
+            Football-Data.org
 
-</a>
+        </small>
 
+        <small>
 
+            PostgreSQL
 
-<a href="#jogos">
+        </small>
 
-⚽ Jogos
+        <small>
 
-</a>
+            Prediction Engine v2.0
 
+        </small>
 
-
-<a href="#analises">
-
-🤖 IA
-
-</a>
-
-
-
-<a href="#valuebets">
-
-💎 Value Bets
-
-</a>
-
-
-
-<a href="#estatisticas">
-
-📈 Estatísticas
-
-</a>
-
-
-
-</nav>
-
+    </div>
 
 </aside>
 
-
-
-
-
-<!-- ======================================
-CONTEÚDO PRINCIPAL
-====================================== -->
-
+<!-- =====================================
+CONTEÚDO
+===================================== -->
 
 <main class="conteudo">
 
-
-
 <header class="topo">
 
+    <div>
 
+        <h2>
 
-<div>
+            Dashboard Inteligente
 
+        </h2>
 
-<h2>
+        <p id="ultimaAtualizacao">
 
-Dashboard Inteligente
+            Carregando...
 
-</h2>
+        </p>
 
+    </div>
 
+    <div
+    id="statusServidor"
+    class="status online">
 
-<p id="ultimaAtualizacao">
+        🟢 Online
 
-Carregando...
-
-</p>
-
-
-</div>
-
-
-
-<div
-id="statusServidor"
-class="status online">
-
-
-🟢 Online
-
-
-</div>
-
-
+    </div>
 
 </header>
 
-
-
-
-
-<!-- ======================================
-DASHBOARD KPIs
-====================================== -->
-
+<!-- =====================================
+KPIs
+===================================== -->
 
 <section
 id="dashboard"
 class="kpis">
 
-
-
 <div class="card">
 
+    <span class="icone">
+        ⚽
+    </span>
 
-<h3>
+    <h3>
+        Jogos Hoje
+    </h3>
 
-Jogos Hoje
+    <h1 id="jogosHoje">
 
-</h3>
+        0
 
+    </h1>
 
-<h1
-id="jogosHoje">
+    <small id="jogosHojeTexto">
 
-0
+        Jogos disponíveis
 
-</h1>
-
+    </small>
 
 </div>
 
-
-
-
-
 <div class="card">
 
+    <span class="icone">
+        🏆
+    </span>
 
-<h3>
+    <h3>
+        Campeonatos
+    </h3>
 
-Campeonatos
+    <h1 id="campeonatos">
 
-</h3>
+        0
 
+    </h1>
 
-<h1
-id="campeonatos">
+    <small>
 
-0
+        Sincronizados
 
-</h1>
-
+    </small>
 
 </div>
 
-
-
-
-
 <div class="card">
 
+    <span class="icone">
+        🤖
+    </span>
 
-<h3>
+    <h3>
+        Análises IA
+    </h3>
 
-Análises IA
+    <h1 id="analisesIA">
 
-</h3>
+        0
 
+    </h1>
 
-<h1
-id="analisesIA">
+    <small>
 
-0
+        Partidas analisadas
 
-</h1>
-
+    </small>
 
 </div>
 
-
-
-
-
 <div class="card">
 
+    <span class="icone">
+        💎
+    </span>
 
-<h3>
+    <h3>
+        Value Bets
+    </h3>
 
-Value Bets
+    <h1 id="valueBets">
 
-</h3>
+        0
 
+    </h1>
 
-<h1
-id="valueBets">
+    <small>
 
-0
+        Oportunidades
 
-</h1>
-
+    </small>
 
 </div>
 
-
-
-
-
 <div class="card">
 
+    <span class="icone">
+        📈
+    </span>
 
-<h3>
+    <h3>
+        ROI Previsto
+    </h3>
 
-ROI Previsto
+    <h1 id="roi">
 
-</h3>
+        0%
 
+    </h1>
 
-<h1
-id="roi">
+    <small>
 
-0%
+        Expected Value
 
-</h1>
-
+    </small>
 
 </div>
 
-
-
-
-
 <div class="card">
 
+    <span class="icone">
+        🎯
+    </span>
 
-<h3>
+    <h3>
+        Precisão IA
+    </h3>
 
-Precisão IA
+    <h1 id="precisao">
 
-</h3>
+        0%
 
+    </h1>
 
-<h1
-id="precisao">
+    <small>
 
-0%
+        Prediction Engine
 
-</h1>
-
+    </small>
 
 </div>
-
-
 
 </section>
 
-
-
-
-
-<!-- ======================================
+<!-- =====================================
 RESUMO DO SISTEMA
-====================================== -->
+===================================== -->
 
-
-<section
-class="painel">
-
-
+<section class="painel">
 
 <div class="painel-header">
-
 
 <h2>
 
@@ -383,18 +323,11 @@ Resumo do Sistema
 
 </h2>
 
-
 </div>
-
-
 
 <div class="painel-body">
 
-
-
 <div class="resumo-grid">
-
-
 
 <div>
 
@@ -404,19 +337,13 @@ Sistema
 
 </strong>
 
-
 <p id="nomeSistema">
 
 BetVision AI
 
 </p>
 
-
 </div>
-
-
-
-
 
 <div>
 
@@ -426,41 +353,29 @@ Status
 
 </strong>
 
-
 <p id="statusSistema">
 
-Operacional
+🟢 Operacional
 
 </p>
 
-
 </div>
-
-
-
-
 
 <div>
 
 <strong>
 
-Modelo
+Modelo IA
 
 </strong>
 
-
 <p id="modeloIA">
 
-Probabilidade + Estatística
+Prediction Engine v2.0
 
 </p>
 
-
 </div>
-
-
-
-
 
 <div>
 
@@ -470,74 +385,66 @@ Probabilidade + Estatística
 
 </strong>
 
-
 <p id="ultimaAtualizacaoCompleta">
 
 --
 
 </p>
 
+</div>
 
 </div>
 
-
-
 </div>
-
-
-</div>
-
 
 </section>
-
 <!-- ======================================
 JOGOS DO DIA
 ====================================== -->
-
 
 <section
 id="jogos"
 class="painel">
 
+    <div class="painel-header">
 
-<div class="painel-header">
+        <h2>
 
+            ⚽ Jogos do Dia
 
-<h2>
+        </h2>
 
-⚽ Jogos do Dia
+        <button
+        id="btnAtualizar"
+        class="btn-atualizar">
 
-</h2>
+            🔄 Atualizar
 
+        </button>
 
-<button
-id="btnAtualizar"
-class="btn-atualizar">
+    </div>
 
-🔄 Atualizar
+    <div
+    id="listaJogos"
+    class="lista-jogos">
 
-</button>
+        <!-- Card Modelo -->
 
+        <div class="card-jogo loading-card">
 
-</div>
+            <div class="jogo-topo">
 
+                <strong>
 
+                    Carregando partidas...
 
-<div
-id="listaJogos"
-class="lista">
+                </strong>
 
+            </div>
 
-<div class="loading">
+        </div>
 
-Carregando jogos...
-
-</div>
-
-
-</div>
-
-
+    </div>
 
 </section>
 
@@ -549,44 +456,31 @@ Carregando jogos...
 VALUE BETS
 ====================================== -->
 
-
 <section
 id="valuebets"
 class="painel">
 
+    <div class="painel-header">
 
+        <h2>
 
-<div class="painel-header">
+            💎 Melhores Value Bets
 
+        </h2>
 
-<h2>
+    </div>
 
-💎 Melhores Value Bets
+    <div
+    id="listaValueBets"
+    class="lista-valuebets">
 
-</h2>
+        <div class="card-value loading-card">
 
+            Carregando oportunidades...
 
-</div>
+        </div>
 
-
-
-<div
-id="listaValueBets"
-class="lista">
-
-
-<div class="loading">
-
-
-Carregando oportunidades...
-
-
-</div>
-
-
-</div>
-
-
+    </div>
 
 </section>
 
@@ -598,44 +492,31 @@ Carregando oportunidades...
 ANÁLISES IA
 ====================================== -->
 
-
 <section
 id="analises"
 class="painel">
 
+    <div class="painel-header">
 
+        <h2>
 
-<div class="painel-header">
+            🤖 Últimas Análises IA
 
+        </h2>
 
-<h2>
+    </div>
 
-🤖 Últimas Análises IA
+    <div
+    id="listaAnalises"
+    class="lista-analises">
 
-</h2>
+        <div class="card-analise loading-card">
 
+            Carregando análises...
 
-</div>
+        </div>
 
-
-
-<div
-id="listaAnalises"
-class="lista">
-
-
-<div class="loading">
-
-
-Carregando análises...
-
-
-</div>
-
-
-</div>
-
-
+    </div>
 
 </section>
 
@@ -644,84 +525,431 @@ Carregando análises...
 
 
 <!-- ======================================
-ESTATÍSTICAS
+MODELO DOS CARDS (ESCONDIDOS)
+APP.JS CLONA ESTES ELEMENTOS
 ====================================== -->
 
+<template id="templateJogo">
+
+<div class="card-jogo">
+
+    <div class="jogo-topo">
+
+        <div>
+
+            <h3 class="titulo-jogo">
+
+                Time Casa x Time Visitante
+
+            </h3>
+
+            <small class="campeonato">
+
+                Campeonato
+
+            </small>
+
+        </div>
+
+        <span class="horario">
+
+            20:00
+
+        </span>
+
+    </div>
+
+    <div class="placar-previsto">
+
+        <strong>
+
+            Placar IA
+
+        </strong>
+
+        <h2 class="placar">
+
+            2 x 1
+
+        </h2>
+
+    </div>
+
+    <div class="probabilidades">
+
+        <div>
+
+            <span>
+
+                🏠 Casa
+
+            </span>
+
+            <strong class="probCasa">
+
+                45%
+
+            </strong>
+
+        </div>
+
+        <div>
+
+            <span>
+
+                🤝 Empate
+
+            </span>
+
+            <strong class="probEmpate">
+
+                28%
+
+            </strong>
+
+        </div>
+
+        <div>
+
+            <span>
+
+                ✈️ Fora
+
+            </span>
+
+            <strong class="probFora">
+
+                27%
+
+            </strong>
+
+        </div>
+
+    </div>
+
+    <div class="rodape-jogo">
+
+        <span class="favorito">
+
+            Favorito
+
+        </span>
+
+        <span class="confianca">
+
+            ⭐⭐⭐⭐
+
+        </span>
+
+    </div>
+
+    <button
+    class="btnDetalhes">
+
+        Ver análise completa
+
+    </button>
+
+</div>
+
+</template>
+
+
+
+
+
+<template id="templateValue">
+
+<div class="card-value">
+
+    <div class="value-header">
+
+        <h3 class="jogo">
+
+            Time A x Time B
+
+        </h3>
+
+    </div>
+
+    <div class="value-grid">
+
+        <div>
+
+            <small>
+
+                Mercado
+
+            </small>
+
+            <strong class="mercado">
+
+                Vitória Casa
+
+            </strong>
+
+        </div>
+
+        <div>
+
+            <small>
+
+                Odd Mercado
+
+            </small>
+
+            <strong class="odd">
+
+                2.15
+
+            </strong>
+
+        </div>
+
+        <div>
+
+            <small>
+
+                Odd Justa
+
+            </small>
+
+            <strong class="oddJusta">
+
+                1.83
+
+            </strong>
+
+        </div>
+
+        <div>
+
+            <small>
+
+                Edge
+
+            </small>
+
+            <strong class="edge">
+
+                17%
+
+            </strong>
+
+        </div>
+
+        <div>
+
+            <small>
+
+                ROI
+
+            </small>
+
+            <strong class="roi">
+
+                21%
+
+            </strong>
+
+        </div>
+
+        <div>
+
+            <small>
+
+                Kelly
+
+            </small>
+
+            <strong class="kelly">
+
+                8%
+
+            </strong>
+
+        </div>
+
+    </div>
+
+    <div class="classificacao">
+
+        ⭐⭐⭐⭐⭐ Excelente
+
+    </div>
+
+</div>
+
+</template>
+
+
+
+
+
+<template id="templateAnalise">
+
+<div class="card-analise">
+
+    <h3 class="titulo">
+
+        Time Casa x Time Fora
+
+    </h3>
+
+    <div class="analise-grid">
+
+        <div>
+
+            <span>
+
+                Favorito
+
+            </span>
+
+            <strong class="favorito">
+
+                Time Casa
+
+            </strong>
+
+        </div>
+
+        <div>
+
+            <span>
+
+                Probabilidade
+
+            </span>
+
+            <strong class="probabilidade">
+
+                67%
+
+            </strong>
+
+        </div>
+
+        <div>
+
+            <span>
+
+                Placar IA
+
+            </span>
+
+            <strong class="placar">
+
+                2 x 0
+
+            </strong>
+
+        </div>
+
+        <div>
+
+            <span>
+
+                Gols Esperados
+
+            </span>
+
+            <strong class="gols">
+
+                2.73
+
+            </strong>
+
+        </div>
+
+        <div>
+
+            <span>
+
+                Over 2.5
+
+            </span>
+
+            <strong class="over">
+
+                SIM
+
+            </strong>
+
+        </div>
+
+        <div>
+
+            <span>
+
+                Confiança
+
+            </span>
+
+            <strong class="confianca">
+
+                Alta
+
+            </strong>
+
+        </div>
+
+    </div>
+
+</div>
+
+</template>
+<!-- ======================================
+ESTATÍSTICAS
+====================================== -->
 
 <section
 id="estatisticas"
 class="painel">
 
+    <div class="painel-header">
 
+        <h2>
 
-<div class="painel-header">
+            📊 Estatísticas Inteligentes
 
+        </h2>
 
-<h2>
+    </div>
 
-📊 Estatísticas Inteligentes
+    <div class="graficos">
 
-</h2>
+        <div class="grafico-card">
 
+            <h3>
 
-</div>
+                Distribuição das Análises
 
+            </h3>
 
+            <canvas
+            id="graficoAnalises">
 
+            </canvas>
 
-<div class="graficos">
+        </div>
 
+        <div class="grafico-card">
 
+            <h3>
 
-<div class="grafico-card">
+                Performance Value Bets
 
+            </h3>
 
-<h3>
+            <canvas
+            id="graficoValue">
 
-Distribuição das Análises
+            </canvas>
 
-</h3>
+        </div>
 
-
-
-<canvas
-id="graficoAnalises">
-
-</canvas>
-
-
-
-</div>
-
-
-
-
-
-<div class="grafico-card">
-
-
-<h3>
-
-Performance Value Bets
-
-</h3>
-
-
-
-<canvas
-id="graficoValue">
-
-</canvas>
-
-
-
-</div>
-
-
-
-</div>
-
-
+    </div>
 
 </section>
 
@@ -733,135 +961,90 @@ id="graficoValue">
 STATUS DO SERVIDOR
 ====================================== -->
 
-
 <section
 class="painel">
 
+    <div class="painel-header">
 
+        <h2>
 
-<div class="painel-header">
+            🖥 Status do Servidor
 
+        </h2>
 
-<h2>
+    </div>
 
-🖥 Status do Servidor
+    <div class="status-grid">
 
-</h2>
+        <div class="status-card">
 
+            <span>
 
-</div>
+                API
 
+            </span>
 
+            <strong
+            id="apiStatus">
 
-<div class="status-grid">
+                Online
 
+            </strong>
 
+        </div>
 
-<div class="status-card">
+        <div class="status-card">
 
+            <span>
 
-<span>
+                PostgreSQL
 
-API
+            </span>
 
-</span>
+            <strong
+            id="dbStatus">
 
+                Conectado
 
+            </strong>
 
-<strong
-id="apiStatus">
+        </div>
 
-Online
+        <div class="status-card">
 
-</strong>
+            <span>
 
+                WebSocket
 
+            </span>
 
-</div>
+            <strong
+            id="wsStatus">
 
+                Conectando...
 
+            </strong>
 
+        </div>
 
+        <div class="status-card">
 
-<div class="status-card">
+            <span>
 
+                Modelo IA
 
-<span>
+            </span>
 
-Banco PostgreSQL
+            <strong
+            id="modeloStatus">
 
-</span>
+                BetVision Statistical AI
 
+            </strong>
 
+        </div>
 
-<strong
-id="dbStatus">
-
-Conectado
-
-</strong>
-
-
-
-</div>
-
-
-
-
-
-<div class="status-card">
-
-
-<span>
-
-WebSocket
-
-</span>
-
-
-
-<strong
-id="wsStatus">
-
-Conectando...
-
-</strong>
-
-
-
-</div>
-
-
-
-
-
-<div class="status-card">
-
-
-<span>
-
-Modelo IA
-
-</span>
-
-
-
-<strong
-id="modeloStatus">
-
-Ativo
-
-</strong>
-
-
-
-</div>
-
-
-
-</div>
-
-
+    </div>
 
 </section>
 
@@ -870,44 +1053,43 @@ Ativo
 
 
 <!-- ======================================
-EVENTOS DO SISTEMA
+ÚLTIMAS ATUALIZAÇÕES
 ====================================== -->
-
 
 <section
 class="painel">
 
+    <div class="painel-header">
 
+        <h2>
 
-<div class="painel-header">
+            📢 Últimas Atualizações
 
+        </h2>
 
-<h2>
+    </div>
 
-📜 Eventos Recentes
+    <div
+    id="timelineSistema"
+    class="timeline">
 
-</h2>
+        <div class="timeline-item">
 
+            <span class="hora">
 
-</div>
+                --
 
+            </span>
 
+            <span class="texto">
 
-<div
-id="logsSistema"
-class="logs">
+                Aguardando eventos...
 
+            </span>
 
-<div>
+        </div>
 
-Sistema iniciado.
-
-</div>
-
-
-</div>
-
-
+    </div>
 
 </section>
 
@@ -916,72 +1098,85 @@ Sistema iniciado.
 
 
 <!-- ======================================
-MODAL IA
+LOGS
 ====================================== -->
 
+<section
+class="painel">
+
+    <div class="painel-header">
+
+        <h2>
+
+            📜 Logs do Sistema
+
+        </h2>
+
+    </div>
+
+    <div
+    id="logsSistema"
+    class="logs">
+
+        <div>
+
+            Sistema iniciado.
+
+        </div>
+
+    </div>
+
+</section>
+
+
+
+
+
+<!-- ======================================
+MODAL DA IA
+====================================== -->
 
 <div
 id="modalIA"
 class="modal">
 
+    <div
+    class="modal-content">
 
+        <div
+        class="modal-header">
 
-<div
-class="modal-content">
+            <h2>
 
+                🤖 Análise Completa da IA
 
+            </h2>
 
-<div
-class="modal-header">
+            <button
+            id="fecharModal">
 
+                ✕
 
+            </button>
 
-<h2>
+        </div>
 
-🤖 Detalhes da Análise
+        <div
+        id="conteudoModal">
 
-</h2>
+            <div class="analise-completa">
 
+                <h3>
 
+                    Carregando...
 
+                </h3>
 
-<button
-id="fecharModal">
+            </div>
 
+        </div>
 
-✖
-
-
-</button>
-
-
-
-</div>
-
-
-
-
-
-<div
-id="conteudoModal">
-
-
-
-<p>
-
-Nenhuma análise selecionada.
-
-</p>
-
-
-
-</div>
-
-
-
-</div>
-
-
+    </div>
 
 </div>
 
@@ -993,110 +1188,78 @@ Nenhuma análise selecionada.
 TOAST
 ====================================== -->
 
-
 <div
 id="toast"
 class="toast">
 
+    <span
+    id="toastTexto">
 
+        Sistema iniciado.
 
-<span
-id="toastTexto">
-
-
-Sistema iniciado.
-
-
-</span>
-
-
+    </span>
 
 </div>
+
+
+
+
 
 <!-- ======================================
 RODAPÉ
 ====================================== -->
 
+<footer
+class="rodape">
 
-<footer class="rodape">
+    <div>
 
+        <strong>
 
+            ⚽ BetVision AI
 
-<div>
+        </strong>
 
-<strong>
+    </div>
 
-BetVision AI
+    <div>
 
-</strong>
+        Modelo:
 
+        <span
+        id="modeloRodape">
 
-</div>
+            BetVision Statistical AI v2.0
 
+        </span>
 
+    </div>
 
+    <div>
 
+        Precisão:
 
-<div>
+        <span
+        id="precisaoRodape">
 
+            --
 
-Modelo:
+        </span>
 
-<span
-id="modeloRodape">
+    </div>
 
+    <div>
 
-Probabilidade + Estatística
+        Banco:
 
+        <span
+        id="statusBanco">
 
-</span>
+            PostgreSQL
 
+        </span>
 
-</div>
-
-
-
-
-
-<div>
-
-
-Versão
-
-
-<span>
-
-
-4.0
-
-
-</span>
-
-
-</div>
-
-
-
-
-
-<div>
-
-
-Banco:
-
-<span
-id="statusBanco">
-
-
-PostgreSQL
-
-
-</span>
-
-
-</div>
-
-
+    </div>
 
 </footer>
 
@@ -1106,7 +1269,6 @@ PostgreSQL
 
 </main>
 
-
 </div>
 
 
@@ -1114,15 +1276,13 @@ PostgreSQL
 
 
 <!-- ======================================
-SCRIPT PRINCIPAL
+SCRIPTS
 ====================================== -->
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script src="app.js"></script>
 
-
-
 </body>
-
 
 </html>
