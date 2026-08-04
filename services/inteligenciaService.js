@@ -37,8 +37,37 @@ export async function analisarMercado(){
         );
 
 
-        const jogos =
-            await buscarOddsReais();
+        const jogosBrutos =
+    await buscarOddsReais();
+
+
+const jogos = jogosBrutos.map(jogo=>{
+
+
+    return {
+
+        id:jogo.id,
+
+        esporte:jogo.esporte,
+
+        horario:jogo.horario,
+
+        casa:jogo.casa,
+
+        fora:jogo.fora,
+
+        odds:jogo.odds || {
+
+            casa:0,
+            empate:0,
+            fora:0
+
+        }
+
+    };
+
+
+});
 
 
 
