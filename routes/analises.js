@@ -1,8 +1,8 @@
 // ==========================================
 // BetVision AI
 // routes/analises.js
-// Versão 8.0
-// Engine IA + PostgreSQL
+// Versão 9.0
+// Engine IA + Jogos Reais + PostgreSQL
 // ==========================================
 
 
@@ -11,6 +11,11 @@ import express from "express";
 import {
     gerarAnalise
 } from "../services/iaService.js";
+
+
+import {
+    buscarJogos
+} from "../services/jogosService.js";
 
 
 import db from "../database/database.js";
@@ -23,7 +28,7 @@ const router = express.Router();
 
 
 // ==========================================
-// LISTAR ANÁLISES IA
+// LISTAR ANÁLISES
 // GET /api/analises
 // ==========================================
 
@@ -31,80 +36,62 @@ const router = express.Router();
 router.get("/", async(req,res)=>{
 
 
-    try{
+try{
 
 
-        const resultado = await db.query(`
+const resultado = await db.query(`
 
-            SELECT *
+SELECT *
 
-            FROM analises
+FROM analises
 
-            ORDER BY id DESC
+ORDER BY id DESC
 
-            LIMIT 50
+LIMIT 50
 
-        `);
-
-
-
-
-        res.json({
-
-
-            sucesso:true,
-
-
-            total:
-
-            resultado.rows.length,
-
-
-            analises:
-
-            resultado.rows
-
-
-        });
+`);
 
 
 
-    }
 
-    catch(error){
+res.json({
 
+sucesso:true,
 
-        console.error(
+total:
+resultado.rows.length,
 
-            "❌ Erro buscar análises:",
-
-            error.message
-
-        );
+analises:
+resultado.rows
 
 
-
-        res.status(500).json({
-
-
-            sucesso:false,
-
-
-            erro:
-
-            "Erro ao buscar análises",
-
-
-            detalhe:
-
-            error.message
-
-
-        });
+});
 
 
 
-    }
+}
+
+catch(error){
+
+
+console.error(
+error.message
+);
+
+
+res.status(500).json({
+
+erro:
+"Erro buscar análises",
+
+detalhe:
+error.message
+
+});
+
+
+}
+
 
 
 });
@@ -115,8 +102,199 @@ router.get("/", async(req,res)=>{
 
 
 
+
+
 // ==========================================
-// GERAR ANÁLISE IA
+// GERAR TODAS AS ANÁLISES DOS JOGOS
+// GET /api/analises/gerar
+// ==========================================
+
+
+router.get("/gerar", async(req,res)=>{
+
+
+try{
+
+
+
+const jogos =
+
+await buscarJogos();
+
+
+
+
+
+let salvas = 0;
+
+
+
+
+
+for(const jogo of jogos){
+
+
+
+const analise =
+
+await gerarAnalise(
+
+jogo
+
+);
+
+
+
+
+
+await db.query(
+
+`
+
+INSERT INTO analises
+
+(
+
+jogo,
+
+favorito,
+
+probabilidade,
+
+probabilidade_casa,
+
+probabilidade_empate,
+
+probabilidade_fora,
+
+placar_previsto,
+
+gols_esperados,
+
+value_bet,
+
+confianca,
+
+algoritmo
+
+)
+
+
+VALUES
+
+($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+
+`,
+
+[
+
+
+analise.jogo,
+
+
+analise.favorito,
+
+
+analise.probabilidade,
+
+
+analise.probabilidade_casa,
+
+
+analise.probabilidade_empate,
+
+
+analise.probabilidade_fora,
+
+
+analise.placar_previsto,
+
+
+analise.gols_esperados,
+
+
+analise.value_bet,
+
+
+analise.confianca,
+
+
+analise.algoritmo
+
+
+
+]
+
+
+);
+
+
+
+salvas++;
+
+
+}
+
+
+
+
+
+res.json({
+
+sucesso:true,
+
+mensagem:
+"Análises IA atualizadas",
+
+total:
+salvas
+
+
+});
+
+
+
+
+
+}
+
+catch(error){
+
+
+console.error(
+
+"Erro gerar análises:",
+
+error.message
+
+);
+
+
+
+res.status(500).json({
+
+erro:
+error.message
+
+});
+
+
+}
+
+
+
+});
+
+
+
+
+
+
+
+
+
+// ==========================================
+// GERAR UMA ANÁLISE MANUAL
 // POST /api/analises
 // ==========================================
 
@@ -124,153 +302,129 @@ router.get("/", async(req,res)=>{
 router.post("/", async(req,res)=>{
 
 
-    try{
+try{
 
 
+const resultado =
 
-        const dados = req.body;
+await gerarAnalise(
 
+req.body
 
+);
 
 
-        const resultado =
 
-            await gerarAnalise(
 
-                dados
 
-            );
+await db.query(
 
+`
 
+INSERT INTO analises
 
+(
 
+jogo,
 
+favorito,
 
-        // salvar banco
+probabilidade,
 
+probabilidade_casa,
 
-        await db.query(
+probabilidade_empate,
 
-        `
+probabilidade_fora,
 
-        INSERT INTO analises
+placar_previsto,
 
-        (
+gols_esperados,
 
-            jogo,
+value_bet,
 
-            favorito,
+confianca,
 
-            probabilidade,
+algoritmo
 
-            placar_previsto,
+)
 
-            gols_esperados,
+VALUES
 
-            over25,
+($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
 
-            confianca
+`,
 
-        )
+[
 
 
-        VALUES
+resultado.jogo,
 
-        ($1,$2,$3,$4,$5,$6,$7)
 
+resultado.favorito,
 
-        `,
 
+resultado.probabilidade,
 
-        [
 
+resultado.probabilidade_casa,
 
-            resultado.jogo || "Não informado",
 
+resultado.probabilidade_empate,
 
-            resultado.favorito || "-",
 
+resultado.probabilidade_fora,
 
-            resultado.probabilidade || 0,
 
+resultado.placar_previsto,
 
-            resultado.placar || "2 x 1",
 
+resultado.gols_esperados,
 
-            resultado.golsEsperados || 2.5,
 
+resultado.value_bet,
 
-            resultado.over25 || "SIM",
 
+resultado.confianca,
 
-            resultado.confianca || "Média"
 
+resultado.algoritmo
 
-        ]
 
 
-        );
+]
 
+);
 
 
 
 
-        res.json({
+res.json({
 
+sucesso:true,
 
-            sucesso:true,
+analise:resultado
 
+});
 
-            analise:
 
-            resultado
 
 
+}
 
-        });
+catch(error){
 
 
+res.status(500).json({
 
+erro:
+error.message
 
+});
 
-    }
 
-    catch(error){
+}
 
-
-
-        console.error(
-
-            "❌ Erro gerar análise IA:",
-
-            error.message
-
-        );
-
-
-
-        res.status(500).json({
-
-
-            sucesso:false,
-
-
-            erro:
-
-            "Falha na análise IA",
-
-
-            detalhe:
-
-            error.message
-
-
-
-        });
-
-
-
-    }
 
 
 });
@@ -282,95 +436,73 @@ router.post("/", async(req,res)=>{
 
 
 // ==========================================
-// ANÁLISE AUTOMÁTICA DE JOGO
-// GET /api/analises/:id
+// BUSCAR POR ID
 // ==========================================
 
 
 router.get("/:id", async(req,res)=>{
 
 
-    try{
+try{
 
 
+const resultado =
 
-        const resultado = await db.query(
+await db.query(
 
-        `
+`
 
-        SELECT *
+SELECT *
 
-        FROM analises
+FROM analises
 
-        WHERE id=$1
+WHERE id=$1
 
-        `,
+`
 
+,
 
-        [
+[req.params.id]
 
-            req.params.id
-
-        ]
-
-
-        );
-
+);
 
 
 
 
-        if(
+if(!resultado.rows.length){
 
-            resultado.rows.length===0
+return res.status(404).json({
 
-        ){
+erro:
+"Análise não encontrada"
 
+});
 
-            return res.status(404).json({
-
-
-                erro:
-
-                "Análise não encontrada"
-
-
-            });
-
-
-        }
+}
 
 
 
+res.json(
 
+resultado.rows[0]
 
-        res.json(
-
-            resultado.rows[0]
-
-        );
-
+);
 
 
 
-    }
+}
 
-    catch(error){
-
-
-
-        res.status(500).json({
+catch(error){
 
 
-            erro:
+res.status(500).json({
 
-            error.message
+erro:error.message
+
+});
 
 
-        });
-
-
-    }
+}
 
 
 
@@ -379,10 +511,6 @@ router.get("/:id", async(req,res)=>{
 
 
 
-
-// ==========================================
-// EXPORT
-// ==========================================
 
 
 export default router;
