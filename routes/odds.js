@@ -1,90 +1,245 @@
 // ==========================================
 // BetVision AI
 // routes/odds.js
-// Versão 7.0
+// Versão 8.0
+// Rotas de Odds Reais
 // ==========================================
 
 import express from "express";
 
 import {
+
     buscarOdds,
     buscarOddsJogos
+
 } from "../services/oddsService.js";
 
+
 import {
+
     buscarJogos
+
 } from "../services/futebolService.js";
 
+
 const router = express.Router();
+
+
+
 // ==========================================
-// TODAS AS ODDS DOS JOGOS DO DIA
+// STATUS DA API DE ODDS
+// GET /api/odds/status
+// ==========================================
+
+router.get("/status", async (req,res)=>{
+
+
+    res.json({
+
+
+        sistema:
+            "BetVision AI",
+
+
+        servico:
+            "The Odds API",
+
+
+        status:
+            "online",
+
+
+        horario:
+            new Date().toISOString()
+
+
+    });
+
+
+});
+
+
+
+
+// ==========================================
+// TODAS AS ODDS DOS JOGOS
 // GET /api/odds
 // ==========================================
 
-router.get("/", async (req, res) => {
+router.get("/", async(req,res)=>{
 
-    try {
 
-        const jogos = await buscarJogos();
+    try{
 
-        const odds = await buscarOddsJogos(jogos);
 
-        res.json(odds);
+        console.log(
+            "💰 Consultando odds..."
+        );
+
+
+
+        const jogos =
+            await buscarJogos();
+
+
+
+        const resultado =
+            await buscarOddsJogos(
+                jogos
+            );
+
+
+
+        res.json(resultado);
+
+
 
     }
 
-    catch (error) {
 
-        console.error(error);
+    catch(error){
+
+
+        console.error(
+
+            "❌ Erro rota odds:",
+
+            error.message
+
+        );
+
+
 
         res.status(500).json({
 
-            erro: "Erro ao buscar odds",
 
-            detalhe: error.message
+            erro:
+                "Erro ao buscar odds",
+
+
+
+            detalhe:
+                error.message
+
+
 
         });
 
+
+
     }
+
+
 
 });
 
+
+
+
 // ==========================================
-// ODDS DE UM JOGO
+// ODDS DE UM JOGO ESPECÍFICO
 // GET /api/odds/:id
 // ==========================================
 
-router.get("/:id", async (req, res) => {
+router.get("/:id", async(req,res)=>{
 
-    try {
 
-        const odds = await buscarOdds(req.params.id);
+    try{
+
+
+        const id =
+            req.params.id;
+
+
+
+        console.log(
+
+            `💰 Buscando odd jogo ${id}`
+
+        );
+
+
+
+        const odds =
+            await buscarOdds(id);
+
+
+
+        if(!odds){
+
+
+            return res.status(404).json({
+
+
+                erro:
+                    "Odds não encontradas"
+
+
+
+            });
+
+
+        }
+
+
 
         res.json({
 
-            jogo: req.params.id,
+
+            jogo:
+                id,
+
 
             odds
 
+
+
         });
+
+
 
     }
 
-    catch (error) {
 
-        console.error(error);
+    catch(error){
+
+
+
+        console.error(
+
+            "❌ Erro consultar odd:",
+
+            error.message
+
+        );
+
+
 
         res.status(500).json({
 
-            erro: "Erro ao consultar odds",
 
-            detalhe: error.message
+            erro:
+                "Erro ao consultar odds",
+
+
+
+            detalhe:
+                error.message
+
+
 
         });
 
+
+
     }
 
+
+
 });
+
+
+
 
 // ==========================================
 // EXPORTAÇÃO
