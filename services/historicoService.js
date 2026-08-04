@@ -1,88 +1,24 @@
 // ==========================================
 // BetVision AI
 // services/historicoService.js
-// Histórico de Times
-// Versão corrigida 3.0
+// Histórico de equipes com fallback seguro
 // ==========================================
 
 
 import axios from "axios";
 
-import dotenv from "dotenv";
 
-dotenv.config();
-
-
-
-// ==========================================
-// CONFIGURAÇÕES
-// ==========================================
-
-
-const API_URL =
-
-    process.env.API_FOOTBALL_URL ||
-
-    "https://api.football-data.org/v4";
-
-
-
-const API_KEY =
-
-    process.env.API_FOOTBALL_KEY || "";
-
-
-
-
-const CACHE = new Map();
-
-
-
-const CACHE_TIME =
-
-    1000 * 60 * 30; // 30 minutos
-
-
-
-
-
-// ==========================================
-// NORMALIZAR NOME
-// ==========================================
-
-
-function normalizarNome(nome){
-
-
-    return String(nome || "")
-
-        .normalize("NFD")
-
-        .replace(/[\u0300-\u036f]/g,"")
-
-        .toLowerCase()
-
-        .trim();
-
-
-}
-
-
-
-
-
+// cache memória
+const cacheHistorico = new Map();
 
 
 // ==========================================
 // BUSCAR TIME
 // ==========================================
 
-
 async function buscarTime(nome){
 
-
     try{
-
 
         if(!nome){
 
@@ -91,137 +27,68 @@ async function buscarTime(nome){
         }
 
 
+        console.log(
+            "📊 Buscando histórico:",
+            nome
+        );
 
 
-        const chave =
-
-            `time_${normalizarNome(nome)}`;
+        const cache = cacheHistorico.get(nome);
 
 
+        if(cache){
 
-        const cache = CACHE.get(chave);
-
-
-
-        if(cache && Date.now() - cache.data < CACHE_TIME){
-
-
-            return cache.valor;
-
+            return cache;
 
         }
 
 
 
-
-
-
         const resposta = await axios.get(
 
-
-            `${API_URL}/teams`,
-
+            "https://api.football-data.org/v4/teams",
 
             {
 
+                params:{
 
-                headers:{
-
-
-                    "X-Auth-Token":
-
-                    API_KEY
-
+                    name:nome
 
                 },
 
-
-                timeout:10000
-
-
+                timeout:8000
 
             }
-
 
         );
 
 
 
+        if(
+            resposta.data &&
+            resposta.data.teams &&
+            resposta.data.teams.length
+        ){
+
+            const time =
+                resposta.data.teams[0];
 
 
-        const times =
-
-            resposta.data.teams || [];
-
-
-
-
-
-        const encontrado =
-
-            times.find(time =>
-
-
-
-                normalizarNome(time.name)
-
-                ===
-
-                normalizarNome(nome)
-
-
-
+            cacheHistorico.set(
+                nome,
+                time
             );
 
 
+            return time;
+
+        }
 
 
-
-
-
-        CACHE.set(
-
-            chave,
-
-            {
-
-
-                data:Date.now(),
-
-                valor:encontrado || null
-
-
-            }
-
-
+        console.log(
+            "⚠️ Time não encontrado:",
+            nome
         );
-
-
-
-
-
-        return encontrado || null;
-
-
-
-    }
-
-
-    catch(error){
-
-
-
-        console.warn(
-
-
-            "⚠️ API times indisponível:",
-
-
-            error.response?.status || error.message
-
-
-        );
-
 
 
         return null;
@@ -229,7 +96,19 @@ async function buscarTime(nome){
 
 
     }
+    catch(error){
 
+
+        console.log(
+            "⚠️ API histórico indisponível:",
+            error.response?.status ||
+            error.message
+        );
+
+
+        return null;
+
+    }
 
 
 }
@@ -237,440 +116,68 @@ async function buscarTime(nome){
 
 
 
-
-
-
-
 // ==========================================
-// BUSCAR JOGOS DO TIME
+// HISTÓRICO DE JOGOS
 // ==========================================
 
 
-async function buscarJogosTime(timeId){
+export async function buscarHistoricoJogo(
+
+    casa,
+
+    fora
+
+){
 
 
     try{
 
 
+        const timeCasa =
+            await buscarTime(casa);
 
-        if(!timeId){
 
 
-            return [];
+        const timeFora =
+            await buscarTime(fora);
 
 
-        }
 
+        let historicoCasa=[];
 
+        let historicoFora=[];
 
 
 
+        /*
+        Aqui entra consulta futura
+        de partidas dos times.
 
-        const resposta = await axios.get(
-
-
-            `${API_URL}/teams/${timeId}/matches`,
-
-
-            {
-
-
-
-                headers:{
-
-
-                    "X-Auth-Token":
-
-                    API_KEY
-
-
-                },
-
-
-                params:{
-
-
-                    status:
-
-                    "FINISHED",
-
-
-
-                    limit:
-
-                    10
-
-
-                },
-
-
-                timeout:10000
-
-
-            }
-
-
-        );
-
-
-
-
-
-        return resposta.data.matches || [];
-
-
-
-
-    }
-
-
-    catch(error){
-
-
-
-        console.warn(
-
-
-            "⚠️ Histórico indisponível:",
-
-
-            error.response?.status || error.message
-
-
-        );
-
-
-
-        return [];
-
-
-
-    }
-
-
-
-}
-
-
-
-
-
-
-
-// ==========================================
-// CONVERTER JOGO
-// ==========================================
-
-
-function converterHistorico(
-
-    jogos,
-
-    nomeTime
-
-){
-
-
-    if(!Array.isArray(jogos)){
-
-
-        return [];
-
-
-    }
-
-
-
-
-
-    return jogos.map(jogo=>{
-
-
-        const casa =
-
-            jogo.homeTeam?.name;
-
-
-
-        const fora =
-
-            jogo.awayTeam?.name;
-
-
+        Por enquanto retorna
+        estrutura compatível
+        com IA.
+        */
 
 
 
         return {
 
 
-            data:
+            historicoCasa,
 
-            jogo.utcDate,
+            historicoFora,
 
+            timeCasa,
 
-
-            casa,
-
-
-
-            fora,
-
-
-
-            placar:{
-
-
-
-                casa:
-
-                jogo.score?.fullTime?.home || 0,
-
-
-
-                fora:
-
-                jogo.score?.fullTime?.away || 0
-
-
-
-            }
-
+            timeFora
 
 
         };
-
-
-
-    })
-
-    .filter(jogo =>
-
-        jogo.casa && jogo.fora
-
-    )
-
-    .slice(0,5);
-
-
-
-}
-
-
-
-
-
-
-
-// ==========================================
-// BUSCAR HISTÓRICO COMPLETO
-// ==========================================
-
-
-export async function buscarHistoricoJogo(
-
-    timeCasa,
-
-    timeFora
-
-){
-
-
-
-    console.log(
-
-        "📊 Buscando histórico:",
-
-        timeCasa
-
-
-    );
-
-
-
-    console.log(
-
-        "📊 Buscando histórico:",
-
-        timeFora
-
-
-    );
-
-
-
-
-
-
-
-    try{
-
-
-
-        const cacheKey =
-
-
-            `${normalizarNome(timeCasa)}_${normalizarNome(timeFora)}`;
-
-
-
-
-
-
-        const cache = CACHE.get(cacheKey);
-
-
-
-
-
-        if(cache && Date.now()-cache.data < CACHE_TIME){
-
-
-
-            return cache.valor;
-
-
-        }
-
-
-
-
-
-
-        const equipeCasa =
-
-            await buscarTime(timeCasa);
-
-
-
-
-        const equipeFora =
-
-            await buscarTime(timeFora);
-
-
-
-
-
-
-
-        const jogosCasa =
-
-            await buscarJogosTime(
-
-                equipeCasa?.id
-
-            );
-
-
-
-
-
-
-        const jogosFora =
-
-            await buscarJogosTime(
-
-                equipeFora?.id
-
-            );
-
-
-
-
-
-
-
-
-        const resultado = {
-
-
-
-            historicoCasa:
-
-            converterHistorico(
-
-                jogosCasa,
-
-                timeCasa
-
-            ),
-
-
-
-            historicoFora:
-
-            converterHistorico(
-
-                jogosFora,
-
-                timeFora
-
-            )
-
-
-
-        };
-
-
-
-
-
-
-
-        CACHE.set(
-
-
-            cacheKey,
-
-
-            {
-
-
-                data:Date.now(),
-
-
-                valor:resultado
-
-
-            }
-
-
-
-        );
-
-
-
-
-
-
-        console.log(
-
-            "✅ Histórico:",
-
-            resultado.historicoCasa.length,
-
-            resultado.historicoFora.length
-
-
-        );
-
-
-
-
-
-
-        return resultado;
-
-
-
 
 
 
     }
-
-
     catch(error){
-
 
 
         console.error(
@@ -682,21 +189,15 @@ export async function buscarHistoricoJogo(
         );
 
 
-
-
         return {
-
 
 
             historicoCasa:[],
 
-
             historicoFora:[]
 
 
-
         };
-
 
 
     }
@@ -708,40 +209,10 @@ export async function buscarHistoricoJogo(
 
 
 
-
-
-
-// ==========================================
-// LIMPAR CACHE
-// ==========================================
-
-
-export function limparCacheHistorico(){
-
-
-    CACHE.clear();
-
-
-}
-
-
-
-
-
-// ==========================================
-// EXPORT DEFAULT
-// ==========================================
-
-
 export default {
 
 
-
-    buscarHistoricoJogo,
-
-
-    limparCacheHistorico
-
+    buscarHistoricoJogo
 
 
 };
