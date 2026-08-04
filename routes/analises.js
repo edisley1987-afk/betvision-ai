@@ -15,7 +15,7 @@ import {
 
 import {
     buscarJogos
-} from "../services/jogosService.js";
+} from "../services/futebolService.js";
 
 
 import db from "../database/database.js";
