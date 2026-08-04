@@ -12,7 +12,7 @@ const API_KEY = process.env.ODDS_API_KEY;
 
 const BASE_URL =
     process.env.ODDS_API_URL ||
-    "https://api.the-odds-api.com/v4";
+    "https://api.the-odds-api.com";
 
 
 
@@ -43,7 +43,7 @@ export async function getOdds(){
 
         const resposta = await axios.get(
 
-            `${BASE_URL}/sports/soccer/odds`,
+            `${BASE_URL}/v4/sports/soccer/odds`,
 
             {
 
@@ -66,12 +66,15 @@ export async function getOdds(){
         );
 
 
+        const jogos = resposta.data || [];
+
+
         console.log(
-            `✅ Odds encontradas: ${resposta.data.length}`
+            `✅ Odds encontradas: ${jogos.length}`
         );
 
 
-        return resposta.data;
+        return jogos;
 
 
     }catch(error){
