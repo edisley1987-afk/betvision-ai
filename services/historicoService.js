@@ -2,7 +2,7 @@
 // BetVision AI
 // services/historicoService.js
 // Histórico dos Times via PostgreSQL
-// Versão corrigida v2.0
+// Versão 8.0
 // ==========================================
 
 
@@ -11,41 +11,85 @@ import db from "../database/database.js";
 
 
 // ==========================================
-// BUSCAR TIME PELO NOME
+// NORMALIZAR NOME DO TIME
+// ==========================================
+
+function normalizarNome(nome = ""){
+
+
+    return nome
+
+        .toLowerCase()
+
+        .normalize("NFD")
+
+        .replace(/[\u0300-\u036f]/g,"")
+
+        .replace(/\b(fc|fk|sk|afc|cf|sc|ac)\b/g,"")
+
+        .replace(/[^a-z0-9 ]/g,"")
+
+        .replace(/\s+/g," ")
+
+        .trim();
+
+
+}
+
+
+
+// ==========================================
+// BUSCAR TIME
 // ==========================================
 
 async function buscarTime(nome){
 
 
-    if(!nome){
-
-        return null;
-
-    }
-
-
     try{
 
 
-        const resultado = await db.query(
+        if(!nome){
+
+            return null;
+
+        }
+
+
+        const nomeNormalizado =
+            normalizarNome(nome);
+
+
+
+        const resultado =
+            await db.query(
 
             `
+
             SELECT
+
                 id,
+
                 nome
+
             FROM times
+
+
             WHERE
-                LOWER(nome)
-                LIKE
-                LOWER($1)
+
+                LOWER(nome) LIKE LOWER($1)
+
+
             LIMIT 1
+
+
             `,
+
+
             [
-                `%${nome}%`
-            ]
 
-        );
+                `%${nomeNormalizado}%`
 
+            ]);
 
 
         if(resultado.rows.length){
@@ -58,25 +102,83 @@ async function buscarTime(nome){
 
 
 
+        /*
+        ======================================
+        SEGUNDA TENTATIVA
+        Busca removendo prefixos
+        ======================================
+        */
+
+
+        const palavras =
+            nomeNormalizado.split(" ");
+
+
+
+        const resultado2 =
+            await db.query(
+
+            `
+
+            SELECT
+
+                id,
+
+                nome
+
+            FROM times
+
+
+            WHERE
+
+                LOWER(nome) LIKE LOWER($1)
+
+
+            LIMIT 1
+
+
+            `,
+
+
+            [
+
+                `%${palavras[palavras.length-1]}%`
+
+            ]);
+
+
+
+        if(resultado2.rows.length){
+
+
+            return resultado2.rows[0];
+
+
+        }
+
+
+
         console.log(
 
             "⚠️ Time não cadastrado:",
+
             nome
 
         );
+
 
 
         return null;
 
 
 
-    }
-    catch(error){
+    }catch(error){
 
 
         console.error(
 
-            "❌ Erro buscar time:",
+            "Erro buscar time:",
+
             error.message
 
         );
@@ -93,32 +195,20 @@ async function buscarTime(nome){
 
 
 
+
 // ==========================================
-// BUSCAR PARTIDAS DO TIME
+// BUSCAR ÚLTIMOS JOGOS
 // ==========================================
 
 
 async function buscarJogosTime(timeId){
 
 
-
-    if(!timeId){
-
-
-        return [];
-
-
-    }
-
-
-
-
     try{
 
 
-
-        const resultado = await db.query(
-
+        const resultado =
+            await db.query(
 
             `
 
@@ -143,18 +233,17 @@ async function buscarJogosTime(timeId){
                 p.gols_fora
 
 
-
             FROM partidas p
 
 
 
-            INNER JOIN times tc
+            JOIN times tc
 
             ON tc.id = p.time_casa
 
 
 
-            INNER JOIN times tf
+            JOIN times tf
 
             ON tf.id = p.time_fora
 
@@ -173,28 +262,22 @@ async function buscarJogosTime(timeId){
 
             )
 
+
+
             AND
 
-
-            (
-
-                p.status = 'finalizado'
-
-                OR
-
-                p.status = 'FINISHED'
-
-            )
+            p.status = 'finalizado'
 
 
 
             ORDER BY
 
-                p.data_partida DESC
+            p.data_partida DESC
 
 
 
             LIMIT 10
+
 
 
             `,
@@ -204,84 +287,80 @@ async function buscarJogosTime(timeId){
 
                 timeId
 
-            ]
-
-        );
+            ]);
 
 
 
 
-
-        return resultado.rows.map(jogo=>({
-
+        return resultado.rows.map(jogo=>{
 
 
-            data:
-
-            jogo.data_partida,
+            return {
 
 
+                data:
 
-            casa:
+                    jogo.data_partida,
 
-            jogo.casa,
-
-
-
-            fora:
-
-            jogo.fora,
-
-
-
-            placar:{
 
 
                 casa:
 
-                Number(
-
-                    jogo.gols_casa || 0
-
-                ),
+                    jogo.casa,
 
 
 
                 fora:
 
-                Number(
-
-                    jogo.gols_fora || 0
-
-                )
-
-            }
+                    jogo.fora,
 
 
 
-        }));
+                placar:{
+
+
+                    casa:
+
+                        Number(
+                            jogo.gols_casa || 0
+                        ),
+
+
+                    fora:
+
+                        Number(
+                            jogo.gols_fora || 0
+                        )
+
+
+                }
+
+
+            };
+
+
+        });
 
 
 
-    }
-    catch(error){
+    }catch(error){
 
 
         console.error(
 
-            "❌ Erro buscar partidas:",
+            "Erro buscar jogos time:",
+
             error.message
 
         );
 
 
-
         return [];
+
 
     }
 
 
-
 }
 
 
@@ -289,42 +368,15 @@ async function buscarJogosTime(timeId){
 
 
 // ==========================================
-// HISTÓRICO PADRÃO VAZIO
-// ==========================================
-
-function historicoVazio(){
-
-
-    return {
-
-
-        historicoCasa: [],
-
-
-        historicoFora: []
-
-
-    };
-
-
-}
-
-
-
-
-// ==========================================
-// BUSCAR HISTÓRICO COMPLETO
+// HISTÓRICO COMPLETO DA PARTIDA
 // ==========================================
 
 
 export async function buscarHistoricoJogo(
 
-
     timeCasa,
 
-
     timeFora
-
 
 ){
 
@@ -340,110 +392,76 @@ export async function buscarHistoricoJogo(
 
 
 
-    try{
+    const casa =
+
+        await buscarTime(timeCasa);
 
 
 
-        const equipeCasa =
 
-            await buscarTime(
+    const fora =
 
-                timeCasa
+        await buscarTime(timeFora);
+
+
+
+
+
+    let historicoCasa=[];
+
+
+    let historicoFora=[];
+
+
+
+
+
+    if(casa){
+
+
+        historicoCasa =
+
+            await buscarJogosTime(
+
+                casa.id
 
             );
 
 
+    }
 
-        const equipeFora =
 
-            await buscarTime(
 
-                timeFora
+
+
+    if(fora){
+
+
+        historicoFora =
+
+            await buscarJogosTime(
+
+                fora.id
 
             );
 
 
-
-
-
-        let historicoCasa=[];
-
-
-        let historicoFora=[];
-
-
-
-
-        if(equipeCasa){
-
-
-            historicoCasa =
-
-                await buscarJogosTime(
-
-                    equipeCasa.id
-
-                );
-
-
-        }
-
-
-
-
-        if(equipeFora){
-
-
-            historicoFora =
-
-                await buscarJogosTime(
-
-                    equipeFora.id
-
-                );
-
-
-        }
-
-
-
-
-
-        return {
-
-
-            historicoCasa,
-
-
-            historicoFora
-
-
-
-        };
-
-
-
-    }
-    catch(error){
-
-
-
-        console.error(
-
-            "❌ Erro histórico:",
-
-            error.message
-
-        );
-
-
-
-        return historicoVazio();
-
-
-
     }
 
+
+
+
+
+    return {
+
+
+        historicoCasa,
+
+
+        historicoFora
+
+
+    };
 
 
 }
@@ -453,30 +471,14 @@ export async function buscarHistoricoJogo(
 
 
 // ==========================================
-// EXPORTS
+// EXPORT
 // ==========================================
-
-
-export {
-
-
-    buscarTime,
-
-    buscarJogosTime
-
-
-};
-
 
 
 export default {
 
 
-    buscarHistoricoJogo,
-
-    buscarTime,
-
-    buscarJogosTime
+    buscarHistoricoJogo
 
 
 };
