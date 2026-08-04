@@ -1,94 +1,100 @@
 // ==========================================
 // BetVision AI
 // services/oddsService.js
-// Football-Data.org Compatible
-// Versão 6.0
+// The Odds API v4
 // ==========================================
 
-/**
- * Gera odds simuladas.
- * Pode ser substituído futuramente por uma API de odds.
- */
-
-function gerarOdd(min, max) {
-    return Number((Math.random() * (max - min) + min).toFixed(2));
-}
+import { obterOdds } from "./oddsApi.js";
 
 // ==========================================
-// BUSCAR ODDS
+// BUSCAR ODDS DE UM JOGO
 // ==========================================
 
 export async function buscarOdds(idJogo = null) {
 
-    return {
+    try {
 
-        jogo: idJogo,
+        const jogos = await obterOdds();
 
-        atualizadoEm: new Date().toISOString(),
+        if (!jogos.length) {
 
-        mercado: {
-
-            vencedor: {
-
-                casa: gerarOdd(1.60, 3.00),
-
-                empate: gerarOdd(2.80, 4.00),
-
-                fora: gerarOdd(2.20, 4.50)
-
-            },
-
-            gols: {
-
-                over25: gerarOdd(1.60, 2.20),
-
-                under25: gerarOdd(1.60, 2.20)
-
-            }
+            return null;
 
         }
 
-    };
+        if (!idJogo) {
+
+            return jogos[0];
+
+        }
+
+        const jogo = jogos.find(j => String(j.id) === String(idJogo));
+
+        return jogo || null;
+
+    }
+
+    catch (erro) {
+
+        console.error("Erro buscarOdds:", erro.message);
+
+        return null;
+
+    }
 
 }
 
 // ==========================================
-// BUSCAR ODDS DE VÁRIOS JOGOS
+// BUSCAR ODDS DE TODOS OS JOGOS
 // ==========================================
 
 export async function buscarOddsJogos(listaJogos = []) {
 
-    if (!Array.isArray(listaJogos)) {
-        return [];
-    }
+    try {
 
-    const resultado = [];
+        const oddsAPI = await obterOdds();
 
-    for (const jogo of listaJogos) {
+        if (!Array.isArray(listaJogos)) {
 
-        const odds = await buscarOdds(jogo.id);
+            return [];
 
-        resultado.push({
+        }
 
-            ...jogo,
+        return listaJogos.map(jogo => {
 
-            odds
+            const odds = oddsAPI.find(o =>
+
+                o.casa === jogo.casa &&
+                o.fora === jogo.fora
+
+            );
+
+            return {
+
+                ...jogo,
+
+                odds: odds || null
+
+            };
 
         });
 
     }
 
-    return resultado;
+    catch (erro) {
+
+        console.error("Erro buscarOddsJogos:", erro.message);
+
+        return [];
+
+    }
 
 }
-
-// ==========================================
-// EXPORTAÇÃO
-// ==========================================
 
 export default {
 
     buscarOdds,
+
     buscarOddsJogos
 
 };
