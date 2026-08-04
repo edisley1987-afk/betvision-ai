@@ -2,9 +2,17 @@
 // BetVision AI
 // services/oddsService.js
 // The Odds API v4
+// Versão Real
 // ==========================================
 
-import { obterOdds } from "./oddsApi.js";
+import {
+
+    buscarOddsReais,
+    buscarOddsJogo
+
+} from "./providers/oddsApiProvider.js";
+
+
 
 // ==========================================
 // BUSCAR ODDS DE UM JOGO
@@ -12,89 +20,165 @@ import { obterOdds } from "./oddsApi.js";
 
 export async function buscarOdds(idJogo = null) {
 
+
     try {
 
-        const jogos = await obterOdds();
+
+        if (idJogo) {
+
+
+            return await buscarOddsJogo(
+                idJogo
+            );
+
+
+        }
+
+
+        const jogos =
+            await buscarOddsReais();
+
+
 
         if (!jogos.length) {
 
+
+            console.warn(
+                "⚠️ Nenhuma odd encontrada"
+            );
+
+
             return null;
 
-        }
-
-        if (!idJogo) {
-
-            return jogos[0];
 
         }
 
-        const jogo = jogos.find(j => String(j.id) === String(idJogo));
 
-        return jogo || null;
+
+        return jogos[0];
+
 
     }
 
-    catch (erro) {
 
-        console.error("Erro buscarOdds:", erro.message);
+    catch(error) {
+
+
+        console.error(
+
+            "❌ Erro buscarOdds:",
+
+            error.message
+
+        );
+
 
         return null;
 
+
     }
 
+
 }
+
+
+
 
 // ==========================================
 // BUSCAR ODDS DE TODOS OS JOGOS
 // ==========================================
 
-export async function buscarOddsJogos(listaJogos = []) {
+export async function buscarOddsJogos(
+    listaJogos = []
+) {
+
 
     try {
 
-        const oddsAPI = await obterOdds();
 
-        if (!Array.isArray(listaJogos)) {
+        if(
+            !Array.isArray(listaJogos)
+        ){
 
             return [];
 
         }
 
-        return listaJogos.map(jogo => {
 
-            const odds = oddsAPI.find(o =>
 
-                o.casa === jogo.casa &&
-                o.fora === jogo.fora
+        const oddsAPI =
+            await buscarOddsReais();
 
-            );
+
+
+        return listaJogos.map(jogo=>{
+
+
+            const encontrado =
+                oddsAPI.find(odd =>
+
+
+                    odd.casa === jogo.casa
+                    &&
+                    odd.fora === jogo.fora
+
+
+                );
+
+
 
             return {
 
+
                 ...jogo,
 
-                odds: odds || null
+
+                odds:
+                    encontrado || null
+
 
             };
 
+
         });
+
+
 
     }
 
-    catch (erro) {
 
-        console.error("Erro buscarOddsJogos:", erro.message);
+    catch(error){
+
+
+        console.error(
+
+            "❌ Erro buscarOddsJogos:",
+
+            error.message
+
+        );
+
 
         return [];
 
+
     }
+
 
 }
 
+
+
+// ==========================================
+// EXPORT DEFAULT
+// ==========================================
+
 export default {
+
 
     buscarOdds,
 
     buscarOddsJogos
+
 
 };
