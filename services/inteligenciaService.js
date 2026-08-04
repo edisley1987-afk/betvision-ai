@@ -2,38 +2,27 @@
 // BetVision AI
 // services/inteligenciaService.js
 // Integração IA + Histórico + Odds + Value Bets
-// Versão corrigida 8.0
 // ==========================================
 
 
 import {
-
     buscarOddsReais
-
 } from "./providers/oddsApiProvider.js";
 
 
-
 import {
-
     calcularValueBet
-
 } from "./valueBetService.js";
 
 
-
 import {
-    preverPartida,
-    previsaoRapida
+    preverPartida
 } from "./predictionService.js";
 
 
 import {
-
     buscarHistoricoJogo
-
 } from "./historicoService.js";
-
 
 
 
@@ -42,7 +31,6 @@ import {
 // ANALISAR MERCADO
 // ==========================================
 
-
 export async function analisarMercado(){
 
 
@@ -50,50 +38,33 @@ export async function analisarMercado(){
 
 
         console.log(
-
             "🤖 Iniciando análise IA..."
-
         );
 
 
 
-
-
         const jogosBrutos =
-
             await buscarOddsReais();
 
 
 
-
-
         if(
-
             !Array.isArray(jogosBrutos) ||
-
             jogosBrutos.length === 0
-
         ){
 
-
             console.log(
-
                 "⚠️ Nenhum jogo encontrado"
-
             );
 
-
             return [];
-
 
         }
 
 
 
 
-
-        const resultados = [];
-
+        const resultados=[];
 
 
 
@@ -103,84 +74,112 @@ export async function analisarMercado(){
 
 
             console.log(
-
                 "📊 Analisando:",
-
                 jogo.casa,
-
                 "x",
-
                 jogo.fora
-
             );
 
 
 
+            let historicoCasa=[];
 
-
-            // ==================================
-            // HISTÓRICO DOS TIMES
-            // ==================================
-
-
-            const {
-
-
-                historicoCasa,
-
-
-                historicoFora
+            let historicoFora=[];
 
 
 
-            } = await buscarHistoricoJogo(
+            try{
 
 
-                jogo.casa,
+                const historico =
 
+                    await buscarHistoricoJogo(
 
-                jogo.fora
+                        jogo.casa,
 
+                        jogo.fora
 
-            );
-
-
-
-
+                    );
 
 
 
-            // ==================================
-            // MOTOR DE PREVISÃO IA
-            // ==================================
+                historicoCasa =
+                    historico.historicoCasa || [];
 
 
-          const previsao =
 
-    previsaoRapida({
-
-        id: jogo.id,
-
-        casa: jogo.casa,
-
-        fora: jogo.fora,
-
-        campeonato: jogo.esporte,
-
-        horario: jogo.horario,
-
-        historicoCasa,
-
-        historicoFora
-
-    });
-
-            // ==================================
-            // MERCADOS ANALISADOS
-            // ==================================
+                historicoFora =
+                    historico.historicoFora || [];
 
 
-            const mercados = [
+
+            }
+            catch(error){
+
+
+                console.log(
+                    "⚠️ Histórico indisponível"
+                );
+
+
+            }
+
+
+
+
+
+            // ===============================
+            // MOTOR IA
+            // ===============================
+
+
+            const previsao =
+
+
+                preverPartida({
+
+
+                    jogo:{
+
+
+                        id:
+                        jogo.id,
+
+
+                        casa:
+                        jogo.casa,
+
+
+                        fora:
+                        jogo.fora,
+
+
+                        campeonato:
+                        jogo.esporte,
+
+
+                        horario:
+                        jogo.horario
+
+
+                    },
+
+
+                    historicoCasa,
+
+
+                    historicoFora
+
+
+                });
+
+
+
+
+
+
+
+            const mercados=[
 
 
 
@@ -188,19 +187,15 @@ export async function analisarMercado(){
 
 
                     selecao:
-
                     jogo.casa,
 
 
                     odd:
-
                     jogo.odds?.casa || 0,
 
 
                     probabilidade:
-
                     previsao.probabilidadeCasa
-
 
 
                 },
@@ -211,19 +206,15 @@ export async function analisarMercado(){
 
 
                     selecao:
-
                     "Empate",
 
 
                     odd:
-
                     jogo.odds?.empate || 0,
 
 
                     probabilidade:
-
                     previsao.probabilidadeEmpate
-
 
 
                 },
@@ -234,19 +225,15 @@ export async function analisarMercado(){
 
 
                     selecao:
-
                     jogo.fora,
 
 
                     odd:
-
                     jogo.odds?.fora || 0,
 
 
                     probabilidade:
-
                     previsao.probabilidadeFora
-
 
 
                 }
@@ -261,17 +248,11 @@ export async function analisarMercado(){
 
 
 
-            // ==================================
-            // CALCULAR VALUE BET
-            // ==================================
-
-
             for(const mercado of mercados){
 
 
 
                 const value =
-
 
                     calcularValueBet({
 
@@ -279,38 +260,29 @@ export async function analisarMercado(){
 
                         jogo:
 
-
                         `${jogo.casa} x ${jogo.fora}`,
-
 
 
 
                         mercado:
 
-
                         "Resultado Final",
-
 
 
 
                         selecao:
 
-
                         mercado.selecao,
-
 
 
 
                         odd:
 
-
                         mercado.odd,
 
 
 
-
                         probabilidadeIA:
-
 
                         mercado.probabilidade
 
@@ -331,25 +303,19 @@ export async function analisarMercado(){
                     resultados.push({
 
 
-
                         ...value,
 
 
-
                         campeonato:
-
                         jogo.esporte,
 
 
-
                         horario:
-
                         jogo.horario,
 
 
 
                         previsao
-
 
 
                     });
@@ -365,6 +331,7 @@ export async function analisarMercado(){
 
 
 
+
         }
 
 
@@ -375,21 +342,13 @@ export async function analisarMercado(){
 
         console.log(
 
-
             `🎯 Value Bets encontradas: ${resultados.length}`
-
 
         );
 
 
 
-
-
-
-
         return resultados;
-
-
 
 
 
@@ -399,22 +358,16 @@ export async function analisarMercado(){
     catch(error){
 
 
-
         console.error(
-
 
             "Erro inteligência:",
 
-
             error.message
-
 
         );
 
 
-
         return [];
-
 
 
     }
@@ -427,10 +380,6 @@ export async function analisarMercado(){
 
 
 
-
-// ==========================================
-// EXPORT DEFAULT
-// ==========================================
 
 
 export default {
