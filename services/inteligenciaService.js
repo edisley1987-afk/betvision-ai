@@ -184,13 +184,6 @@ export async function analisarMercado(){
 
 
                 });
-
-
-
-
-
-
-
             const mercados=[
 
 
