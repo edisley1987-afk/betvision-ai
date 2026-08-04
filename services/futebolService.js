@@ -1,20 +1,43 @@
 // ==========================================
 // BetVision AI
-// services/jogoBancoService.js
-// Salvar jogos PostgreSQL
-// Versão 2.0 - Corrigido Timestamp
+// services/futebolService.js
+// Serviço Futebol
+// Versão 8.0
+// Jogos + Banco + Fallback
 // ==========================================
 
 
-import db from "../database/database.js";
+import fs from "fs";
+
+import {
+    salvarListaJogos
+}
+from "./jogoBancoService.js";
+
+
 
 
 
 // ==========================================
-// NORMALIZAR DATA DO JOGO
+// ARQUIVO CACHE LOCAL
 // ==========================================
 
-function normalizarDataJogo(valor){
+
+const CACHE_FILE =
+
+    "./data/jogos.json";
+
+
+
+
+
+
+// ==========================================
+// NORMALIZAR HORÁRIO
+// ==========================================
+
+
+function normalizarHorario(valor){
 
 
     if(!valor){
@@ -25,7 +48,7 @@ function normalizarDataJogo(valor){
 
 
 
-    // Já é timestamp ISO
+    // Já vem ISO
 
     if(
         valor.includes("T")
@@ -37,15 +60,14 @@ function normalizarDataJogo(valor){
 
 
 
-    // Formato somente hora
-    // Ex: 20:00
+    // Somente HH:mm
 
     if(
         /^\d{2}:\d{2}$/.test(valor)
     ){
 
 
-        const data =
+        const hoje =
 
             new Date()
             .toISOString()
@@ -53,14 +75,12 @@ function normalizarDataJogo(valor){
 
 
 
-        return `${data}T${valor}:00`;
+        return `${hoje}T${valor}:00`;
 
 
     }
 
 
-
-    // Caso venha outro formato
 
     return valor;
 
@@ -71,241 +91,61 @@ function normalizarDataJogo(valor){
 
 
 
+
+
 // ==========================================
-// SALVAR UM JOGO
+// LER CACHE LOCAL
 // ==========================================
 
 
-export async function salvarJogo(jogo){
+function carregarCache(){
 
 
     try{
 
 
-        const dataJogo =
+        if(
+            fs.existsSync(
+                CACHE_FILE
+            )
+        ){
 
-            normalizarDataJogo(
-                jogo.horario
+
+            return JSON.parse(
+
+                fs.readFileSync(
+
+                    CACHE_FILE,
+
+                    "utf8"
+
+                )
+
             );
 
-
-
-        await db.query(
-
-
-        `
-
-        INSERT INTO jogos
-
-        (
-
-            api_id,
-
-            campeonato,
-
-            time_casa,
-
-            time_fora,
-
-            data_jogo,
-
-            status
-
-        )
-
-
-        VALUES
-
-        (
-
-            $1,
-
-            $2,
-
-            $3,
-
-            $4,
-
-            $5,
-
-            $6
-
-        )
-
-
-        ON CONFLICT(api_id)
-
-        DO UPDATE SET
-
-
-            campeonato =
-            EXCLUDED.campeonato,
-
-
-            time_casa =
-            EXCLUDED.time_casa,
-
-
-            time_fora =
-            EXCLUDED.time_fora,
-
-
-            data_jogo =
-            EXCLUDED.data_jogo,
-
-
-            status =
-            EXCLUDED.status
-
-
-        `,
-
-
-        [
-
-
-            jogo.id || null,
-
-
-            jogo.campeonato || "-",
-
-
-            jogo.casa || "-",
-
-
-            jogo.fora || "-",
-
-
-            dataJogo,
-
-
-            jogo.status || "SCHEDULED"
-
-
-        ]
-
-
-        );
-
-
-
-        console.log(
-
-            "💾 Jogo salvo:",
-
-            jogo.casa,
-
-            "x",
-
-            jogo.fora
-
-        );
-
-
-
-        return true;
-
-
-
-    }
-
-
-    catch(error){
-
-
-        console.error(
-
-
-            "❌ Erro salvar jogo:",
-
-            error.message
-
-        );
-
-
-        return false;
-
-
-    }
-
-
-}
-
-
-
-
-
-
-
-// ==========================================
-// SALVAR LISTA DE JOGOS
-// ==========================================
-
-
-export async function salvarListaJogos(
-
-    jogos = []
-
-){
-
-
-    if(
-        !Array.isArray(jogos)
-    ){
-
-
-        console.log(
-
-            "⚠ Lista de jogos inválida"
-
-        );
-
-
-        return 0;
-
-
-    }
-
-
-
-    let total = 0;
-
-
-
-    for(
-        const jogo of jogos
-    ){
-
-
-        const salvo =
-
-            await salvarJogo(
-                jogo
-            );
-
-
-
-        if(salvo){
-
-            total++;
 
         }
 
 
     }
 
+    catch(error){
 
 
-    console.log(
+        console.log(
 
-        `⚽ ${total} jogos salvos no PostgreSQL`
+            "⚠ Erro lendo cache:",
 
-    );
+            error.message
+
+        );
+
+
+    }
 
 
 
-    return total;
-
+    return [];
 
 }
 
@@ -316,61 +156,289 @@ export async function salvarListaJogos(
 
 
 // ==========================================
-// LISTAR JOGOS BANCO
+// SALVAR CACHE
 // ==========================================
 
 
-export async function listarJogos(){
+function salvarCache(jogos){
 
 
     try{
 
 
-        const resultado =
+        fs.writeFileSync(
 
-            await db.query(
+            CACHE_FILE,
 
+            JSON.stringify(
 
-            `
+                jogos,
 
-            SELECT *
+                null,
 
-            FROM jogos
+                2
 
-            ORDER BY data_jogo ASC
+            )
 
-
-            `
-
-
-            );
-
-
-
-        return resultado.rows;
-
+        );
 
 
     }
 
-
     catch(error){
 
 
-        console.error(
+        console.log(
 
-
-            "❌ Erro listar jogos:",
+            "⚠ Erro salvar cache:",
 
             error.message
 
         );
 
 
-        return [];
+    }
+
+
+}
+
+
+
+
+
+
+
+
+// ==========================================
+// BUSCAR JOGOS
+// ==========================================
+
+
+export async function buscarJogos(){
+
+
+    console.log(
+        "===================================="
+    );
+
+
+    console.log(
+        "⚽ API JOGOS DO DIA"
+    );
+
+
+    console.log(
+        "===================================="
+    );
+
+
+
+
+    let jogos = [];
+
+
+
+
+
+    try{
+
+
+        /*
+        ==============================
+        AQUI ENTRA API FUTEBOL
+        ==============================
+        
+        Futuramente:
+        API-Football
+        Football-Data
+        TheSportsDB
+        
+        */
+
+
+        // exemplo temporário
+        // substitui quando API estiver ativa
+
+
+        jogos = [
+
+            {
+
+                id:1,
+
+                campeonato:
+                "Brasileirão",
+
+
+                casa:
+                "Time A",
+
+
+                fora:
+                "Time B",
+
+
+                horario:
+                "20:00",
+
+
+                status:
+                "SCHEDULED"
+
+            }
+
+        ];
+
 
 
     }
+
+    catch(error){
+
+
+        console.error(
+
+            "❌ Erro buscar jogos:",
+
+            error.message
+
+        );
+
+
+    }
+
+
+
+
+
+
+    // =================================
+    // FALLBACK CACHE
+    // =================================
+
+
+    if(
+        !jogos ||
+        jogos.length === 0
+    ){
+
+
+        console.log(
+
+            "⚠ Usando cache local"
+
+        );
+
+
+        jogos =
+            carregarCache();
+
+
+    }
+
+
+
+
+
+    // =================================
+    // NORMALIZAÇÃO
+    // =================================
+
+
+    jogos = jogos.map(
+
+        jogo => ({
+
+
+            id:
+            jogo.id,
+
+
+            campeonato:
+            jogo.campeonato || "Futebol",
+
+
+
+            casa:
+            jogo.casa || "-",
+
+
+
+            fora:
+            jogo.fora || "-",
+
+
+
+            horario:
+
+            normalizarHorario(
+
+                jogo.horario
+
+            ),
+
+
+
+            status:
+
+            jogo.status ||
+            "SCHEDULED"
+
+
+
+        })
+
+
+    );
+
+
+
+
+
+
+    console.log(
+
+        `⚽ ${jogos.length} jogos carregados`
+
+    );
+
+
+
+
+
+    // salva cache
+
+    salvarCache(
+        jogos
+    );
+
+
+
+
+
+    // salva PostgreSQL
+
+    await salvarListaJogos(
+
+        jogos
+
+    );
+
+
+
+
+
+    console.log(
+
+        "💾 Jogos salvos PostgreSQL"
+
+    );
+
+
+
+
+
+    return jogos;
 
 
 }
@@ -389,11 +457,7 @@ export async function listarJogos(){
 export default {
 
 
-    salvarJogo,
-
-    salvarListaJogos,
-
-    listarJogos
+    buscarJogos
 
 
 };
