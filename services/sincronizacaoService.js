@@ -2,30 +2,29 @@
 // BetVision AI
 // services/sincronizacaoService.js
 // Sincronização Campeonatos + Times
-// Versão 8.0
+// Versão 9.0
 // ==========================================
 
 
-import { buscarCampeonatos } 
+import { buscarCampeonatos }
 from "./campeonatoService.js";
 
 
-import { buscarTimes } 
+import { buscarTimes }
 from "./timesService.js";
 
 
-import { 
+import {
     inserirCampeonato,
-    inserirTime,
-    listarTimes
-} 
+    inserirTime
+}
 from "./bancoService.js";
 
 
 
 
 // ==========================================
-// DELAY ENTRE REQUISIÇÕES
+// DELAY
 // ==========================================
 
 function esperar(ms){
@@ -35,7 +34,6 @@ function esperar(ms){
     );
 
 }
-
 
 
 
@@ -71,14 +69,8 @@ export async function sincronizarSistema(){
 
 
 
+
     try{
-
-
-        /*
-        =====================================
-        BUSCAR CAMPEONATOS
-        =====================================
-        */
 
 
         const campeonatos =
@@ -86,13 +78,13 @@ export async function sincronizarSistema(){
 
 
 
-        if(!Array.isArray(campeonatos)){
-
+        if(
+            !Array.isArray(campeonatos)
+        ){
 
             throw new Error(
-                "Lista de campeonatos inválida"
+                "Campeonatos inválidos"
             );
-
 
         }
 
@@ -108,37 +100,6 @@ export async function sincronizarSistema(){
 
 
 
-        /*
-        =====================================
-        TIMES EXISTENTES NO BANCO
-        =====================================
-        */
-
-
-        const timesBanco =
-            await listarTimes();
-
-
-
-        const idsTimes =
-            new Set(
-
-                timesBanco.map(
-                    t => t.id
-                )
-
-            );
-
-
-
-
-
-        /*
-        =====================================
-        PROCESSAR CAMPEONATOS
-        =====================================
-        */
-
 
         for(const campeonato of campeonatos){
 
@@ -146,6 +107,15 @@ export async function sincronizarSistema(){
 
             try{
 
+
+
+                console.log(
+                    `🏆 ${campeonato.nome}`
+                );
+
+
+
+                // salva campeonato
 
                 await inserirCampeonato(
                     campeonato
@@ -156,19 +126,13 @@ export async function sincronizarSistema(){
 
 
 
-                console.log(
-
-                    `🏆 ${campeonato.nome}`
-
-                );
-
 
 
 
                 /*
-                =================================
+                ==============================
                 BUSCAR TIMES
-                =================================
+                ==============================
                 */
 
 
@@ -190,6 +154,8 @@ export async function sincronizarSistema(){
 
 
 
+
+
                 for(const time of times){
 
 
@@ -197,25 +163,7 @@ export async function sincronizarSistema(){
                     try{
 
 
-                        /*
-                        Evita gravar novamente
-                        */
-
-                        if(
-                            idsTimes.has(
-                                time.id
-                            )
-                        ){
-
-                            continue;
-
-                        }
-
-
-
-
                         await inserirTime({
-
 
                             id:
                                 time.id,
@@ -230,17 +178,9 @@ export async function sincronizarSistema(){
 
 
                             pais:
-                                time.pais
-
-
+                                time.pais || ""
 
                         });
-
-
-
-                        idsTimes.add(
-                            time.id
-                        );
 
 
 
@@ -248,7 +188,8 @@ export async function sincronizarSistema(){
 
 
 
-                    }catch(error){
+                    }
+                    catch(error){
 
 
                         erros++;
@@ -257,9 +198,7 @@ export async function sincronizarSistema(){
                         console.error(
 
                             "Erro salvar time:",
-
                             time.nome,
-
                             error.message
 
                         );
@@ -269,11 +208,10 @@ export async function sincronizarSistema(){
 
 
 
-                    /*
-                    pausa pequena
-                    */
 
-                    await esperar(150);
+                    // evita sobrecarga banco
+
+                    await esperar(100);
 
 
 
@@ -282,16 +220,20 @@ export async function sincronizarSistema(){
 
 
 
+
                 /*
-                Evita limite da API
+                ===============================
+                ESPERA API FOOTBALL-DATA
+                ===============================
                 */
 
-                await esperar(1200);
+
+                await esperar(3000);
 
 
 
-            }catch(error){
-
+            }
+            catch(error){
 
 
                 erros++;
@@ -300,11 +242,12 @@ export async function sincronizarSistema(){
                 console.error(
 
                     `Erro campeonato ${campeonato.nome}:`,
-
                     error.message
 
                 );
 
+
+                await esperar(5000);
 
 
             }
@@ -312,6 +255,7 @@ export async function sincronizarSistema(){
 
 
         }
+
 
 
 
@@ -355,7 +299,6 @@ export async function sincronizarSistema(){
 
 
 
-
         return {
 
 
@@ -376,15 +319,14 @@ export async function sincronizarSistema(){
 
 
 
-
-    }catch(error){
+    }
+    catch(error){
 
 
 
         console.error(
 
             "❌ Erro sincronização:",
-
             error.message
 
         );
@@ -393,13 +335,11 @@ export async function sincronizarSistema(){
 
         return {
 
-
             campeonatos:0,
 
             times:0,
 
             erros:1
-
 
         };
 
@@ -407,16 +347,9 @@ export async function sincronizarSistema(){
     }
 
 
-
 }
 
 
-
-
-
-// ==========================================
-// EXPORT DEFAULT
-// ==========================================
 
 
 export default {
