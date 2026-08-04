@@ -1205,16 +1205,19 @@ export function previsaoRapida(jogo) {
 
         jogo,
 
-        historicoCasa: [],
+        historicoCasa:
 
-        historicoFora: []
+            jogo.historicoCasa || [],
+
+
+        historicoFora:
+
+            jogo.historicoFora || []
 
     });
 
 
 }
-
-
 
 // ==========================================
 // VALIDAÇÃO
