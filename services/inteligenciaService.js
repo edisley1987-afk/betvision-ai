@@ -23,6 +23,7 @@ import {
 
 
 import {
+    preverPartida,
     previsaoRapida
 } from "./predictionService.js";
 
