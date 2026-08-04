@@ -7,70 +7,28 @@
 import axios from "axios";
 
 
-const API_KEY =
-    process.env.ODDS_API_KEY;
+const API_KEY = process.env.ODDS_API_KEY;
 
 
 const BASE_URL =
     process.env.ODDS_API_URL ||
-    "https://api.theoddsapi.com";
-
-// ==========================================
-// BUSCAR ESPORTES DISPONÍVEIS
-// ==========================================
-
-async function listarEsportes(){
-
-    try{
-
-        const resposta =
-            await axios.get(
-
-                `${BASE_URL}/sports`,
-
-                {
-
-                    params:{
-                        apiKey:API_KEY
-                    }
-
-                }
-
-            );
-
-
-        return resposta.data;
-
-
-    }catch(error){
-
-        console.error(
-            "Erro esportes:",
-            error.message
-        );
-
-        return [];
-
-    }
-
-}
+    "https://api.the-odds-api.com/v4";
 
 
 
 // ==========================================
-// BUSCAR ODDS FUTEBOL
+// BUSCAR ODDS
 // ==========================================
 
 export async function getOdds(){
 
-
-    try{
+    try {
 
 
         if(!API_KEY){
 
             console.error(
-                "❌ ODDS_API_KEY ausente"
+                "❌ ODDS_API_KEY não configurada"
             );
 
             return [];
@@ -78,39 +36,28 @@ export async function getOdds(){
         }
 
 
-
         console.log(
-            "💰 Consultando The Odds API"
+            "💰 Consultando The Odds API..."
         );
 
 
+        const resposta = await axios.get(
 
-        const resposta =
-
-        await axios.get(
-
-
-            `${BASE_URL}/sports/soccer_epl/odds`,
+            `${BASE_URL}/sports/soccer/odds`,
 
             {
 
                 params:{
 
-
-                    apiKey:API_KEY,
-
+                    apiKey: API_KEY,
 
                     regions:"eu",
 
-
                     markets:"h2h",
-
 
                     oddsFormat:"decimal"
 
-
                 },
-
 
                 timeout:30000
 
@@ -119,48 +66,31 @@ export async function getOdds(){
         );
 
 
-
         console.log(
-
-            "Jogos Odds:",
-            resposta.data.length
-
+            `✅ Odds encontradas: ${resposta.data.length}`
         );
-
 
 
         return resposta.data;
 
 
-
-    }
-
-    catch(error){
+    }catch(error){
 
 
         console.error(
-
-            "Erro The Odds API:",
+            "❌ Erro The Odds API:",
             error.response?.data ||
             error.message
-
         );
 
 
         return [];
 
-
     }
-
 
 }
 
 
-
-
-// ==========================================
-// COMPATIBILIDADE
-// ==========================================
 
 export async function obterOdds(){
 
@@ -170,129 +100,9 @@ export async function obterOdds(){
 
 
 
-
-// ==========================================
-// TESTE THE ODDS API
-// ==========================================
-
-export async function testarOddsAPI(){
-
-    try{
-
-        const resposta = await axios.get(
-
-            `${BASE_URL}/sports`,
-
-            {
-
-                params:{
-
-                    apiKey: API_KEY
-
-                }
-
-            }
-
-        );
-
-
-        console.log(
-            "ESPORTES DISPONÍVEIS:",
-            resposta.data.map(
-                s => s.key
-            )
-        );
-
-
-        return resposta.data;
-
-
-    }catch(error){
-
-
-        console.error(
-
-            "ERRO TESTE ODDS API:",
-            error.response?.data ||
-            error.message
-
-        );
-
-
-        return [];
-
-    }
-
-}
-
-
-
-// ==========================================
-// TESTE THE ODDS API
-// ==========================================
-
-export async function testarOddsAPI(){
-
-    try{
-
-        const resposta = await axios.get(
-
-            `${BASE_URL}/sports`,
-
-            {
-
-                params:{
-
-                    apiKey: API_KEY
-
-                }
-
-            }
-
-        );
-
-
-        console.log(
-            "ESPORTES DISPONÍVEIS:",
-            resposta.data.map(
-                s => s.key
-            )
-        );
-
-
-        return resposta.data;
-
-
-    }catch(error){
-
-
-        console.error(
-
-            "ERRO TESTE ODDS API:",
-            error.response?.data ||
-            error.message
-
-        );
-
-
-        return [];
-
-    }
-
-}
-
-
-
-// ==========================================
-// EXPORTAÇÃO
-// ==========================================
-
 export default {
 
     getOdds,
-
-    obterOdds,
-
-    testarOddsAPI
+    obterOdds
 
 };
