@@ -1,106 +1,327 @@
 // ==========================================
 // BetVision AI
 // services/sincronizacaoService.js
-// Versão 6.0
+// Versão 7.0
+// Campeonatos + Times
 // ==========================================
 
-import { buscarCampeonatos } from "./campeonatoService.js";
-import { inserirCampeonato } from "./bancoService.js";
+
+import {
+
+    buscarCampeonatos
+
+} from "./campeonatoService.js";
+
+
+import {
+
+    buscarTimes
+
+} from "./timesService.js";
+
+
+import {
+
+    inserirCampeonato,
+
+    inserirTime
+
+} from "./bancoService.js";
+
+
+
 
 // ==========================================
-// SINCRONIZAR CAMPEONATOS
+// SINCRONIZAR SISTEMA COMPLETO
 // ==========================================
 
-export async function sincronizarSistema() {
 
-    console.log("🌎 Iniciando sincronização dos campeonatos...");
+export async function sincronizarSistema(){
+
+
+    console.log(
+        "🌎 Iniciando sincronização completa..."
+    );
+
+
+
+    let totalCampeonatos = 0;
+
+    let totalTimes = 0;
+
+    let erros = 0;
+
+
 
     try {
 
-        const campeonatos = await buscarCampeonatos();
 
-        if (!Array.isArray(campeonatos)) {
+
+        // ==============================
+        // CAMPEONATOS
+        // ==============================
+
+
+        const campeonatos =
+
+            await buscarCampeonatos();
+
+
+
+        if(!Array.isArray(campeonatos)){
+
 
             throw new Error(
-                "buscarCampeonatos() não retornou um array."
+
+                "Lista de campeonatos inválida"
+
             );
+
 
         }
 
+
+
         console.log(
+
             `📦 ${campeonatos.length} campeonatos encontrados`
+
         );
 
-        let inseridos = 0;
-        let erros = 0;
 
-        for (const campeonato of campeonatos) {
 
-            try {
 
-                await inserirCampeonato(campeonato);
+        for(const campeonato of campeonatos){
 
-                inseridos++;
 
-            } catch (erro) {
 
-                erros++;
+            try{
 
-                console.error(
-                    `❌ ${campeonato.nome}: ${erro.message}`
+
+                await inserirCampeonato(
+
+                    campeonato
+
                 );
+
+
+                totalCampeonatos++;
+
+
+
+
+                // ==============================
+                // TIMES
+                // ==============================
+
+
+                const times =
+
+                    await buscarTimes(
+
+                        campeonato.id
+
+                    );
+
+
+
+                console.log(
+
+                    `⚽ ${times.length} times encontrados em ${campeonato.nome}`
+
+                );
+
+
+
+                for(const time of times){
+
+
+
+                    try{
+
+
+                        await inserirTime({
+
+                            id:
+
+                            time.id,
+
+
+                            campeonato_id:
+
+                            campeonato.id,
+
+
+                            nome:
+
+                            time.nome,
+
+
+                            pais:
+
+                            time.pais
+
+
+                        });
+
+
+
+                        totalTimes++;
+
+
+
+                    }
+
+                    catch(erro){
+
+
+                        erros++;
+
+
+                        console.error(
+
+                            "Erro inserir time:",
+
+                            time.nome
+
+                        );
+
+
+                    }
+
+
+
+                }
+
+
+
 
             }
 
+            catch(erro){
+
+
+                erros++;
+
+
+                console.error(
+
+                    `Erro campeonato ${campeonato.nome}:`,
+
+                    erro.message
+
+                );
+
+
+            }
+
+
+
         }
 
-        console.log(
-            `✅ Sincronização concluída`
-        );
+
+
 
         console.log(
-            `✔ ${inseridos} campeonatos processados`
+            "================================"
         );
 
-        if (erros > 0) {
 
-            console.log(
-                `⚠ ${erros} erros durante a sincronização`
-            );
+        console.log(
+            "✅ Sincronização concluída"
+        );
 
-        }
+
+        console.log(
+
+            `🏆 Campeonatos: ${totalCampeonatos}`
+
+        );
+
+
+        console.log(
+
+            `⚽ Times cadastrados: ${totalTimes}`
+
+        );
+
+
+        console.log(
+
+            `⚠️ Erros: ${erros}`
+
+        );
+
+
+        console.log(
+            "================================"
+        );
+
+
 
         return {
 
-            total: campeonatos.length,
-            inseridos,
-            erros,
-            campeonatos
+
+            campeonatos:
+
+            totalCampeonatos,
+
+
+            times:
+
+            totalTimes,
+
+
+            erros
+
+
 
         };
 
-    } catch (erro) {
 
-        console.error(
-            "❌ Erro na sincronização:",
-            erro.message
-        );
-
-        return {
-
-            total: 0,
-            inseridos: 0,
-            erros: 1,
-            campeonatos: []
-
-        };
 
     }
 
+    catch(erro){
+
+
+        console.error(
+
+            "❌ Falha sincronização:",
+
+            erro.message
+
+        );
+
+
+
+        return {
+
+
+            campeonatos:0,
+
+            times:0,
+
+            erros:1
+
+
+        };
+
+
+    }
+
+
+
 }
+
+
+
+
 
 export default {
 
+
     sincronizarSistema
+
 
 };
