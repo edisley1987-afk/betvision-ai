@@ -1,25 +1,38 @@
 // ==========================================
 // BetVision AI
 // services/bancoService.js
-// PostgreSQL
+// PostgreSQL Service
+// Versão 9.0
 // ==========================================
+
 
 import db from "../database/database.js";
 
 
+
+
 // ==========================================
-// CAMPEONATOS
+// LISTAR CAMPEONATOS
 // ==========================================
 
 
 export async function listarCampeonatos(){
 
+
     try{
+
 
         const resultado = await db.query(`
 
-            SELECT *
+            SELECT
+                id,
+                nome,
+                pais,
+                continente,
+                temporada
+
             FROM campeonatos
+
             ORDER BY nome
 
         `);
@@ -30,17 +43,29 @@ export async function listarCampeonatos(){
 
     }catch(erro){
 
+
         console.error(
             "Erro listar campeonatos:",
             erro.message
         );
 
+
         return [];
+
 
     }
 
+
 }
 
+
+
+
+
+
+// ==========================================
+// INSERIR CAMPEONATO
+// ==========================================
 
 
 export async function inserirCampeonato(dados){
@@ -49,48 +74,53 @@ export async function inserirCampeonato(dados){
     try{
 
 
-        const resultado = await db.query(
+        const resultado = await db.query(`
 
-        `
+            INSERT INTO campeonatos
+            (
+                id,
+                nome,
+                pais,
+                continente,
+                temporada
+            )
 
-        INSERT INTO campeonatos
-
-        (
-            id,
-            nome,
-            pais,
-            continente,
-            temporada
-        )
-
-        VALUES
-
-        ($1,$2,$3,$4,$5)
-
-        ON CONFLICT(id)
-
-        DO UPDATE SET
-
-            nome = EXCLUDED.nome,
-            pais = EXCLUDED.pais,
-            continente = EXCLUDED.continente,
-            temporada = EXCLUDED.temporada
+            VALUES
+            ($1,$2,$3,$4,$5)
 
 
-        RETURNING id;
+            ON CONFLICT(id)
+
+            DO UPDATE SET
+
+                nome = EXCLUDED.nome,
+
+                pais = EXCLUDED.pais,
+
+                continente = EXCLUDED.continente,
+
+                temporada = EXCLUDED.temporada
+
+
+            RETURNING id;
+
 
         `,
-
-
         [
 
             dados.id,
+
             dados.nome,
+
             dados.pais || "",
+
             dados.continente || "",
+
             dados.temporada || "2026"
 
+
         ]);
+
 
 
         return resultado.rows[0];
@@ -100,102 +130,87 @@ export async function inserirCampeonato(dados){
 
 
         console.error(
+
             "Erro inserir campeonato:",
+
             erro.message
+
         );
+
 
         throw erro;
 
+
     }
+
 
 }
 
 
 
 
+
+
 // ==========================================
-// TIMES
+// BUSCAR CAMPEONATO
 // ==========================================
 
 
-export async function inserirTime(dados){
+export async function buscarCampeonato(id){
 
 
     try{
 
 
-        const resultado = await db.query(
+        const resultado = await db.query(`
 
-        `
+            SELECT *
 
-        INSERT INTO times
+            FROM campeonatos
 
-        (
-
-            id,
-            campeonato_id,
-            nome,
-            pais
-
-        )
-
-
-        VALUES
-
-        ($1,$2,$3,$4)
-
-
-        ON CONFLICT(id)
-
-        DO UPDATE SET
-
-
-            nome = EXCLUDED.nome,
-
-            campeonato_id = EXCLUDED.campeonato_id,
-
-            pais = EXCLUDED.pais
-
-
-        RETURNING id;
-
+            WHERE id=$1
 
         `,
-
-
         [
 
-            dados.id,
-
-            dados.campeonato_id,
-
-            dados.nome,
-
-            dados.pais || ""
+            id
 
         ]);
 
 
-        return resultado.rows[0];
+
+        return resultado.rows[0] || null;
+
 
 
     }catch(erro){
 
 
         console.error(
-            "Erro inserir time:",
+
+            "Erro buscar campeonato:",
+
             erro.message
+
         );
 
 
-        throw erro;
+        return null;
 
 
     }
 
+
 }
 
 
+
+
+
+
+// ==========================================
+// LISTAR TIMES
+// ==========================================
 
 
 export async function listarTimes(){
@@ -206,16 +221,23 @@ export async function listarTimes(){
 
         const resultado = await db.query(`
 
+            SELECT
 
-            SELECT *
+                id,
+
+                campeonato_id,
+
+                nome,
+
+                pais
 
             FROM times
 
             ORDER BY nome
 
 
-
         `);
+
 
 
         return resultado.rows;
@@ -226,8 +248,11 @@ export async function listarTimes(){
 
 
         console.error(
+
             "Erro listar times:",
+
             erro.message
+
         );
 
 
@@ -238,6 +263,104 @@ export async function listarTimes(){
 
 
 }
+
+
+
+
+
+
+// ==========================================
+// INSERIR TIME
+// ==========================================
+
+
+export async function inserirTime(dados){
+
+
+    try{
+
+
+        const resultado = await db.query(`
+
+
+            INSERT INTO times
+
+            (
+                id,
+                campeonato_id,
+                nome,
+                pais
+            )
+
+
+            VALUES
+
+            ($1,$2,$3,$4)
+
+
+
+            ON CONFLICT(id)
+
+            DO UPDATE SET
+
+
+                campeonato_id =
+                    EXCLUDED.campeonato_id,
+
+
+                nome =
+                    EXCLUDED.nome,
+
+
+                pais =
+                    EXCLUDED.pais
+
+
+
+            RETURNING id;
+
+
+        `,
+        [
+
+            dados.id,
+
+            dados.campeonato_id,
+
+            dados.nome,
+
+            dados.pais || ""
+
+
+        ]);
+
+
+
+        return resultado.rows[0];
+
+
+
+    }catch(erro){
+
+
+        console.error(
+
+            "Erro inserir time:",
+
+            erro.message
+
+        );
+
+
+        throw erro;
+
+
+    }
+
+
+}
+
+
 
 
 
@@ -253,19 +376,20 @@ export async function buscarTime(id){
     try{
 
 
-        const resultado = await db.query(
+        const resultado = await db.query(`
 
-        `
 
-        SELECT *
+            SELECT *
 
-        FROM times
 
-        WHERE id=$1
+            FROM times
+
+
+            WHERE id=$1
+
 
 
         `,
-
         [
 
             id
@@ -273,15 +397,20 @@ export async function buscarTime(id){
         ]);
 
 
+
         return resultado.rows[0] || null;
+
 
 
     }catch(erro){
 
 
         console.error(
+
             "Erro buscar time:",
+
             erro.message
+
         );
 
 
@@ -290,7 +419,11 @@ export async function buscarTime(id){
 
     }
 
+
 }
+
+
+
 
 
 
@@ -305,22 +438,20 @@ export async function removerCampeonato(id){
     try{
 
 
-        await db.query(
+        await db.query(`
 
-        `
+            DELETE FROM campeonatos
 
-        DELETE FROM campeonatos
-
-        WHERE id=$1
+            WHERE id=$1
 
 
         `,
-
         [
 
             id
 
         ]);
+
 
 
         return true;
@@ -331,8 +462,11 @@ export async function removerCampeonato(id){
 
 
         console.error(
+
             "Erro remover campeonato:",
+
             erro.message
+
         );
 
 
@@ -347,6 +481,13 @@ export async function removerCampeonato(id){
 
 
 
+
+
+// ==========================================
+// EXPORT DEFAULT
+// ==========================================
+
+
 export default {
 
 
@@ -354,9 +495,11 @@ export default {
 
     inserirCampeonato,
 
-    inserirTime,
+    buscarCampeonato,
 
     listarTimes,
+
+    inserirTime,
 
     buscarTime,
 
