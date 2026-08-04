@@ -229,6 +229,62 @@ export async function testarOddsAPI(){
 
 
 // ==========================================
+// TESTE THE ODDS API
+// ==========================================
+
+export async function testarOddsAPI(){
+
+    try{
+
+        const resposta = await axios.get(
+
+            `${BASE_URL}/sports`,
+
+            {
+
+                params:{
+
+                    apiKey: API_KEY
+
+                }
+
+            }
+
+        );
+
+
+        console.log(
+            "ESPORTES DISPONÍVEIS:",
+            resposta.data.map(
+                s => s.key
+            )
+        );
+
+
+        return resposta.data;
+
+
+    }catch(error){
+
+
+        console.error(
+
+            "ERRO TESTE ODDS API:",
+            error.response?.data ||
+            error.message
+
+        );
+
+
+        return [];
+
+    }
+
+}
+
+
+
+// ==========================================
 // EXPORTAÇÃO
 // ==========================================
 
