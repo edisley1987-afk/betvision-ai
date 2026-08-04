@@ -165,24 +165,17 @@ export async function analisarMercado(){
 
     previsaoRapida({
 
-        id:jogo.id,
+        id: jogo.id,
 
-        casa:jogo.casa,
+        casa: jogo.casa,
 
-        fora:jogo.fora,
+        fora: jogo.fora,
 
-        campeonato:jogo.esporte,
+        campeonato: jogo.esporte,
 
-        horario:jogo.horario
+        horario: jogo.horario
 
     });
-
-                    historicoCasa,
-
-
-                    historicoFora
-
-
                 });
             const mercados=[
 
