@@ -1,14 +1,16 @@
 // ==========================================
 // BetVision AI
 // services/futebolService.js
+// Versão 9.0
 // Serviço central de partidas
-// Football-Data.org v4
-// Versão corrigida PRO
 // ==========================================
 
 
-import axios from "axios";
-
+import fs from "fs/promises";
+import path from "path";
+import {
+    fileURLToPath
+} from "url";
 
 
 // ==========================================
@@ -16,77 +18,88 @@ import axios from "axios";
 // ==========================================
 
 
-const API_KEY =
-
-    process.env.FOOTBALL_DATA_KEY ||
-
-    process.env.API_FOOTBALL_KEY;
+const __filename =
+    fileURLToPath(import.meta.url);
 
 
-
-const BASE_URL =
-
-    process.env.FOOTBALL_DATA_URL ||
-
-    "https://api.football-data.org/v4";
+const __dirname =
+    path.dirname(__filename);
 
 
 
+const ARQUIVO_JOGOS =
 
+    path.join(
 
-// ==========================================
-// COMPETIÇÕES SUPORTADAS
-// ==========================================
+        __dirname,
 
+        "../data/jogos.json"
 
-const COMPETICOES_FREE = [
-
-
-    "PL",     // Inglaterra
-
-
-    "BL1",    // Alemanha
-
-
-    "BSA",    // Brasil
-
-
-    "CL",     // Champions
-
-
-    "SA",     // Itália
-
-
-    "PD",     // Espanha
-
-
-    "FL1",    // França
-
-
-    "PPL"     // Portugal
-
-
-];
-
-
-
+    );
 
 
 
 
 // ==========================================
-// DATA ISO
+// LER CACHE LOCAL DE JOGOS
 // ==========================================
 
 
-function dataISO(data){
+async function carregarJogosArquivo(){
 
 
-    return data
+    try{
 
-        .toISOString()
 
-        .split("T")[0];
+        const dados =
+
+            await fs.readFile(
+
+                ARQUIVO_JOGOS,
+
+                "utf-8"
+
+            );
+
+
+
+        const jogos =
+
+            JSON.parse(dados);
+
+
+
+        if(!Array.isArray(jogos)){
+
+
+            return [];
+
+
+        }
+
+
+
+        return jogos;
+
+
+
+    }
+
+    catch(error){
+
+
+        console.log(
+
+            "⚠️ Erro lendo jogos.json:",
+
+            error.message
+
+        );
+
+
+        return [];
+
+    }
 
 
 }
@@ -96,13 +109,12 @@ function dataISO(data){
 
 
 
-
 // ==========================================
-// CONVERSÃO PARTIDA
+// NORMALIZAR JOGO
 // ==========================================
 
 
-function converter(match){
+function normalizarJogo(jogo){
 
 
     return {
@@ -110,109 +122,103 @@ function converter(match){
 
         id:
 
-            match.id,
+        jogo.id ||
+
+        jogo.idEvent ||
+
+        Date.now(),
 
 
 
         campeonato:
 
-            match.competition?.name ||
+        jogo.campeonato ||
 
-            "Futebol",
+        jogo.strLeague ||
 
+        jogo.league ||
 
+        "Futebol",
 
-        codigoCompeticao:
-
-            match.competition?.code ||
-
-            "",
 
 
 
         pais:
 
-            match.area?.name ||
+        jogo.pais ||
 
-            "",
+        jogo.country ||
+
+        "",
+
 
 
 
         casa:
 
-            match.homeTeam?.name ||
+        jogo.casa ||
 
-            "Casa",
+        jogo.homeTeam ||
+
+        jogo.strHomeTeam ||
+
+        "Casa",
+
 
 
 
         fora:
 
-            match.awayTeam?.name ||
+        jogo.fora ||
 
-            "Fora",
+        jogo.awayTeam ||
+
+        jogo.strAwayTeam ||
+
+        "Fora",
+
 
 
 
         horario:
 
-            match.utcDate || null,
+        jogo.horario ||
+
+        jogo.dateEvent ||
+
+        jogo.utcDate ||
+
+        new Date().toISOString(),
+
 
 
 
         status:
 
-            match.status ||
+        jogo.status ||
 
-            "SCHEDULED",
-
-
-
-        rodada:
-
-            match.matchday || null,
+        "SCHEDULED",
 
 
 
-        estadio:
 
-            match.venue || "",
+        escudos:
 
+        jogo.escudos ||
 
-
-        escudos:{
-
+        {
 
             casa:
 
-                match.homeTeam?.crest || "",
-
+            jogo.homeLogo || "",
 
 
             fora:
 
-                match.awayTeam?.crest || ""
-
-
-        },
-
-
-
-        placar:{
-
-
-            casa:
-
-                match.score?.fullTime?.home ?? null,
-
-
-
-            fora:
-
-                match.score?.fullTime?.away ?? null
-
+            jogo.awayLogo || ""
 
         }
+
 
 
 
@@ -228,119 +234,8 @@ function converter(match){
 
 
 
-
 // ==========================================
-// CONSULTA FOOTBALL DATA
-// ==========================================
-
-
-async function consultarPeriodo(
-
-    inicio,
-
-    fim
-
-){
-
-
-    try{
-
-
-        const resposta = await axios.get(
-
-
-            `${BASE_URL}/matches`,
-
-
-            {
-
-
-                headers:{
-
-
-                    "X-Auth-Token":
-
-                        API_KEY
-
-
-                },
-
-
-                params:{
-
-
-                    competitions:
-
-                        COMPETICOES_FREE.join(","),
-
-
-
-                    dateFrom:
-
-                        inicio,
-
-
-
-                    dateTo:
-
-                        fim
-
-
-                },
-
-
-                timeout:
-
-                    30000
-
-
-
-            }
-
-
-        );
-
-
-
-        return resposta.data.matches || [];
-
-
-
-    }
-
-
-    catch(error){
-
-
-        console.error(
-
-            "❌ Erro consulta Football-Data:",
-
-            error.response?.data ||
-
-            error.message
-
-        );
-
-
-
-        return [];
-
-    }
-
-
-}
-
-
-
-
-
-
-
-
-
-// ==========================================
-// BUSCAR JOGOS
+// BUSCAR TODOS OS JOGOS
 // ==========================================
 
 
@@ -348,252 +243,25 @@ export async function buscarJogos(){
 
 
 
-    console.log("");
-
-    console.log(
-
-        "===================================="
-
-    );
-
-    console.log(
-
-        "⚽ BUSCANDO JOGOS FOOTBALL DATA"
-
-    );
-
-    console.log(
-
-        "===================================="
-
-    );
-
-
-
-
-
-    if(!API_KEY){
-
-
-        console.error(
-
-            "❌ FOOTBALL_DATA_KEY não configurada"
-
-        );
-
-
-        console.error(
-
-            "Configure a variável no Render"
-
-        );
-
-
-        return [];
-
-    }
-
-
-
-
-
-
-
     try{
-
-
-
-        const hoje =
-
-            new Date();
-
-
-
-        const inicio =
-
-            dataISO(hoje);
-
-
-
-
-
-        console.log(
-
-            "📅 Data inicial:",
-
-            inicio
-
-        );
-
-
-
-
-
-        let partidas =
-
-            await consultarPeriodo(
-
-                inicio,
-
-                inicio
-
-            );
-
-
-
-
-
-        console.log(
-
-            `📦 Jogos hoje: ${partidas.length}`
-
-        );
-
-
-
-
-
-
-
-
-
-        // ==================================
-        // BUSCA FUTURO 7 DIAS
-        // ==================================
-
-
-        if(partidas.length===0){
-
-
-
-            const futuro =
-
-                new Date();
-
-
-
-            futuro.setDate(
-
-                futuro.getDate()+7
-
-            );
-
-
-
-
-
-            const fim =
-
-                dataISO(futuro);
-
-
-
-
-
-            console.log(
-
-                "🔎 Buscando próximos 7 dias:",
-
-                fim
-
-            );
-
-
-
-
-
-            partidas =
-
-                await consultarPeriodo(
-
-                    inicio,
-
-                    fim
-
-                );
-
-
-
-
-
-            console.log(
-
-                `📦 Jogos encontrados período: ${partidas.length}`
-
-            );
-
-
-
-        }
-
-
-
-
-
-
-
-
-
-        // ==================================
-        // STATUS
-        // ==================================
-
-
-        const STATUS_VALIDOS = [
-
-
-            "SCHEDULED",
-
-
-            "TIMED",
-
-
-            "IN_PLAY",
-
-
-            "LIVE",
-
-
-            "PAUSED",
-
-
-            "FINISHED"
-
-
-        ];
-
-
-
-
-
-
 
 
 
         const jogos =
 
-
-            partidas
-
-
-            .filter(jogo=>{
-
-
-                return STATUS_VALIDOS.includes(
-
-                    jogo.status
-
-                );
-
-
-            })
-
-
-            .map(converter);
+            await carregarJogosArquivo();
 
 
 
 
+
+        const resultado =
+
+            jogos.map(
+
+                normalizarJogo
+
+            );
 
 
 
@@ -601,7 +269,7 @@ export async function buscarJogos(){
 
         console.log(
 
-            `✅ Jogos enviados: ${jogos.length}`
+            `⚽ ${resultado.length} jogos carregados`
 
         );
 
@@ -609,38 +277,19 @@ export async function buscarJogos(){
 
 
 
-        if(jogos.length===0){
-
-
-            console.log(
-
-                "⚠️ Nenhuma partida encontrada no período"
-
-            );
-
-
-        }
-
-
-
-
-
-
-        return jogos;
-
-
+        return resultado;
 
 
 
     }
 
-
     catch(error){
+
 
 
         console.error(
 
-            "❌ Falha buscar jogos:",
+            "❌ Erro buscarJogos:",
 
             error.message
 
@@ -664,20 +313,39 @@ export async function buscarJogos(){
 
 
 
-
 // ==========================================
-// COMPATIBILIDADE
+// BUSCAR JOGO POR ID
 // ==========================================
 
 
-export async function buscarJogosHoje(){
+export async function buscarJogoPorId(id){
 
 
-    return await buscarJogos();
+
+    const jogos =
+
+        await buscarJogos();
+
+
+
+
+    return jogos.find(
+
+        jogo =>
+
+        String(jogo.id)
+
+        ===
+
+        String(id)
+
+    )
+    ||
+    null;
+
 
 
 }
-
 
 
 
@@ -697,7 +365,7 @@ export default {
     buscarJogos,
 
 
-    buscarJogosHoje
+    buscarJogoPorId
 
 
 };
