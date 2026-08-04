@@ -1,25 +1,36 @@
 // ==========================================
 // BetVision AI
 // services/sincronizacaoService.js
-// Sincronização Campeonatos + Times
-// Versão 10.0
+// Versão 11.0
+// Sincronização Football-Data.org
+// Campeonatos + Times
 // ==========================================
 
 
-import { buscarCampeonatos }
-from "./campeonatoService.js";
+import {
 
+    buscarCompeticoes,
 
-import { buscarTimes }
-from "./timesService.js";
+    buscarTimesCompeticao,
+
+    normalizarTime
+
+}
+from "./apiFootballService.js";
+
 
 
 import {
+
     inserirCampeonato,
+
     inserirTime,
+
     listarTimes
+
 }
 from "./bancoService.js";
+
 
 
 
@@ -29,11 +40,16 @@ from "./bancoService.js";
 // DELAY
 // ==========================================
 
+
 function esperar(ms){
 
+
     return new Promise(resolve =>
+
         setTimeout(resolve, ms)
+
     );
+
 
 }
 
@@ -43,11 +59,12 @@ function esperar(ms){
 
 
 // ==========================================
-// SINCRONIZAÇÃO PRINCIPAL
+// SINCRONIZAÇÃO
 // ==========================================
 
 
 export async function sincronizarSistema(){
+
 
 
     console.log("================================");
@@ -60,6 +77,7 @@ export async function sincronizarSistema(){
 
 
 
+
     let totalCampeonatos = 0;
 
     let totalTimes = 0;
@@ -69,26 +87,36 @@ export async function sincronizarSistema(){
 
 
 
+
     try{
 
 
+
         /*
-        ===============================
-        BUSCA CAMPEONATOS
-        ===============================
+        ==================================
+        BUSCAR CAMPEONATOS
+        ==================================
         */
 
 
-        const campeonatos =
-            await buscarCampeonatos();
+        const campeonatosAPI =
+
+            await buscarCompeticoes();
 
 
 
-        if(!Array.isArray(campeonatos)){
+
+        if(
+
+            !Array.isArray(campeonatosAPI)
+
+        ){
 
 
             throw new Error(
-                "Campeonatos inválidos"
+
+                "Nenhum campeonato retornado pela API"
+
             );
 
 
@@ -96,9 +124,11 @@ export async function sincronizarSistema(){
 
 
 
+
+
         console.log(
 
-            `🏆 Campeonatos encontrados: ${campeonatos.length}`
+            `🏆 Campeonatos encontrados: ${campeonatosAPI.length}`
 
         );
 
@@ -107,23 +137,30 @@ export async function sincronizarSistema(){
 
 
 
+
+
         /*
-        ===============================
-        TIMES EXISTENTES
-        ===============================
+        ==================================
+        TIMES JÁ SALVOS
+        ==================================
         */
 
 
-        const timesExistentes =
+        const timesBanco =
+
             await listarTimes();
 
 
 
+
         const idsTimes =
+
             new Set(
 
-                timesExistentes.map(
-                    time => time.id
+                timesBanco.map(
+
+                    t => Number(t.id)
+
                 )
 
             );
@@ -134,28 +171,81 @@ export async function sincronizarSistema(){
 
 
 
+
         /*
-        ===============================
+        ==================================
         PROCESSAR CAMPEONATOS
-        ===============================
+        ==================================
         */
 
 
-        for(const campeonato of campeonatos){
+        for(
+
+            const campeonatoAPI of campeonatosAPI
+
+        ){
 
 
 
             try{
 
 
+
+
+
+                const campeonato = {
+
+
+
+                    id:
+
+                        campeonatoAPI.id,
+
+
+
+                    nome:
+
+                        campeonatoAPI.name || 
+                        "Sem nome",
+
+
+
+                    pais:
+
+                        campeonatoAPI.area?.name || "",
+
+
+
+                    codigo:
+
+                        campeonatoAPI.code || ""
+
+
+
+                };
+
+
+
+
+
+
+
+
                 console.log(
+
                     `🏆 ${campeonato.nome}`
+
                 );
 
 
 
+
+
+
                 await inserirCampeonato(
+
                     campeonato
+
                 );
 
 
@@ -167,23 +257,34 @@ export async function sincronizarSistema(){
 
 
 
+
+
+
                 /*
-                ===============================
+                =============================
                 BUSCAR TIMES
-                ===============================
+                =============================
                 */
 
 
-                const times =
-                    await buscarTimes(
+
+                const timesAPI =
+
+
+                    await buscarTimesCompeticao(
+
                         campeonato.id
+
                     );
+
+
+
 
 
 
                 console.log(
 
-                    `⚽ ${times.length} times encontrados em ${campeonato.nome}`
+                    `⚽ ${timesAPI.length} times encontrados`
 
                 );
 
@@ -193,7 +294,12 @@ export async function sincronizarSistema(){
 
 
 
-                for(const time of times){
+
+                for(
+
+                    const item of timesAPI
+
+                ){
 
 
 
@@ -201,15 +307,31 @@ export async function sincronizarSistema(){
 
 
 
-                        // evita duplicação
+                        const time =
+
+                            normalizarTime(
+
+                                item
+
+                            );
+
+
+
+
 
                         if(
+
                             idsTimes.has(
-                                time.id
+
+                                Number(time.id)
+
                             )
+
                         ){
 
+
                             continue;
+
 
                         }
 
@@ -218,22 +340,33 @@ export async function sincronizarSistema(){
 
 
 
+
                         await inserirTime({
 
+
+
                             id:
+
                                 time.id,
 
 
+
                             campeonato_id:
+
                                 campeonato.id,
 
 
+
                             nome:
+
                                 time.nome,
 
 
+
                             pais:
-                                time.pais || ""
+
+                                time.pais
+
 
 
                         });
@@ -242,8 +375,12 @@ export async function sincronizarSistema(){
 
 
 
+
+
                         idsTimes.add(
-                            time.id
+
+                            Number(time.id)
+
                         );
 
 
@@ -255,7 +392,9 @@ export async function sincronizarSistema(){
 
 
                     }
+
                     catch(error){
+
 
 
                         erros++;
@@ -263,8 +402,8 @@ export async function sincronizarSistema(){
 
                         console.error(
 
-                            "Erro salvar time:",
-                            time.nome,
+                            "❌ Erro salvar time:",
+
                             error.message
 
                         );
@@ -276,7 +415,10 @@ export async function sincronizarSistema(){
 
 
 
-                    await esperar(150);
+
+
+                    await esperar(200);
+
 
 
 
@@ -287,20 +429,25 @@ export async function sincronizarSistema(){
 
 
 
+
+
+
                 /*
-                ===============================
+                ==================================
                 CONTROLE API
-                ===============================
+                ==================================
                 */
 
 
-                await esperar(12000);
+                await esperar(1000);
 
 
 
 
 
             }
+
+
             catch(error){
 
 
@@ -308,9 +455,13 @@ export async function sincronizarSistema(){
                 erros++;
 
 
+
                 console.error(
 
-                    `Erro campeonato ${campeonato.nome}:`,
+                    "❌ Erro campeonato:",
+
+                    campeonatoAPI.name,
+
                     error.message
 
                 );
@@ -318,28 +469,9 @@ export async function sincronizarSistema(){
 
 
 
-                /*
-                Se API limitar
-                */
-
-
-                if(
-                    error.response?.status === 429
-                ){
-
-                    console.log(
-                        "⏳ Aguardando limite API..."
-                    );
-
-
-                    await esperar(15000);
-
-
-                }
-
-
-
             }
+
+
 
 
 
@@ -352,29 +484,45 @@ export async function sincronizarSistema(){
 
 
 
+
         console.log("================================");
 
+
         console.log(
+
             "✅ SINCRONIZAÇÃO CONCLUÍDA"
+
         );
 
 
+
         console.log(
+
             `🏆 Campeonatos: ${totalCampeonatos}`
+
         );
 
 
+
         console.log(
+
             `⚽ Times cadastrados: ${totalTimes}`
+
         );
+
 
 
         console.log(
+
             `⚠️ Erros: ${erros}`
+
         );
+
 
 
         console.log("================================");
+
+
 
 
 
@@ -384,14 +532,17 @@ export async function sincronizarSistema(){
         return {
 
 
+
             sucesso:true,
 
 
             campeonatos:
+
                 totalCampeonatos,
 
 
             times:
+
                 totalTimes,
 
 
@@ -401,7 +552,8 @@ export async function sincronizarSistema(){
 
             mensagem:
 
-                `${totalCampeonatos} campeonatos sincronizados`
+                "Sincronização concluída"
+
 
 
         };
@@ -411,14 +563,18 @@ export async function sincronizarSistema(){
 
 
 
+
     }
+
+
+
     catch(error){
 
 
 
         console.error(
 
-            "❌ Erro sincronização:",
+            "❌ Falha sincronização:",
 
             error.message
 
@@ -426,7 +582,9 @@ export async function sincronizarSistema(){
 
 
 
+
         return {
+
 
 
             sucesso:false,
@@ -446,13 +604,17 @@ export async function sincronizarSistema(){
                 error.message
 
 
+
         };
+
 
 
     }
 
 
+
 }
+
 
 
 
