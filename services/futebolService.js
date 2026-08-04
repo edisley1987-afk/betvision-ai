@@ -1,8 +1,7 @@
 // ==========================================
 // BetVision AI
 // services/futebolService.js
-// Versão 9.0
-// Serviço central de partidas
+// Busca jogos reais
 // ==========================================
 
 
@@ -13,93 +12,81 @@ import {
 } from "url";
 
 
-// ==========================================
-// CONFIGURAÇÃO
-// ==========================================
-
-
 const __filename =
-    fileURLToPath(import.meta.url);
+fileURLToPath(import.meta.url);
 
 
 const __dirname =
-    path.dirname(__filename);
+path.dirname(__filename);
 
 
 
-const ARQUIVO_JOGOS =
+const FILE =
 
-    path.join(
-
-        __dirname,
-
-        "../data/jogos.json"
-
-    );
+path.join(
+    __dirname,
+    "../data/jogos.json"
+);
 
 
 
 
-// ==========================================
-// LER CACHE LOCAL DE JOGOS
-// ==========================================
+
+async function carregarArquivo(){
 
 
-async function carregarJogosArquivo(){
+try{
 
 
-    try{
+const dados =
 
-
-        const dados =
-
-            await fs.readFile(
-
-                ARQUIVO_JOGOS,
-
-                "utf-8"
-
-            );
+await fs.readFile(
+    FILE,
+    "utf8"
+);
 
 
 
-        const jogos =
+const json =
 
-            JSON.parse(dados);
-
-
-
-        if(!Array.isArray(jogos)){
-
-
-            return [];
-
-
-        }
+JSON.parse(dados);
 
 
 
-        return jogos;
+if(Array.isArray(json)){
+
+return json;
+
+}
 
 
 
-    }
+if(json.jogos){
 
-    catch(error){
+return json.jogos;
 
-
-        console.log(
-
-            "⚠️ Erro lendo jogos.json:",
-
-            error.message
-
-        );
+}
 
 
-        return [];
 
-    }
+return [];
+
+
+
+}
+
+catch(error){
+
+
+console.log(
+"⚠️ Jogos.json não encontrado"
+);
+
+
+return [];
+
+}
+
 
 
 }
@@ -109,120 +96,63 @@ async function carregarJogosArquivo(){
 
 
 
-// ==========================================
-// NORMALIZAR JOGO
-// ==========================================
+function normalizar(jogo){
 
 
-function normalizarJogo(jogo){
+return {
 
 
-    return {
+id:
 
+jogo.id ||
 
-        id:
+jogo.idEvent,
 
-        jogo.id ||
 
-        jogo.idEvent ||
 
-        Date.now(),
+campeonato:
 
+jogo.campeonato ||
 
+jogo.league ||
 
-        campeonato:
+"Futebol",
 
-        jogo.campeonato ||
 
-        jogo.strLeague ||
 
-        jogo.league ||
+casa:
 
-        "Futebol",
+jogo.casa ||
 
+jogo.homeTeam ||
+jogo.strHomeTeam,
 
 
 
-        pais:
+fora:
 
-        jogo.pais ||
+jogo.fora ||
+jogo.awayTeam ||
+jogo.strAwayTeam,
 
-        jogo.country ||
 
-        "",
 
+horario:
 
+jogo.horario ||
+jogo.dateEvent ||
+jogo.utcDate,
 
 
-        casa:
 
-        jogo.casa ||
+status:
 
-        jogo.homeTeam ||
+jogo.status ||
+"SCHEDULED"
 
-        jogo.strHomeTeam ||
 
-        "Casa",
 
-
-
-
-        fora:
-
-        jogo.fora ||
-
-        jogo.awayTeam ||
-
-        jogo.strAwayTeam ||
-
-        "Fora",
-
-
-
-
-        horario:
-
-        jogo.horario ||
-
-        jogo.dateEvent ||
-
-        jogo.utcDate ||
-
-        new Date().toISOString(),
-
-
-
-
-        status:
-
-        jogo.status ||
-
-        "SCHEDULED",
-
-
-
-
-        escudos:
-
-        jogo.escudos ||
-
-        {
-
-            casa:
-
-            jogo.homeLogo || "",
-
-
-            fora:
-
-            jogo.awayLogo || ""
-
-        }
-
-
-
-
-    };
+};
 
 
 }
@@ -232,75 +162,45 @@ function normalizarJogo(jogo){
 
 
 
-
-
-// ==========================================
-// BUSCAR TODOS OS JOGOS
-// ==========================================
 
 
 export async function buscarJogos(){
 
 
 
-    try{
+const jogos =
 
-
-
-        const jogos =
-
-            await carregarJogosArquivo();
+await carregarArquivo();
 
 
 
 
+const resultado =
 
-        const resultado =
+jogos.map(normalizar)
 
-            jogos.map(
+.filter(
 
-                normalizarJogo
+j =>
 
-            );
+j.casa &&
+j.fora
 
-
-
-
-
-        console.log(
-
-            `⚽ ${resultado.length} jogos carregados`
-
-        );
+);
 
 
 
 
 
-        return resultado;
+console.log(
+
+`⚽ ${resultado.length} jogos carregados`
+
+);
 
 
 
-    }
-
-    catch(error){
-
-
-
-        console.error(
-
-            "❌ Erro buscarJogos:",
-
-            error.message
-
-        );
-
-
-
-        return [];
-
-
-    }
+return resultado;
 
 
 
@@ -310,62 +210,10 @@ export async function buscarJogos(){
 
 
 
-
-
-
-// ==========================================
-// BUSCAR JOGO POR ID
-// ==========================================
-
-
-export async function buscarJogoPorId(id){
-
-
-
-    const jogos =
-
-        await buscarJogos();
-
-
-
-
-    return jogos.find(
-
-        jogo =>
-
-        String(jogo.id)
-
-        ===
-
-        String(id)
-
-    )
-    ||
-    null;
-
-
-
-}
-
-
-
-
-
-
-
-
-// ==========================================
-// EXPORT DEFAULT
-// ==========================================
 
 
 export default {
 
-
-    buscarJogos,
-
-
-    buscarJogoPorId
-
+buscarJogos
 
 };
