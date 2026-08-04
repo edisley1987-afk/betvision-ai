@@ -1,86 +1,44 @@
 // ==========================================
 // BetVision AI
 // services/historicoService.js
-// Histórico de equipes com fallback seguro
+// Histórico dos Times via PostgreSQL
 // ==========================================
 
 
-import axios from "axios";
+import db from "../database/database.js";
 
-
-// cache memória
-const cacheHistorico = new Map();
 
 
 // ==========================================
-// BUSCAR TIME
+// BUSCAR ID DO TIME
 // ==========================================
 
 async function buscarTime(nome){
 
+
     try{
 
-        if(!nome){
 
-            return null;
+        const resultado = await db.query(
 
-        }
-
-
-        console.log(
-            "📊 Buscando histórico:",
-            nome
-        );
-
-
-        const cache = cacheHistorico.get(nome);
-
-
-        if(cache){
-
-            return cache;
-
-        }
-
-
-
-        const resposta = await axios.get(
-
-            "https://api.football-data.org/v4/teams",
-
-            {
-
-                params:{
-
-                    name:nome
-
-                },
-
-                timeout:8000
-
-            }
+            `
+            SELECT 
+                id,
+                nome
+            FROM times
+            WHERE LOWER(nome) = LOWER($1)
+            LIMIT 1
+            `,
+            [
+                nome
+            ]
 
         );
 
 
+        if(resultado.rows.length){
 
-        if(
-            resposta.data &&
-            resposta.data.teams &&
-            resposta.data.teams.length
-        ){
-
-            const time =
-                resposta.data.teams[0];
-
-
-            cacheHistorico.set(
-                nome,
-                time
-            );
-
-
-            return time;
+            return resultado.rows[0];
 
         }
 
@@ -94,19 +52,21 @@ async function buscarTime(nome){
         return null;
 
 
-
     }
     catch(error){
 
 
-        console.log(
-            "⚠️ API histórico indisponível:",
-            error.response?.status ||
+        console.error(
+
+            "Erro buscar time:",
+
             error.message
+
         );
 
 
         return null;
+
 
     }
 
@@ -117,62 +77,120 @@ async function buscarTime(nome){
 
 
 // ==========================================
-// HISTÓRICO DE JOGOS
+// BUSCAR ÚLTIMOS JOGOS DO TIME
 // ==========================================
 
 
-export async function buscarHistoricoJogo(
-
-    casa,
-
-    fora
-
-){
+async function buscarJogosTime(timeId){
 
 
     try{
 
 
-        const timeCasa =
-            await buscarTime(casa);
+        const resultado = await db.query(
+
+            `
+            SELECT
+
+                p.id,
+
+                p.data_partida,
+
+                tc.nome AS casa,
+
+                tf.nome AS fora,
+
+                p.gols_casa,
+
+                p.gols_fora
+
+
+            FROM partidas p
+
+
+            JOIN times tc
+
+                ON tc.id = p.time_casa
+
+
+            JOIN times tf
+
+                ON tf.id = p.time_fora
+
+
+            WHERE
+
+                (
+                    p.time_casa = $1
+                    OR
+                    p.time_fora = $1
+                )
+
+            AND
+
+                p.status = 'finalizado'
+
+
+            ORDER BY
+
+                p.data_partida DESC
+
+
+            LIMIT 10
+
+            `,
+            [
+                timeId
+            ]
+
+        );
 
 
 
-        const timeFora =
-            await buscarTime(fora);
+        return resultado.rows.map(jogo=>{
+
+
+            return {
+
+
+                data:
+
+                jogo.data_partida,
 
 
 
-        let historicoCasa=[];
+                casa:
 
-        let historicoFora=[];
-
-
-
-        /*
-        Aqui entra consulta futura
-        de partidas dos times.
-
-        Por enquanto retorna
-        estrutura compatível
-        com IA.
-        */
+                jogo.casa,
 
 
 
-        return {
+                fora:
+
+                jogo.fora,
 
 
-            historicoCasa,
 
-            historicoFora,
-
-            timeCasa,
-
-            timeFora
+                placar:{
 
 
-        };
+                    casa:
+
+                    Number(jogo.gols_casa || 0),
+
+
+                    fora:
+
+                    Number(jogo.gols_fora || 0)
+
+
+                }
+
+
+            };
+
+
+        });
 
 
 
@@ -182,29 +200,112 @@ export async function buscarHistoricoJogo(
 
         console.error(
 
-            "Erro histórico:",
-
+            "Erro buscar jogos:",
             error.message
 
         );
 
 
-        return {
+        return [];
 
 
-            historicoCasa:[],
-
-            historicoFora:[]
+    }
 
 
-        };
+}
+
+
+
+
+// ==========================================
+// FUNÇÃO PRINCIPAL
+// ==========================================
+
+
+export async function buscarHistoricoJogo(
+
+    timeCasa,
+
+    timeFora
+
+){
+
+
+    console.log(
+
+        "📊 Buscando histórico:",
+        timeCasa
+
+    );
+
+
+    const casa =
+
+        await buscarTime(timeCasa);
+
+
+
+    const fora =
+
+        await buscarTime(timeFora);
+
+
+
+
+    let historicoCasa=[];
+
+    let historicoFora=[];
+
+
+
+
+    if(casa){
+
+
+        historicoCasa =
+
+            await buscarJogosTime(
+
+                casa.id
+
+            );
 
 
     }
 
 
 
+    if(fora){
+
+
+        historicoFora =
+
+            await buscarJogosTime(
+
+                fora.id
+
+            );
+
+
+    }
+
+
+
+
+
+    return {
+
+
+        historicoCasa,
+
+        historicoFora
+
+
+    };
+
+
 }
+
 
 
 
