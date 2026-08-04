@@ -177,24 +177,6 @@ export async function analisarMercado(){
 
     });
 
-
-
-                    historicoCasa,
-
-
-                    historicoFora
-
-
-
-                });
-
-
-
-
-
-
-
-
             // ==================================
             // MERCADOS ANALISADOS
             // ==================================
