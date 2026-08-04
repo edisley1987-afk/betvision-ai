@@ -1,7 +1,7 @@
 // ==========================================
 // BetVision AI
 // services/inteligenciaService.js
-// Integração IA + Odds + Value Bets
+// Integração IA + Histórico + Odds + Value Bets
 // ==========================================
 
 
@@ -16,14 +16,19 @@ import {
 
 
 import {
-    previsaoRapida
+    preverPartida
 } from "./predictionService.js";
+
+
+import {
+    buscarHistoricoJogo
+} from "./historicoService.js";
 
 
 
 
 // ==========================================
-// ANALISAR ODDS
+// ANALISAR MERCADO
 // ==========================================
 
 export async function analisarMercado(){
@@ -37,37 +42,58 @@ export async function analisarMercado(){
         );
 
 
+
         const jogosBrutos =
-    await buscarOddsReais();
+            await buscarOddsReais();
 
 
-const jogos = jogosBrutos.map(jogo=>{
+
+        const jogos =
+            jogosBrutos.map(jogo=>{
 
 
-    return {
-
-        id:jogo.id,
-
-        esporte:jogo.esporte,
-
-        horario:jogo.horario,
-
-        casa:jogo.casa,
-
-        fora:jogo.fora,
-
-        odds:jogo.odds || {
-
-            casa:0,
-            empate:0,
-            fora:0
-
-        }
-
-    };
+                return {
 
 
-});
+                    id:
+                    jogo.id,
+
+
+                    esporte:
+                    jogo.esporte,
+
+
+                    horario:
+                    jogo.horario,
+
+
+                    casa:
+                    jogo.casa,
+
+
+                    fora:
+                    jogo.fora,
+
+
+                    odds:
+                    jogo.odds || {
+
+
+                        casa:0,
+
+                        empate:0,
+
+                        fora:0
+
+
+                    }
+
+
+                };
+
+
+            });
+
 
 
 
@@ -81,8 +107,8 @@ const jogos = jogosBrutos.map(jogo=>{
 
             return [];
 
-        }
 
+        }
 
 
 
@@ -90,62 +116,155 @@ const jogos = jogosBrutos.map(jogo=>{
 
 
 
-
         for(const jogo of jogos){
+
+
+
+            console.log(
+
+                "📊 Analisando:",
+                jogo.casa,
+                "x",
+                jogo.fora
+
+            );
+
+
+
+
+            // ==============================
+            // BUSCA HISTÓRICO DOS TIMES
+            // ==============================
+
+
+            const {
+
+                historicoCasa,
+
+                historicoFora
+
+
+            } = await buscarHistoricoJogo(
+
+                jogo.casa,
+
+                jogo.fora
+
+            );
+
+
+
+
+
+            // ==============================
+            // MOTOR DE PREVISÃO IA
+            // ==============================
 
 
             const previsao =
 
-                previsaoRapida({
+                preverPartida({
 
-                    id:jogo.id,
 
-                    casa:jogo.casa,
+                    jogo:{
 
-                    fora:jogo.fora,
 
-                    campeonato:jogo.esporte,
+                        id:
+                        jogo.id,
 
-                    horario:jogo.horario
+
+                        casa:
+                        jogo.casa,
+
+
+                        fora:
+                        jogo.fora,
+
+
+                        campeonato:
+                        jogo.esporte,
+
+
+                        horario:
+                        jogo.horario
+
+
+                    },
+
+
+                    historicoCasa,
+
+
+                    historicoFora
+
 
                 });
 
 
 
-            const analises=[
+
+
+
+
+            const mercados=[
+
 
 
                 {
-                    selecao:jogo.casa,
 
-                    odd:jogo.odds.casa,
+
+                    selecao:
+                    jogo.casa,
+
+
+                    odd:
+                    jogo.odds.casa,
+
 
                     probabilidade:
                     previsao.probabilidadeCasa
 
+
                 },
 
 
-                {
-                    selecao:"Empate",
 
-                    odd:jogo.odds.empate,
+                {
+
+
+                    selecao:
+                    "Empate",
+
+
+                    odd:
+                    jogo.odds.empate,
+
 
                     probabilidade:
                     previsao.probabilidadeEmpate
 
+
                 },
 
 
-                {
-                    selecao:jogo.fora,
 
-                    odd:jogo.odds.fora,
+                {
+
+
+                    selecao:
+                    jogo.fora,
+
+
+                    odd:
+                    jogo.odds.fora,
+
 
                     probabilidade:
                     previsao.probabilidadeFora
 
+
                 }
+
 
 
             ];
@@ -154,28 +273,51 @@ const jogos = jogosBrutos.map(jogo=>{
 
 
 
-            for(const mercado of analises){
+
+
+            for(const mercado of mercados){
+
 
 
                 const value =
 
-                calcularValueBet({
+                    calcularValueBet({
 
-                    jogo:
-                    `${jogo.casa} x ${jogo.fora}`,
 
-                    mercado:"Resultado Final",
+                        jogo:
 
-                    selecao:
-                    mercado.selecao,
+                        `${jogo.casa} x ${jogo.fora}`,
 
-                    odd:
-                    mercado.odd,
 
-                    probabilidadeIA:
-                    mercado.probabilidade
 
-                });
+                        mercado:
+
+                        "Resultado Final",
+
+
+
+                        selecao:
+
+                        mercado.selecao,
+
+
+
+                        odd:
+
+                        mercado.odd,
+
+
+
+                        probabilidadeIA:
+
+                        mercado.probabilidade
+
+
+
+                    });
+
+
+
 
 
 
@@ -183,20 +325,34 @@ const jogos = jogosBrutos.map(jogo=>{
                 if(value.possuiValor){
 
 
+
                     resultados.push({
+
 
                         ...value,
 
+
                         campeonato:
+
                         jogo.esporte,
 
+
                         horario:
-                        jogo.horario
+
+                        jogo.horario,
+
+
+
+                        previsao
+
+
 
                     });
 
 
+
                 }
+
 
 
             }
@@ -204,6 +360,9 @@ const jogos = jogosBrutos.map(jogo=>{
 
 
         }
+
+
+
 
 
 
@@ -220,6 +379,7 @@ const jogos = jogosBrutos.map(jogo=>{
 
 
     }
+
     catch(error){
 
 
@@ -234,6 +394,7 @@ const jogos = jogosBrutos.map(jogo=>{
 
         return [];
 
+
     }
 
 
@@ -243,9 +404,12 @@ const jogos = jogosBrutos.map(jogo=>{
 
 
 
+
+
 export default {
 
 
     analisarMercado
+
 
 };
