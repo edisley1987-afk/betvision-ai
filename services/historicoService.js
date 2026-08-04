@@ -1,8 +1,8 @@
 // ==========================================
 // BetVision AI
 // services/historicoService.js
-// Histórico de times e jogos
-// Versão 10.0
+// Histórico de Jogos + Estatísticas
+// Versão 8.0
 // ==========================================
 
 
@@ -11,328 +11,39 @@ import db from "../database/database.js";
 
 
 
-
 // ==========================================
-// NORMALIZAR NOME DO TIME
-// ==========================================
-
-
-function normalizarNome(nome = ""){
-
-
-    return nome
-
-        .toLowerCase()
-
-        .normalize("NFD")
-
-        .replace(
-            /[\u0300-\u036f]/g,
-            ""
-        )
-
-        .replace(
-            /[^a-z0-9 ]/g,
-            ""
-        )
-
-        .trim();
-
-
-}
-
-
-
-
-
-
-
-// ==========================================
-// BUSCAR TIME POR NOME
+// BUSCAR HISTÓRICO DE UM TIME
 // ==========================================
 
-
-export async function buscarTimePorNome(nome){
-
+export async function buscarHistoricoTime(
+    time
+){
 
     try{
 
 
-        const nomeLimpo =
-            normalizarNome(nome);
-
-
-
-        const resultado = await db.query(`
-
-            SELECT *
-
-            FROM times
-
-            WHERE
-
-                LOWER(
-                    TRANSLATE(
-                        nome,
-                        'áàãâäéèêëíìîïóòõôöúùûüç',
-                        'aaaaaeeeeiiiiooooouuuuc'
-                    )
-                )
-
-                LIKE $1
-
-
-            LIMIT 1
-
-
-        `,
-        [
-
-            `%${nomeLimpo}%`
-
-        ]);
-
-
-
-
-
-        if(resultado.rows.length){
-
-            return resultado.rows[0];
-
-        }
-
-
-
-
-
-        /*
-        Segunda tentativa:
-        procura parecido
-        */
-
-
-        const todos =
-            await db.query(`
-
-                SELECT *
-
-                FROM times
-
-            `);
-
-
-
-
-        const encontrado =
-            todos.rows.find(time => {
-
-
-                const banco =
-                    normalizarNome(
-                        time.nome
-                    );
-
-
-                return (
-
-                    banco.includes(nomeLimpo)
-
-                    ||
-
-                    nomeLimpo.includes(banco)
-
-                );
-
-
-            });
-
-
-
-
-
-        return encontrado || null;
-
-
-
-
-    }
-    catch(error){
-
-
-        console.error(
-
-            "Erro buscar time histórico:",
-
-            error.message
-
-        );
-
-
-        return null;
-
-
-    }
-
-
-}
-
-
-
-
-
-
-
-
-// ==========================================
-// BUSCAR HISTÓRICO DO TIME
-// ==========================================
-
-
-export async function buscarHistoricoTime(nomeTime){
-
-
-
-    try{
-
-
-
-        console.log(
-
-            `📊 Buscando histórico: ${nomeTime}`
-
-        );
-
-
-
-
-
-        const time =
-
-            await buscarTimePorNome(
-                nomeTime
-            );
-
-
-
-
-
-        if(!time){
-
-
-            console.warn(
-
-                `⚠️ Time não cadastrado: ${nomeTime}`
-
-            );
-
-
-            return {
-
-
-                time:null,
-
-
-                jogos:[],
-
-
-                estatisticas:{
-
-
-
-                    vitorias:0,
-
-                    empates:0,
-
-                    derrotas:0,
-
-                    golsMarcados:0,
-
-                    golsSofridos:0
-
-
-
-                }
-
-
-
-            };
-
-
-        }
-
-
-
-
-
-
-
-        /*
-        Busca jogos futuros/passados
-        */
-
-
-        const jogos =
-            await db.query(`
-
-
-                SELECT *
-
+        const resultado =
+
+            await db.query(
+                `
+                SELECT
+                    *
                 FROM jogos
-
                 WHERE
-
-                    mandante_id=$1
-
+                    time_casa = $1
                     OR
-
-                    visitante_id=$1
-
-
-                ORDER BY data DESC
-
-
+                    time_fora = $1
+                ORDER BY data_jogo DESC
                 LIMIT 10
-
-
-            `,
-            [
-
-                time.id
-
-            ]);
+                `,
+                [
+                    time
+                ]
+            );
 
 
 
-
-
-
-
-        return {
-
-
-            time,
-
-
-            jogos:
-
-                jogos.rows,
-
-
-
-            estatisticas:
-
-                calcularEstatisticas(
-                    jogos.rows,
-                    time.id
-                )
-
-
-
-        };
-
-
-
+        return resultado.rows;
 
 
 
@@ -340,31 +51,16 @@ export async function buscarHistoricoTime(nomeTime){
     catch(error){
 
 
-
         console.error(
-
             "Erro histórico time:",
-
             error.message
-
         );
 
 
-        return {
-
-
-            time:null,
-
-            jogos:[],
-
-            estatisticas:{}
-
-
-        };
+        return [];
 
 
     }
-
 
 
 }
@@ -373,149 +69,171 @@ export async function buscarHistoricoTime(nomeTime){
 
 
 
-
-
-
-
 // ==========================================
-// CALCULAR ESTATÍSTICAS
+// BUSCAR HISTÓRICO DO CONFRONTO
 // ==========================================
 
+export async function buscarHistoricoJogo(
 
-function calcularEstatisticas(
+    timeCasa,
 
-    jogos,
-
-    timeId
+    timeFora
 
 ){
 
 
+    try{
 
-    let vitorias = 0;
 
-    let empates = 0;
-
-    let derrotas = 0;
-
-    let golsMarcados = 0;
-
-    let golsSofridos = 0;
+        console.log(
+            `📊 Buscando histórico: ${timeCasa}`
+        );
 
 
 
+        const casa =
 
-
-    for(const jogo of jogos){
-
-
-
-        const mandante =
-            jogo.mandante_id == timeId;
+            await buscarHistoricoTime(
+                timeCasa
+            );
 
 
 
-        const golsPro =
-            mandante
+        const fora =
 
-            ?
-
-            jogo.gols_mandante
-
-            :
-
-            jogo.gols_visitante;
+            await buscarHistoricoTime(
+                timeFora
+            );
 
 
 
 
 
-        const golsContra =
-            mandante
-
-            ?
-
-            jogo.gols_visitante
-
-            :
-
-            jogo.gols_mandante;
+        return {
 
 
+            historicoCasa:
 
+                casa,
+
+
+            historicoFora:
+
+                fora
 
 
 
-        golsMarcados +=
-            golsPro || 0;
+        };
 
 
 
-        golsSofridos +=
-            golsContra || 0;
+    }
+    catch(error){
+
+
+        console.error(
+
+            "Erro buscar histórico jogo:",
+            error.message
+
+        );
 
 
 
+        return {
 
 
+            historicoCasa: [],
 
-        if(
-            golsPro >
-            golsContra
-        ){
 
-            vitorias++;
+            historicoFora: []
 
-        }
-
-        else if(
-            golsPro ===
-            golsContra
-        ){
-
-            empates++;
-
-        }
-
-        else{
-
-            derrotas++;
-
-        }
-
+        };
 
 
     }
 
 
+}
 
 
 
-    return {
-
-
-        jogos:
-
-            jogos.length,
-
-
-        vitorias,
-
-
-        empates,
-
-
-        derrotas,
-
-
-        golsMarcados,
-
-
-        golsSofridos
 
 
 
-    };
+// ==========================================
+// SALVAR HISTÓRICO
+// ==========================================
+
+export async function salvarHistoricoJogo(
+    dados
+){
+
+
+    try{
+
+
+        await db.query(
+
+            `
+            INSERT INTO jogos
+            (
+                id,
+                time_casa,
+                time_fora,
+                gols_casa,
+                gols_fora,
+                data_jogo
+            )
+
+            VALUES
+            ($1,$2,$3,$4,$5,$6)
+
+            ON CONFLICT(id)
+
+            DO NOTHING
+            `,
+
+            [
+
+                dados.id,
+
+                dados.time_casa,
+
+                dados.time_fora,
+
+                dados.gols_casa || 0,
+
+                dados.gols_fora || 0,
+
+                dados.data_jogo
+
+            ]
+
+        );
+
+
+
+        return true;
+
+
+
+    }
+    catch(error){
+
+
+        console.error(
+
+            "Erro salvar histórico:",
+            error.message
+
+        );
+
+
+        return false;
+
+
+    }
 
 
 }
@@ -527,16 +245,99 @@ function calcularEstatisticas(
 
 
 // ==========================================
-// EXPORT
+// ÚLTIMOS RESULTADOS
 // ==========================================
 
+export async function ultimosResultados(
+    time
+){
+
+
+    try{
+
+
+        const jogos =
+
+            await buscarHistoricoTime(
+                time
+            );
+
+
+
+        return jogos.map(jogo => ({
+
+
+            data:
+
+                jogo.data_jogo,
+
+
+            casa:
+
+                jogo.time_casa,
+
+
+            fora:
+
+                jogo.time_fora,
+
+
+            golsCasa:
+
+                jogo.gols_casa,
+
+
+            golsFora:
+
+                jogo.gols_fora
+
+
+
+        }));
+
+
+
+    }
+    catch(error){
+
+
+        console.error(
+            "Erro resultados:",
+            error.message
+        );
+
+
+        return [];
+
+
+    }
+
+
+}
+
+
+
+
+
+
+
+// ==========================================
+// EXPORT DEFAULT
+// ==========================================
 
 export default {
 
 
-    buscarTimePorNome,
+    buscarHistoricoJogo,
 
-    buscarHistoricoTime
+
+    buscarHistoricoTime,
+
+
+    salvarHistoricoJogo,
+
+
+    ultimosResultados
 
 
 };
