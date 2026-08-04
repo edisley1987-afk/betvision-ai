@@ -1,15 +1,21 @@
 // ==========================================
 // BetVision AI
 // services/historicoService.js
-// Histórico de Times + Football Data API
-// Versão 7.0
+// Histórico de Times
+// Versão corrigida 3.0
 // ==========================================
 
 
 import axios from "axios";
 
+import dotenv from "dotenv";
+
+dotenv.config();
+
+
+
 // ==========================================
-// CONFIGURAÇÃO
+// CONFIGURAÇÕES
 // ==========================================
 
 
@@ -23,137 +29,44 @@ const API_URL =
 
 const API_KEY =
 
-    process.env.API_FOOTBALL_KEY;
+    process.env.API_FOOTBALL_KEY || "";
+
+
+
+
+const CACHE = new Map();
+
+
+
+const CACHE_TIME =
+
+    1000 * 60 * 30; // 30 minutos
 
 
 
 
 
 // ==========================================
-// CACHE
+// NORMALIZAR NOME
 // ==========================================
 
 
-const cacheTimes = {};
-
-const cacheHistorico = {};
+function normalizarNome(nome){
 
 
+    return String(nome || "")
 
+        .normalize("NFD")
 
-// ==========================================
-// CONTROLE DE REQUISIÇÕES
-// ==========================================
+        .replace(/[\u0300-\u036f]/g,"")
 
+        .toLowerCase()
 
-let ultimaConsulta = 0;
-
-
-
-async function aguardarAPI(){
-
-
-    const agora = Date.now();
-
-
-    const diferenca =
-
-        agora - ultimaConsulta;
-
-
-
-    if(diferenca < 5000){
-
-
-        await new Promise(resolve =>
-
-            setTimeout(
-
-                resolve,
-
-                5000 - diferenca
-
-            )
-
-        );
-
-
-    }
-
-
-    ultimaConsulta = Date.now();
+        .trim();
 
 
 }
 
-
-
-
-
-// ==========================================
-// MAPA DE TIMES
-// ==========================================
-
-
-const TIMES = {
-
-
-    "FC Ararat-Armenia": 558,
-
-    "NK Celje": 610,
-
-
-    "Mjällby AIF": 446,
-
-    "ŠK Slovan Bratislava": 524,
-
-
-    "PFC Levski Sofia": 523,
-
-    "FC Kairat": 1016,
-
-
-    "Hapoel Be'er Sheva": 594,
-
-    "Red Star Belgrade": 728,
-
-
-    "Union Saint-Gilloise": 98,
-
-    "Bodø/Glimt": 1187,
-
-
-    "Dinamo Zagreb": 620,
-
-    "FK Kauno Žalgiris": 641,
-
-
-    "Sparta Prague": 524,
-
-    "Lyon": 523,
-
-
-    "Olympiakos Piraeus": 645,
-
-    "NEC Nijmegen": 1910
-
-
-};
-
-
-
-
-
-// ==========================================
-// FALLBACK HISTÓRICO
-// ==========================================
-// usado quando API bloquear
-// ==========================================
-
-
-const FALLBACK = {
-
-};
 
 
 
@@ -165,188 +78,39 @@ const FALLBACK = {
 // ==========================================
 
 
-export async function buscarTime(nome){
+async function buscarTime(nome){
 
 
     try{
 
 
-        if(cacheTimes[nome]){
+        if(!nome){
 
-
-            return cacheTimes[nome];
-
+            return null;
 
         }
 
 
 
 
-        if(TIMES[nome]){
+        const chave =
 
-
-            const time = {
-
-
-                id:
-
-                TIMES[nome],
-
-
-                nome
-
-            };
+            `time_${normalizarNome(nome)}`;
 
 
 
-            cacheTimes[nome] = time;
+        const cache = CACHE.get(chave);
 
 
 
-            return time;
+        if(cache && Date.now() - cache.data < CACHE_TIME){
+
+
+            return cache.valor;
 
 
         }
 
-
-
-
-        console.log(
-
-            "⚠️ Time sem ID:",
-
-            nome
-
-        );
-
-
-
-        return null;
-
-
-
-    }
-
-
-    catch(error){
-
-
-        console.error(
-
-            "Erro buscarTime:",
-
-            error.message
-
-        );
-
-
-        return null;
-
-
-    }
-
-
-}
-
-
-
-
-
-
-
-// ==========================================
-// BUSCAR HISTÓRICO DO TIME
-// ==========================================
-
-
-export async function buscarHistoricoTime(nome){
-
-
-    try{
-
-
-        console.log(
-
-            "📊 Buscando histórico:",
-
-            nome
-
-        );
-
-
-
-
-
-        const time =
-
-            await buscarTime(nome);
-
-
-
-
-
-        if(!time){
-
-
-            console.log(
-
-                "⚠️ Sem ID histórico:",
-
-                nome
-
-            );
-
-
-            return [];
-
-        }
-
-
-
-
-
-
-        if(cacheHistorico[time.id]){
-
-
-            return cacheHistorico[time.id];
-
-
-        }
-
-
-
-
-
-
-        if(FALLBACK[nome]){
-
-
-            console.log(
-
-                "📦 Usando histórico local:",
-
-                nome
-
-            );
-
-
-            cacheHistorico[time.id] =
-
-                FALLBACK[nome];
-
-
-            return FALLBACK[nome];
-
-
-        }
-
-
-
-
-
-
-        await aguardarAPI();
 
 
 
@@ -355,26 +119,10 @@ export async function buscarHistoricoTime(nome){
         const resposta = await axios.get(
 
 
-            `${API_URL}/teams/${time.id}/matches`,
+            `${API_URL}/teams`,
 
 
             {
-
-
-                params:{
-
-
-                    status:
-
-                    "FINISHED",
-
-
-                    limit:
-
-                    5
-
-
-                },
 
 
                 headers:{
@@ -388,9 +136,8 @@ export async function buscarHistoricoTime(nome){
                 },
 
 
-                timeout:
+                timeout:10000
 
-                15000
 
 
             }
@@ -402,82 +149,50 @@ export async function buscarHistoricoTime(nome){
 
 
 
-        const jogos =
+        const times =
 
-            resposta.data.matches || [];
-
-
+            resposta.data.teams || [];
 
 
 
 
 
-        const historico = jogos.map(jogo => {
+        const encontrado =
+
+            times.find(time =>
 
 
 
-            return {
+                normalizarNome(time.name)
 
+                ===
 
-                data:
-
-                jogo.utcDate,
-
-
-
-                casa:
-
-                jogo.homeTeam.name,
+                normalizarNome(nome)
 
 
 
-                fora:
-
-                jogo.awayTeam.name,
-
-
-
-                placar:{
-
-
-                    casa:
-
-                    jogo.score?.fullTime?.home || 0,
-
-
-
-                    fora:
-
-                    jogo.score?.fullTime?.away || 0
-
-
-                }
-
-
-
-            };
-
-
-        });
+            );
 
 
 
 
 
 
-        cacheHistorico[time.id] = historico;
+
+        CACHE.set(
+
+            chave,
+
+            {
 
 
+                data:Date.now(),
+
+                valor:encontrado || null
 
 
+            }
 
-        console.log(
-
-            "✅ Histórico encontrado:",
-
-            historico.length,
-
-            "jogos"
 
         );
 
@@ -485,7 +200,7 @@ export async function buscarHistoricoTime(nome){
 
 
 
-        return historico;
+        return encontrado || null;
 
 
 
@@ -496,25 +211,25 @@ export async function buscarHistoricoTime(nome){
 
 
 
-        console.log(
+        console.warn(
 
-            "⚠️ API histórico indisponível:",
 
-            error.response?.status ||
+            "⚠️ API times indisponível:",
 
-            error.message
+
+            error.response?.status || error.message
+
 
         );
 
 
 
-        // fallback vazio
-
-        return [];
+        return null;
 
 
 
     }
+
 
 
 }
@@ -527,7 +242,227 @@ export async function buscarHistoricoTime(nome){
 
 
 // ==========================================
-// HISTÓRICO DO JOGO
+// BUSCAR JOGOS DO TIME
+// ==========================================
+
+
+async function buscarJogosTime(timeId){
+
+
+    try{
+
+
+
+        if(!timeId){
+
+
+            return [];
+
+
+        }
+
+
+
+
+
+
+        const resposta = await axios.get(
+
+
+            `${API_URL}/teams/${timeId}/matches`,
+
+
+            {
+
+
+
+                headers:{
+
+
+                    "X-Auth-Token":
+
+                    API_KEY
+
+
+                },
+
+
+                params:{
+
+
+                    status:
+
+                    "FINISHED",
+
+
+
+                    limit:
+
+                    10
+
+
+                },
+
+
+                timeout:10000
+
+
+            }
+
+
+        );
+
+
+
+
+
+        return resposta.data.matches || [];
+
+
+
+
+    }
+
+
+    catch(error){
+
+
+
+        console.warn(
+
+
+            "⚠️ Histórico indisponível:",
+
+
+            error.response?.status || error.message
+
+
+        );
+
+
+
+        return [];
+
+
+
+    }
+
+
+
+}
+
+
+
+
+
+
+
+// ==========================================
+// CONVERTER JOGO
+// ==========================================
+
+
+function converterHistorico(
+
+    jogos,
+
+    nomeTime
+
+){
+
+
+    if(!Array.isArray(jogos)){
+
+
+        return [];
+
+
+    }
+
+
+
+
+
+    return jogos.map(jogo=>{
+
+
+        const casa =
+
+            jogo.homeTeam?.name;
+
+
+
+        const fora =
+
+            jogo.awayTeam?.name;
+
+
+
+
+
+        return {
+
+
+            data:
+
+            jogo.utcDate,
+
+
+
+            casa,
+
+
+
+            fora,
+
+
+
+            placar:{
+
+
+
+                casa:
+
+                jogo.score?.fullTime?.home || 0,
+
+
+
+                fora:
+
+                jogo.score?.fullTime?.away || 0
+
+
+
+            }
+
+
+
+        };
+
+
+
+    })
+
+    .filter(jogo =>
+
+        jogo.casa && jogo.fora
+
+    )
+
+    .slice(0,5);
+
+
+
+}
+
+
+
+
+
+
+
+// ==========================================
+// BUSCAR HISTÓRICO COMPLETO
 // ==========================================
 
 
@@ -541,22 +476,181 @@ export async function buscarHistoricoJogo(
 
 
 
-    const historicoCasa =
+    console.log(
 
-        await buscarHistoricoTime(
+        "📊 Buscando histórico:",
 
-            timeCasa
+        timeCasa
+
+
+    );
+
+
+
+    console.log(
+
+        "📊 Buscando histórico:",
+
+        timeFora
+
+
+    );
+
+
+
+
+
+
+
+    try{
+
+
+
+        const cacheKey =
+
+
+            `${normalizarNome(timeCasa)}_${normalizarNome(timeFora)}`;
+
+
+
+
+
+
+        const cache = CACHE.get(cacheKey);
+
+
+
+
+
+        if(cache && Date.now()-cache.data < CACHE_TIME){
+
+
+
+            return cache.valor;
+
+
+        }
+
+
+
+
+
+
+        const equipeCasa =
+
+            await buscarTime(timeCasa);
+
+
+
+
+        const equipeFora =
+
+            await buscarTime(timeFora);
+
+
+
+
+
+
+
+        const jogosCasa =
+
+            await buscarJogosTime(
+
+                equipeCasa?.id
+
+            );
+
+
+
+
+
+
+        const jogosFora =
+
+            await buscarJogosTime(
+
+                equipeFora?.id
+
+            );
+
+
+
+
+
+
+
+
+        const resultado = {
+
+
+
+            historicoCasa:
+
+            converterHistorico(
+
+                jogosCasa,
+
+                timeCasa
+
+            ),
+
+
+
+            historicoFora:
+
+            converterHistorico(
+
+                jogosFora,
+
+                timeFora
+
+            )
+
+
+
+        };
+
+
+
+
+
+
+
+        CACHE.set(
+
+
+            cacheKey,
+
+
+            {
+
+
+                data:Date.now(),
+
+
+                valor:resultado
+
+
+            }
+
+
 
         );
 
 
 
 
-    const historicoFora =
 
-        await buscarHistoricoTime(
 
-            timeFora
+        console.log(
+
+            "✅ Histórico:",
+
+            resultado.historicoCasa.length,
+
+            resultado.historicoFora.length
+
 
         );
 
@@ -564,19 +658,53 @@ export async function buscarHistoricoJogo(
 
 
 
-    return {
+
+        return resultado;
 
 
-        historicoCasa,
 
 
-        historicoFora
 
 
-    };
+    }
+
+
+    catch(error){
+
+
+
+        console.error(
+
+            "Erro histórico:",
+
+            error.message
+
+        );
+
+
+
+
+        return {
+
+
+
+            historicoCasa:[],
+
+
+            historicoFora:[]
+
+
+
+        };
+
+
+
+    }
+
 
 
 }
+
 
 
 
@@ -591,61 +719,7 @@ export async function buscarHistoricoJogo(
 export function limparCacheHistorico(){
 
 
-    Object.keys(cacheTimes)
-
-    .forEach(
-
-        item => delete cacheTimes[item]
-
-    );
-
-
-
-    Object.keys(cacheHistorico)
-
-    .forEach(
-
-        item => delete cacheHistorico[item]
-
-    );
-
-
-
-    console.log(
-
-        "🧹 Cache histórico limpo"
-
-    );
-
-
-}
-
-
-
-
-
-// ==========================================
-// STATUS
-// ==========================================
-
-
-export function statusHistorico(){
-
-
-    return {
-
-
-        timesCacheados:
-
-        Object.keys(cacheTimes).length,
-
-
-        historicosCacheados:
-
-        Object.keys(cacheHistorico).length
-
-
-    };
+    CACHE.clear();
 
 
 }
@@ -662,15 +736,12 @@ export function statusHistorico(){
 export default {
 
 
-    buscarTime,
-
-    buscarHistoricoTime,
 
     buscarHistoricoJogo,
 
-    limparCacheHistorico,
 
-    statusHistorico
+    limparCacheHistorico
+
 
 
 };
