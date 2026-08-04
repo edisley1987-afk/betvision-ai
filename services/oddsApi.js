@@ -1,7 +1,7 @@
 // ==========================================
 // BetVision AI
 // services/oddsApi.js
-// The Odds API v4
+// The Odds API
 // ==========================================
 
 import axios from "axios";
@@ -11,24 +11,74 @@ const API_KEY = process.env.ODDS_API_KEY;
 
 
 const BASE_URL =
-    process.env.ODDS_API_URL ||
     "https://api.the-odds-api.com";
 
 
 
 // ==========================================
-// BUSCAR ODDS
+// LISTAR ESPORTES DISPONÍVEIS
+// ==========================================
+
+export async function listarEsportes(){
+
+    try {
+
+        const resposta = await axios.get(
+
+            `${BASE_URL}/v4/sports/`,
+
+            {
+                params:{
+                    apiKey: API_KEY
+                },
+
+                timeout:30000
+            }
+
+        );
+
+
+        console.log(
+            "✅ Esportes encontrados:",
+            resposta.data.length
+        );
+
+
+        return resposta.data;
+
+
+    } catch(error){
+
+        console.error(
+            "❌ Erro esportes:",
+            error.response?.data ||
+            error.message
+        );
+
+
+        return [];
+
+    }
+
+}
+
+
+
+
+// ==========================================
+// BUSCAR ODDS FUTEBOL
 // ==========================================
 
 export async function getOdds(){
+
 
     try {
 
 
         if(!API_KEY){
 
-            console.error(
-                "❌ ODDS_API_KEY não configurada"
+            console.log(
+                "❌ ODDS_API_KEY ausente"
             );
 
             return [];
@@ -36,20 +86,16 @@ export async function getOdds(){
         }
 
 
-        console.log(
-            "💰 Consultando The Odds API..."
-        );
-
 
         const resposta = await axios.get(
 
-            `${BASE_URL}/v4/sports/soccer/odds`,
+            `${BASE_URL}/v4/sports/soccer_epl/odds/`,
 
             {
 
                 params:{
 
-                    apiKey: API_KEY,
+                    apiKey:API_KEY,
 
                     regions:"eu",
 
@@ -66,30 +112,37 @@ export async function getOdds(){
         );
 
 
-        const jogos = resposta.data || [];
-
 
         console.log(
-            `✅ Odds encontradas: ${jogos.length}`
+
+            `✅ Odds recebidas: ${resposta.data.length}`
+
         );
 
 
-        return jogos;
+        return resposta.data;
 
 
-    }catch(error){
+
+    }
+
+    catch(error){
 
 
         console.error(
+
             "❌ Erro The Odds API:",
+
             error.response?.data ||
             error.message
+
         );
 
 
         return [];
 
     }
+
 
 }
 
@@ -106,6 +159,9 @@ export async function obterOdds(){
 export default {
 
     getOdds,
-    obterOdds
+
+    obterOdds,
+
+    listarEsportes
 
 };
