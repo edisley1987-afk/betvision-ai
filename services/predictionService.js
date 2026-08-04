@@ -1,8 +1,8 @@
 // ==========================================
 // BetVision AI
 // services/predictionService.js
-// Inteligência Artificial de Previsão
-// PARTE 1/4
+// PARTE 1A
+// Engine de Previsão
 // ==========================================
 
 "use strict";
@@ -12,27 +12,38 @@
 // ==========================================
 
 const FATOR_CASA = 1.15;
+
 const PESO_FORMA = 0.40;
+
 const PESO_ATAQUE = 0.30;
+
 const PESO_DEFESA = 0.30;
 
 const MAX_GOLS = 5;
 
+
 // ==========================================
-// NORMALIZAR VALOR
+// LIMITAR VALORES
 // ==========================================
 
-function limitar(valor, min, max) {
+function limitar(valor, minimo, maximo) {
 
-    return Math.max(min, Math.min(max, valor));
+    return Math.max(
+
+        minimo,
+
+        Math.min(maximo, valor)
+
+    );
 
 }
+
 
 // ==========================================
 // MÉDIA
 // ==========================================
 
-function media(lista) {
+function media(lista = []) {
 
     if (!Array.isArray(lista) || lista.length === 0) {
 
@@ -40,15 +51,30 @@ function media(lista) {
 
     }
 
-    return lista.reduce((soma, valor) => soma + valor, 0) / lista.length;
+    const soma = lista.reduce(
+
+        (total, valor) => total + Number(valor || 0),
+
+        0
+
+    );
+
+    return soma / lista.length;
 
 }
+
 
 // ==========================================
 // ÚLTIMOS JOGOS
 // ==========================================
 
-function ultimosJogos(jogos, quantidade = 5) {
+function ultimosJogos(
+
+    jogos = [],
+
+    quantidade = 5
+
+) {
 
     if (!Array.isArray(jogos)) {
 
@@ -57,11 +83,25 @@ function ultimosJogos(jogos, quantidade = 5) {
     }
 
     return jogos
+
         .slice()
-        .sort((a, b) => new Date(b.data) - new Date(a.data))
+
+        .sort(
+
+            (a, b) =>
+
+                new Date(b.data)
+
+                -
+
+                new Date(a.data)
+
+        )
+
         .slice(0, quantidade);
 
 }
+
 
 // ==========================================
 // CALCULAR FORMA
@@ -70,7 +110,13 @@ function ultimosJogos(jogos, quantidade = 5) {
 // Derrota = 0
 // ==========================================
 
-function calcularForma(jogos, nomeTime) {
+function calcularForma(
+
+    jogos,
+
+    nomeTime
+
+) {
 
     if (!Array.isArray(jogos) || jogos.length === 0) {
 
@@ -82,15 +128,21 @@ function calcularForma(jogos, nomeTime) {
 
     jogos.forEach(jogo => {
 
-        const emCasa = jogo.casa === nomeTime;
+        const emCasa =
+
+            jogo.casa === nomeTime;
 
         const golsTime = emCasa
-            ? jogo.placar.casa
-            : jogo.placar.fora;
+
+            ? Number(jogo.placar?.casa || 0)
+
+            : Number(jogo.placar?.fora || 0);
 
         const golsAdversario = emCasa
-            ? jogo.placar.fora
-            : jogo.placar.casa;
+
+            ? Number(jogo.placar?.fora || 0)
+
+            : Number(jogo.placar?.casa || 0);
 
         if (golsTime > golsAdversario) {
 
@@ -106,17 +158,34 @@ function calcularForma(jogos, nomeTime) {
 
     });
 
-    return pontos / (jogos.length * 3);
+    return Number(
+
+        (
+
+            pontos /
+
+            (jogos.length * 3)
+
+        ).toFixed(3)
+
+    );
 
 }
 
+
 // ==========================================
-// MÉDIA DE GOLS MARCADOS
+// MÉDIA GOLS MARCADOS
 // ==========================================
 
-function mediaGolsMarcados(jogos, nomeTime) {
+function mediaGolsMarcados(
 
-    if (!jogos.length) {
+    jogos,
+
+    nomeTime
+
+) {
+
+    if (!Array.isArray(jogos) || jogos.length === 0) {
 
         return 0;
 
@@ -126,9 +195,9 @@ function mediaGolsMarcados(jogos, nomeTime) {
 
         return jogo.casa === nomeTime
 
-            ? jogo.placar.casa
+            ? Number(jogo.placar?.casa || 0)
 
-            : jogo.placar.fora;
+            : Number(jogo.placar?.fora || 0);
 
     });
 
@@ -136,13 +205,20 @@ function mediaGolsMarcados(jogos, nomeTime) {
 
 }
 
+
 // ==========================================
-// MÉDIA DE GOLS SOFRIDOS
+// MÉDIA GOLS SOFRIDOS
 // ==========================================
 
-function mediaGolsSofridos(jogos, nomeTime) {
+function mediaGolsSofridos(
 
-    if (!jogos.length) {
+    jogos,
+
+    nomeTime
+
+) {
+
+    if (!Array.isArray(jogos) || jogos.length === 0) {
 
         return 0;
 
@@ -152,15 +228,23 @@ function mediaGolsSofridos(jogos, nomeTime) {
 
         return jogo.casa === nomeTime
 
-            ? jogo.placar.fora
+            ? Number(jogo.placar?.fora || 0)
 
-            : jogo.placar.casa;
+            : Number(jogo.placar?.casa || 0);
 
     });
 
     return media(gols);
 
 }
+
+console.log("✅ predictionService Parte 1A carregada");
+// ==========================================
+// BetVision AI
+// services/predictionService.js
+// PARTE 1B
+// Ataque, Defesa e Índice da Equipe
+// ==========================================
 
 // ==========================================
 // FORÇA DE ATAQUE
@@ -168,9 +252,17 @@ function mediaGolsSofridos(jogos, nomeTime) {
 
 function calcularAtaque(jogos, nomeTime) {
 
+    const mediaMarcados = mediaGolsMarcados(
+
+        jogos,
+
+        nomeTime
+
+    );
+
     return limitar(
 
-        mediaGolsMarcados(jogos, nomeTime) / 3,
+        mediaMarcados / 3,
 
         0,
 
@@ -182,8 +274,8 @@ function calcularAtaque(jogos, nomeTime) {
 
 // ==========================================
 // FORÇA DEFENSIVA
-// Quanto menos sofre gols,
-// maior será a força.
+// Quanto menos gols sofre,
+// maior será a nota.
 // ==========================================
 
 function calcularDefesa(jogos, nomeTime) {
@@ -212,11 +304,27 @@ function calcularDefesa(jogos, nomeTime) {
 // ÍNDICE GERAL DA EQUIPE
 // ==========================================
 
-function calcularIndiceEquipe(jogos, nomeTime, casa = false) {
+function calcularIndiceEquipe(
+
+    jogos,
+
+    nomeTime,
+
+    casa = false
+
+) {
+
+    const jogosRecentes = ultimosJogos(
+
+        jogos,
+
+        5
+
+    );
 
     const forma = calcularForma(
 
-        jogos,
+        jogosRecentes,
 
         nomeTime
 
@@ -224,7 +332,7 @@ function calcularIndiceEquipe(jogos, nomeTime, casa = false) {
 
     const ataque = calcularAtaque(
 
-        jogos,
+        jogosRecentes,
 
         nomeTime
 
@@ -232,7 +340,7 @@ function calcularIndiceEquipe(jogos, nomeTime, casa = false) {
 
     const defesa = calcularDefesa(
 
-        jogos,
+        jogosRecentes,
 
         nomeTime
 
@@ -256,14 +364,110 @@ function calcularIndiceEquipe(jogos, nomeTime, casa = false) {
 
     }
 
-    return limitar(indice, 0, 1);
+    return limitar(
+
+        indice,
+
+        0,
+
+        1
+
+    );
 
 }
+
+// ==========================================
+// FORÇA RELATIVA
+// ==========================================
+
+function calcularForcaRelativa(
+
+    indiceCasa,
+
+    indiceFora
+
+) {
+
+    const total = indiceCasa + indiceFora;
+
+    if (total <= 0) {
+
+        return {
+
+            casa: 0.5,
+
+            fora: 0.5
+
+        };
+
+    }
+
+    return {
+
+        casa: indiceCasa / total,
+
+        fora: indiceFora / total
+
+    };
+
+}
+
+// ==========================================
+// DIFERENÇA DE FORÇA
+// ==========================================
+
+function diferencaForca(
+
+    indiceCasa,
+
+    indiceFora
+
+) {
+
+    return Math.abs(
+
+        indiceCasa - indiceFora
+
+    );
+
+}
+
+// ==========================================
+// VANTAGEM DE MANDO
+// ==========================================
+
+function vantagemCasa() {
+
+    return FATOR_CASA;
+
+}
+
+// ==========================================
+// EXPORTS INTERNOS
+// ==========================================
+
+export {
+
+    calcularAtaque,
+
+    calcularDefesa,
+
+    calcularIndiceEquipe,
+
+    calcularForcaRelativa,
+
+    diferencaForca,
+
+    vantagemCasa
+
+};
+
+console.log("✅ predictionService Parte 1B carregada"); 
 // ==========================================
 // BetVision AI
 // services/predictionService.js
-// PARTE 2/4
-// Cálculo das probabilidades
+// PARTE 2A
+// Probabilidades + Gols Esperados
 // ==========================================
 
 // ==========================================
@@ -277,18 +481,24 @@ function normalizarProbabilidades(casa, empate, fora) {
     if (soma <= 0) {
 
         return {
+
             casa: 33,
             empate: 34,
             fora: 33
+
         };
 
     }
 
     let pCasa = Math.round((casa / soma) * 100);
+
     let pEmpate = Math.round((empate / soma) * 100);
+
     let pFora = Math.round((fora / soma) * 100);
 
-    const diferenca = 100 - (pCasa + pEmpate + pFora);
+    const diferenca =
+
+        100 - (pCasa + pEmpate + pFora);
 
     pCasa += diferenca;
 
@@ -341,6 +551,7 @@ function calcularProbabilidades(
     );
 
     let casa = indiceCasa;
+
     let fora = indiceFora;
 
     let empate =
@@ -362,7 +573,7 @@ function calcularProbabilidades(
 }
 
 // ==========================================
-// GOLS ESPERADOS
+// CALCULAR GOLS ESPERADOS
 // ==========================================
 
 function calcularGolsEsperados(
@@ -411,17 +622,17 @@ function calcularGolsEsperados(
 
     const golsCasa = limitar(
 
-        (ataqueCasa * 2.4)
+        (ataqueCasa * 2.40)
 
         -
 
-        ((1 - defesaFora) * 0.9)
+        ((1 - defesaFora) * 0.90)
 
         +
 
         0.35,
 
-        0.2,
+        0.20,
 
         MAX_GOLS
 
@@ -429,13 +640,13 @@ function calcularGolsEsperados(
 
     const golsFora = limitar(
 
-        (ataqueFora * 2.1)
+        (ataqueFora * 2.10)
 
         -
 
-        ((1 - defesaCasa) * 0.8),
+        ((1 - defesaCasa) * 0.80),
 
-        0.2,
+        0.20,
 
         MAX_GOLS
 
@@ -451,21 +662,31 @@ function calcularGolsEsperados(
 
 }
 
+console.log("✅ predictionService Parte 2A carregada");
+// ==========================================
+// BetVision AI
+// services/predictionService.js
+// PARTE 2B
+// Placar Previsto + Confiança
+// ==========================================
+
 // ==========================================
 // PREVER PLACAR
 // ==========================================
 
-function preverPlacar(gols) {
+function preverPlacar(golsEsperados) {
+
+    const golsCasa = Math.round(golsEsperados.casa);
+
+    const golsFora = Math.round(golsEsperados.fora);
 
     return {
 
-        casa: Math.round(gols.casa),
+        casa: golsCasa,
 
-        fora: Math.round(gols.fora),
+        fora: golsFora,
 
-        texto:
-
-            `${Math.round(gols.casa)} x ${Math.round(gols.fora)}`
+        texto: `${golsCasa} x ${golsFora}`
 
     };
 
@@ -487,39 +708,23 @@ function calcularConfianca(probabilidades) {
 
     );
 
+    let nivel = "Baixa";
+
     if (maior >= 70) {
 
-        return {
-
-            percentual: maior,
-
-            nivel: "Muito Alta"
-
-        };
+        nivel = "Muito Alta";
 
     }
 
-    if (maior >= 60) {
+    else if (maior >= 60) {
 
-        return {
-
-            percentual: maior,
-
-            nivel: "Alta"
-
-        };
+        nivel = "Alta";
 
     }
 
-    if (maior >= 50) {
+    else if (maior >= 50) {
 
-        return {
-
-            percentual: maior,
-
-            nivel: "Média"
-
-        };
+        nivel = "Média";
 
     }
 
@@ -527,16 +732,112 @@ function calcularConfianca(probabilidades) {
 
         percentual: maior,
 
-        nivel: "Baixa"
+        nivel
 
     };
 
 }
+
+// ==========================================
+// DEFINIR FAVORITO
+// ==========================================
+
+function definirFavorito(probabilidades, jogo) {
+
+    if (
+
+        probabilidades.casa >= probabilidades.empate &&
+
+        probabilidades.casa >= probabilidades.fora
+
+    ) {
+
+        return {
+
+            equipe: jogo.casa,
+
+            mercado: "Vitória Casa",
+
+            probabilidade: probabilidades.casa
+
+        };
+
+    }
+
+    if (
+
+        probabilidades.fora >= probabilidades.casa &&
+
+        probabilidades.fora >= probabilidades.empate
+
+    ) {
+
+        return {
+
+            equipe: jogo.fora,
+
+            mercado: "Vitória Visitante",
+
+            probabilidade: probabilidades.fora
+
+        };
+
+    }
+
+    return {
+
+        equipe: "Empate",
+
+        mercado: "Empate",
+
+        probabilidade: probabilidades.empate
+
+    };
+
+}
+
+// ==========================================
+// ESTIMAR TOTAL DE GOLS
+// ==========================================
+
+function estimarTotalGols(golsEsperados) {
+
+    return Number(
+
+        (
+
+            golsEsperados.casa +
+
+            golsEsperados.fora
+
+        ).toFixed(2)
+
+    );
+
+}
+
+// ==========================================
+// OVER / UNDER 2.5
+// ==========================================
+
+function preverMercadoGols(totalGols) {
+
+    return {
+
+        over25: totalGols >= 2.5,
+
+        under25: totalGols < 2.5
+
+    };
+
+}
+
+console.log("✅ predictionService Parte 2B carregada");
 // ==========================================
 // BetVision AI
 // services/predictionService.js
-// PARTE 3/4
-// Geração da previsão
+// PARTE 3A
+// Previsão Completa da Partida
 // ==========================================
 
 // ==========================================
@@ -559,6 +860,16 @@ export function preverPartida({
 
     }
 
+    if (!jogo.casa || !jogo.fora) {
+
+        throw new Error("Times inválidos.");
+
+    }
+
+    // ==========================
+    // PROBABILIDADES
+    // ==========================
+
     const probabilidades = calcularProbabilidades(
 
         historicoCasa,
@@ -570,6 +881,10 @@ export function preverPartida({
         jogo.fora
 
     );
+
+    // ==========================
+    // GOLS ESPERADOS
+    // ==========================
 
     const golsEsperados = calcularGolsEsperados(
 
@@ -583,17 +898,61 @@ export function preverPartida({
 
     );
 
+    // ==========================
+    // PLACAR PREVISTO
+    // ==========================
+
     const placar = preverPlacar(
 
         golsEsperados
 
     );
 
+    // ==========================
+    // CONFIANÇA
+    // ==========================
+
     const confianca = calcularConfianca(
 
         probabilidades
 
     );
+
+    // ==========================
+    // FAVORITO
+    // ==========================
+
+    const favorito = definirFavorito(
+
+        probabilidades,
+
+        jogo
+
+    );
+
+    // ==========================
+    // TOTAL DE GOLS
+    // ==========================
+
+    const totalGols = estimarTotalGols(
+
+        golsEsperados
+
+    );
+
+    // ==========================
+    // OVER / UNDER
+    // ==========================
+
+    const mercadoGols = preverMercadoGols(
+
+        totalGols
+
+    );
+
+    // ==========================
+    // RETORNO
+    // ==========================
 
     return {
 
@@ -611,132 +970,75 @@ export function preverPartida({
 
         fora: jogo.fora,
 
-        probabilidadeCasa: probabilidades.casa,
+        probabilidadeCasa:
 
-        probabilidadeEmpate: probabilidades.empate,
+            probabilidades.casa,
 
-        probabilidadeFora: probabilidades.fora,
+        probabilidadeEmpate:
 
-        golsEsperadosCasa: golsEsperados.casa,
+            probabilidades.empate,
 
-        golsEsperadosFora: golsEsperados.fora,
+        probabilidadeFora:
+
+            probabilidades.fora,
+
+        golsEsperadosCasa:
+
+            golsEsperados.casa,
+
+        golsEsperadosFora:
+
+            golsEsperados.fora,
 
         golsEsperados:
 
-            Number(
+            totalGols,
 
-                (
+        placarPrevisto:
 
-                    golsEsperados.casa +
+            placar.texto,
 
-                    golsEsperados.fora
+        favorito:
 
-                ).toFixed(2)
+            favorito.equipe,
 
-            ),
+        mercadoFavorito:
 
-        placarPrevisto: placar.texto,
+            favorito.mercado,
 
-        confianca: confianca.percentual,
+        probabilidadeFavorito:
 
-        nivelConfianca: confianca.nivel,
+            favorito.probabilidade,
 
-        algoritmo: "Modelo Estatístico v1.0",
+        over25:
 
-        geradoEm: new Date().toISOString()
+            mercadoGols.over25,
+
+        under25:
+
+            mercadoGols.under25,
+
+        confianca:
+
+            confianca.percentual,
+
+        nivelConfianca:
+
+            confianca.nivel,
+
+        algoritmo:
+
+            "BetVision Statistical AI v2.0",
+
+        geradoEm:
+
+            new Date().toISOString()
 
     };
 
 }
 
-// ==========================================
-// PREVER LISTA DE JOGOS
-// ==========================================
-
-export function preverListaJogos(
-
-    jogos,
-
-    historicos = {}
-
-) {
-
-    if (!Array.isArray(jogos)) {
-
-        return [];
-
-    }
-
-    return jogos.map(jogo => {
-
-        const historicoCasa =
-
-            historicos[jogo.casa] || [];
-
-        const historicoFora =
-
-            historicos[jogo.fora] || [];
-
-        return preverPartida({
-
-            jogo,
-
-            historicoCasa,
-
-            historicoFora
-
-        });
-
-    });
-
-}
-
-// ==========================================
-// RANQUEAR ANÁLISES
-// ==========================================
-
-export function ranquearAnalises(
-
-    analises
-
-) {
-
-    return analises
-
-        .slice()
-
-        .sort((a, b) => {
-
-            if (
-
-                b.confianca !==
-
-                a.confianca
-
-            ) {
-
-                return (
-
-                    b.confianca -
-
-                    a.confianca
-
-                );
-
-            }
-
-            return (
-
-                b.golsEsperados -
-
-                a.golsEsperados
-
-            );
-
-        });
-
-}
-
+console.log("✅ predictionService Parte 3A carregada");
 // ==========================================
 // BUSCAR MELHOR APOSTA
 // ==========================================
@@ -871,7 +1173,8 @@ export function resumoAnalises(
 
     };
 
-}// ==========================================
+}
+// ==========================================
 // BetVision AI
 // services/predictionService.js
 // PARTE 4/4
@@ -918,19 +1221,49 @@ export function validarJogo(jogo) {
 
     }
 
-    if (!jogo.casa || !jogo.fora) {
-
-        return false;
-
-    }
-
     if (!jogo.id) {
 
         return false;
 
     }
 
+    if (!jogo.casa) {
+
+        return false;
+
+    }
+
+    if (!jogo.fora) {
+
+        return false;
+
+    }
+
     return true;
+
+}
+
+// ==========================================
+// PREVISÃO EM LOTE
+// ==========================================
+
+export function preverJogos(jogos = []) {
+
+    if (!Array.isArray(jogos)) {
+
+        return [];
+
+    }
+
+    return jogos
+
+        .filter(validarJogo)
+
+        .map(jogo =>
+
+            previsaoRapida(jogo)
+
+        );
 
 }
 
@@ -961,6 +1294,8 @@ export default {
     preverPartida,
 
     preverListaJogos,
+
+    preverJogos,
 
     previsaoRapida,
 
