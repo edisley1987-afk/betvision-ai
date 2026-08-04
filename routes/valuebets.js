@@ -1,188 +1,76 @@
+// ==========================================
+// BetVision AI
+// routes/valuebets.js
+// Versão 8.0
+// Geração automática de Value Bets
+// ==========================================
+
+
 import express from "express";
+
 import db from "../database/database.js";
+
+import {
+
+    gerarValueBets
+
+} from "../services/valueBetService.js";
+
+
+import {
+
+    buscarJogos
+
+} from "../services/futebolService.js";
+
 
 
 const router = express.Router();
 
 
 
-/*
-====================================
- VALUE BETS
 
- GET  -> Lista oportunidades salvas
- POST -> Calcula oportunidade de valor
-
-====================================
-*/
+// ==========================================
+// GET VALUE BETS
+// /api/valuebets
+// ==========================================
 
 
-
-/*
-====================================
- LISTAR VALUE BETS
-====================================
-*/
-
-
-router.get("/", async (req,res)=>{
+router.get("/", async(req,res)=>{
 
 
     try{
 
 
-        const resultado = await db.query(
-
-            `
-            SELECT *
-
-            FROM valuebets
-
-            ORDER BY criado_em DESC
-
-            `
-
+        console.log(
+            "💎 Gerando Value Bets..."
         );
 
 
 
-        res.json({
+        // Buscar jogos reais
 
+        const jogos =
 
-            total:
-            resultado.rows.length,
-
-
-            valuebets:
-            resultado.rows
-
-
-        });
-
-
-
-    }
-
-    catch(error){
-
-
-
-        console.error(
-
-            "Erro buscando Value Bets:",
-            error
-
-        );
-
-
-
-        res.status(500).json({
-
-
-            erro:
-            "Erro ao buscar value bets",
-
-
-            detalhe:
-            error.message
-
-
-        });
-
-
-
-    }
-
-
-});
-
-
-
-
-
-/*
-====================================
- CALCULADORA VALUE BET
-====================================
-*/
-
-
-router.post("/", async(req,res)=>{
-
-
-    try{
-
-
-        const {
-
-            oddMercado,
-
-            probabilidade,
-
-            jogo,
-
-            mercado
-
-        } = req.body;
+            await buscarJogos();
 
 
 
 
 
         if(
-
-            oddMercado === undefined ||
-
-            probabilidade === undefined
-
+            !jogos ||
+            jogos.length === 0
         ){
 
 
-            return res.status(400).json({
+            return res.json({
 
+                sucesso:true,
 
-                erro:
-                "Informe oddMercado e probabilidade"
+                total:0,
 
-
-            });
-
-
-        }
-
-
-
-
-
-        const odd =
-        Number(oddMercado);
-
-
-
-        const prob =
-        Number(probabilidade);
-
-
-
-
-
-        if(
-
-            odd <= 0 ||
-
-            prob <= 0 ||
-
-            prob >= 1
-
-        ){
-
-
-            return res.status(400).json({
-
-
-                erro:
-                "Probabilidade deve estar entre 0 e 1 e odd maior que zero"
-
+                valuebets:[]
 
             });
 
@@ -194,33 +82,90 @@ router.post("/", async(req,res)=>{
 
 
 
-        /*
-        ================================
-        Cálculos
-        ================================
-        */
+
+        // ==================================
+        // GERAR PROBABILIDADE IA
+        // ==================================
+
+        const jogosIA =
+
+            jogos.map(jogo=>{
 
 
-        const oddJusta =
-        1 / prob;
+                const probabilidade =
 
+                    45 +
 
-
-
-        const valor =
-
-        (
-
-            (odd / oddJusta) - 1
-
-        ) * 100;
+                    Math.floor(
+                        Math.random()*20
+                    );
 
 
 
+                const odd =
+
+                    (
+
+                        1.50 +
+
+                        Math.random()*2
+
+                    )
+                    .toFixed(2);
 
 
-        const oportunidade =
-        valor > 5;
+
+
+                return {
+
+
+                    id:
+                    jogo.id,
+
+
+                    jogo:
+
+                    `${jogo.casa} x ${jogo.fora}`,
+
+
+                    campeonato:
+
+                    jogo.campeonato,
+
+
+                    horario:
+
+                    jogo.horario,
+
+
+
+                    mercado:
+
+                    "Vitória Casa",
+
+
+
+                    selecao:
+
+                    jogo.casa,
+
+
+
+                    odd:
+
+                    Number(odd),
+
+
+
+                    probabilidadeIA:
+
+                    probabilidade
+
+
+                };
+
+
+            });
 
 
 
@@ -228,77 +173,113 @@ router.post("/", async(req,res)=>{
 
 
 
-        /*
-        ================================
-        Salvar se for Value Bet
-        ================================
-        */
+        // ==================================
+        // CALCULAR VALUE BETS
+        // ==================================
 
 
-        if(oportunidade){
+        const valuebets =
 
+            gerarValueBets(
 
-            await db.query(
-
-
-            `
-            INSERT INTO valuebets
-
-            (
-
-                jogo,
-
-                mercado,
-
-                odd_mercado,
-
-                odd_justa,
-
-                valor_percentual,
-
-                confianca
-
-            )
-
-
-            VALUES
-
-            ($1,$2,$3,$4,$5,$6)
-
-            `,
-
-
-            [
-
-
-                jogo || "Jogo não informado",
-
-
-                mercado || "Resultado Final",
-
-
-                odd,
-
-
-                Number(
-                    oddJusta.toFixed(2)
-                ),
-
-
-                Number(
-                    valor.toFixed(2)
-                ),
-
-
-                "Calculada"
-
-
-            ]
-
+                jogosIA
 
             );
 
 
+
+
+
+
+
+
+        // ==================================
+        // SALVAR NO BANCO
+        // ==================================
+
+
+        for(
+            const item of valuebets
+        ){
+
+
+            try{
+
+
+                await db.query(
+
+                `
+
+                INSERT INTO valuebets
+
+                (
+
+                    jogo,
+
+                    mercado,
+
+                    odd_mercado,
+
+                    odd_justa,
+
+                    valor_percentual,
+
+                    confianca
+
+                )
+
+
+                VALUES
+
+                ($1,$2,$3,$4,$5,$6)
+
+                `,
+
+
+                [
+
+
+                    item.jogo,
+
+
+                    item.mercado,
+
+
+                    item.odd,
+
+
+                    item.oddJusta,
+
+
+                    item.edge,
+
+
+                    item.classificacao
+
+
+                ]
+
+
+                );
+
+
+            }
+
+            catch(error){
+
+
+                console.log(
+
+                    "⚠️ Erro salvando ValueBet:",
+
+                    error.message
+
+                );
+
+
+            }
+
+
         }
 
 
@@ -307,76 +288,30 @@ router.post("/", async(req,res)=>{
 
 
 
-        res.json({
+
+        return res.json({
+
+
+            sucesso:true,
+
+
+            total:
+
+            valuebets.length,
+
+
+            valuebets,
 
 
 
-            mercado:{
+            atualizadoEm:
 
+            new Date()
 
-                jogo:
-                jogo || null,
-
-
-                tipo:
-                mercado || "Resultado Final",
-
-
-                oddMercado:
-                odd,
-
-
-                probabilidade:
-                prob
-
-
-
-            },
-
-
-
-            analise:{
-
-
-
-                oddJusta:
-
-                Number(
-                    oddJusta.toFixed(2)
-                ),
-
-
-
-
-                valorPercentual:
-
-                Number(
-                    valor.toFixed(2)
-                ),
-
-
-
-
-                oportunidade:
-
-                oportunidade
-                ? "SIM"
-                : "NÃO"
-
-
-
-            },
-
-
-
-            modelo:
-
-            "Probabilidade Estatística BetVision AI"
-
+            .toISOString()
 
 
         });
-
 
 
 
@@ -387,10 +322,12 @@ router.post("/", async(req,res)=>{
     catch(error){
 
 
+
         console.error(
 
-            "Erro ValueBet:",
-            error
+            "❌ Erro Value Bets:",
+
+            error.message
 
         );
 
@@ -399,15 +336,16 @@ router.post("/", async(req,res)=>{
         res.status(500).json({
 
 
+            sucesso:false,
+
+
             erro:
-            "Erro interno ao calcular Value Bet",
 
-
-            detalhe:
             error.message
 
 
         });
+
 
 
     }
@@ -417,6 +355,11 @@ router.post("/", async(req,res)=>{
 
 
 
+
+
+// ==========================================
+// EXPORT
+// ==========================================
 
 
 export default router;
