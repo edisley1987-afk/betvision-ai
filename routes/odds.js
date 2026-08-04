@@ -1,461 +1,65 @@
 // ==========================================
 // BetVision AI
-// services/oddsService.js
-// Motor de Odds + Value Bets IA
-// Versão 9.0
+// routes/odds.js
+// API de Odds
+// Versão corrigida 9.0
 // ==========================================
+
+
+import express from "express";
 
 
 import {
-    buscarJogos
-} from "./futebolService.js";
+
+    buscarOdds
+
+} from "../services/oddsService.js";
 
 
 
-
-
-// ==========================================
-// GERAR NÚMERO ALEATÓRIO CONTROLADO
-// ==========================================
-
-
-function variar(min, max){
-
-
-    return Math.random() *
-
-    (max - min)
-
-    + min;
-
-
-}
-
-
-
+const router = express.Router();
 
 
 
 
 // ==========================================
-// PROBABILIDADE NORMALIZADA
+// TODAS AS ODDS
+// GET /api/odds
 // ==========================================
 
 
-function normalizar(valor){
+router.get(
 
+"/",
 
-    return Number(
-
-        valor.toFixed(2)
-
-    );
-
-
-}
-
-
-
-
-
-
-
-// ==========================================
-// CALCULAR PROBABILIDADES IA
-// ==========================================
-
-
-function calcularProbabilidades(jogo){
-
-
-
-    let casa = variar(
-
-        0.35,
-
-        0.65
-
-    );
-
-
-
-    let empate = variar(
-
-        0.20,
-
-        0.32
-
-    );
-
-
-
-    let fora =
-
-        1 -
-
-        casa -
-
-        empate;
-
-
-
-
-
-    if(fora < 0.10){
-
-
-        fora = 0.10;
-
-
-        casa =
-
-            1 -
-
-            empate -
-
-            fora;
-
-
-    }
-
-
-
-
-
-    return {
-
-
-        casa:
-
-            normalizar(casa),
-
-
-
-        empate:
-
-            normalizar(empate),
-
-
-
-        fora:
-
-            normalizar(fora)
-
-
-
-    };
-
-
-
-}
-
-
-
-
-
-
-
-
-
-// ==========================================
-// CALCULAR ODDS JUSTAS
-// ==========================================
-
-
-function calcularOddJusta(probabilidade){
-
-
-    if(probabilidade <= 0)
-
-        return 0;
-
-
-
-    return Number(
-
-        (
-
-            1 /
-
-            probabilidade
-
-        )
-
-        .toFixed(2)
-
-    );
-
-
-}
-
-
-
-
-
-
-
-
-
-// ==========================================
-// GERAR ODDS ARTIFICIAIS
-// ==========================================
-
-
-function gerarMercados(jogo){
-
-
-
-    const probabilidades =
-
-        calcularProbabilidades(jogo);
-
-
-
-
-
-    const mercadoCasa = {
-
-
-
-        id:
-
-            jogo.id,
-
-
-
-        jogo:
-
-
-            `${jogo.casa} x ${jogo.fora}`,
-
-
-
-        campeonato:
-
-            jogo.campeonato,
-
-
-
-        mercado:
-
-            "Vitória Casa",
-
-
-
-        selecao:
-
-            jogo.casa,
-
-
-
-        probabilidade:
-
-
-            Number(
-
-                (
-
-                probabilidades.casa *
-
-                100
-
-                )
-
-                .toFixed(1)
-
-            ),
-
-
-
-
-
-        oddJusta:
-
-
-            calcularOddJusta(
-
-                probabilidades.casa
-
-            ),
-
-
-
-
-
-        odd:
-
-
-            Number(
-
-                variar(
-
-                    1.50,
-
-                    3.50
-
-                )
-
-                .toFixed(2)
-
-            ),
-
-
-
-
-
-        fonte:
-
-            "BetVision AI"
-
-    };
-
-
-
-
-
-
-    const edge =
-
-
-        (
-
-            mercadoCasa.odd /
-
-            mercadoCasa.oddJusta
-
-        -
-
-        1
-
-        )
-
-        *100;
-
-
-
-
-
-    mercadoCasa.edge =
-
-        Number(
-
-            edge.toFixed(1)
-
-        );
-
-
-
-
-
-    mercadoCasa.valueBet =
-
-
-        mercadoCasa.edge > 5;
-
-
-
-
-
-
-    mercadoCasa.roi =
-
-        mercadoCasa.edge;
-
-
-
-
-
-    return mercadoCasa;
-
-
-
-}
-
-
-
-
-
-
-
-
-
-// ==========================================
-// BUSCAR ODDS
-// ==========================================
-
-
-export async function buscarOdds(){
-
+async (req,res)=>{
 
 
     try{
 
 
+        console.log("");
 
         console.log(
-
-            "💰 Gerando odds BetVision AI..."
-
+            "================================="
         );
 
 
-
-
-
-        const jogos =
-
-            await buscarJogos();
-
-
-
-
-
         console.log(
-
-            `⚽ Jogos recebidos: ${jogos.length}`
-
+            "💰 API ODDS BETVISION AI"
         );
 
 
-
-
-
-        if(!jogos ||
-
-            jogos.length === 0){
-
-
-
-            console.log(
-
-                "⚠️ Nenhum jogo para calcular odds"
-
-            );
-
-
-
-            return [];
-
-        }
-
-
-
+        console.log(
+            "================================="
+        );
 
 
 
 
         const odds =
 
-
-            jogos.map(
-
-                jogo =>
-
-                    gerarMercados(jogo)
-
-            );
-
-
+            await buscarOdds();
 
 
 
@@ -463,7 +67,7 @@ export async function buscarOdds(){
 
         console.log(
 
-            `💎 Odds geradas: ${odds.length}`
+            `💎 Odds retornadas: ${odds.length}`
 
         );
 
@@ -471,14 +75,43 @@ export async function buscarOdds(){
 
 
 
-        return odds;
+
+        return res.json({
+
+
+            sucesso:
+
+                true,
+
+
+
+            total:
+
+                odds.length,
+
+
+
+            jogos:
+
+                odds,
+
+
+
+            atualizadoEm:
+
+                new Date()
+
+                .toISOString()
+
+
+
+        });
 
 
 
 
 
     }
-
 
     catch(error){
 
@@ -486,7 +119,133 @@ export async function buscarOdds(){
 
         console.error(
 
-            "❌ Erro gerar odds:",
+
+            "❌ Erro rota odds:",
+
+
+            error.message
+
+
+        );
+
+
+
+
+
+        return res.status(500).json({
+
+
+
+            sucesso:
+
+                false,
+
+
+
+            total:
+
+                0,
+
+
+
+            jogos:
+
+                [],
+
+
+
+            erro:
+
+                error.message
+
+
+
+        });
+
+
+
+    }
+
+
+}
+
+);
+
+
+
+
+
+
+
+
+
+// ==========================================
+// ODDS POR ID
+// GET /api/odds/:id
+// ==========================================
+
+
+router.get(
+
+"/:id",
+
+async(req,res)=>{
+
+
+    try{
+
+
+        const odds =
+
+            await buscarOdds();
+
+
+
+
+
+        const jogo =
+
+            odds.find(
+
+
+                item =>
+
+
+                String(item.id) ===
+
+                String(req.params.id)
+
+
+
+            );
+
+
+
+
+
+
+        return res.json(
+
+
+            jogo ||
+
+            null
+
+
+        );
+
+
+
+
+    }
+
+    catch(error){
+
+
+
+        console.error(
+
+            "❌ Erro consultar odd:",
 
             error.message
 
@@ -494,51 +253,26 @@ export async function buscarOdds(){
 
 
 
-        return [];
+        return res.status(500).json({
+
+
+
+            erro:
+
+                "Erro consultar odd"
+
+
+
+        });
 
 
 
     }
 
 
-
 }
 
-
-
-
-
-
-
-
-
-// ==========================================
-// VALUE BETS
-// ==========================================
-
-
-export async function buscarValueBets(){
-
-
-
-    const odds =
-
-        await buscarOdds();
-
-
-
-
-    return odds.filter(
-
-        item =>
-
-            item.valueBet === true
-
-    );
-
-
-
-}
+);
 
 
 
@@ -549,17 +283,8 @@ export async function buscarValueBets(){
 
 
 // ==========================================
-// EXPORT
+// EXPORTAÇÃO
 // ==========================================
 
 
-export default {
-
-
-    buscarOdds,
-
-
-    buscarValueBets
-
-
-};
+export default router;
