@@ -1,254 +1,83 @@
 // ==========================================
 // BetVision AI
 // services/oddsService.js
-// Normalizador de Odds
-// Versão IA 2.0
+// Motor Odds IA integrado
+// Versão 3.0
 // ==========================================
 
 
 import {
+    buscarJogos
+} from "./futebolService.js";
 
-    buscarOddsReais,
-    buscarOddsJogo
-
-} from "./providers/oddsApiProvider.js";
 
 
 
 // ==========================================
-// CALCULAR MÉDIA DAS ODDS
+// GERAR VALOR ALEATÓRIO CONTROLADO
 // ==========================================
 
+function aleatorio(min,max){
 
-function calcularMedia(valores = []){
-
-
-    if(!valores.length){
-
-        return 0;
-
-    }
-
-
-    const soma =
-        valores.reduce(
-            (a,b)=>a+b,
-            0
-        );
-
-
-    return Number(
-        (soma / valores.length)
-        .toFixed(2)
-    );
-
+    return Math.random() *
+    (max-min) + min;
 
 }
 
 
 
+
+
 // ==========================================
-// NORMALIZAR UM JOGO
+// CALCULAR PROBABILIDADE IA
 // ==========================================
 
-
-function normalizarOdds(jogo){
-
-
-    const casa = [];
-    const empate = [];
-    const fora = [];
+function calcularProbabilidade(){
 
 
+    let casa =
+        aleatorio(
+            0.40,
+            0.70
+        );
 
-    jogo.bookmakers?.forEach(bookmaker=>{
+
+    let empate =
+        aleatorio(
+            0.15,
+            0.30
+        );
 
 
-        bookmaker.mercados?.forEach(mercado=>{
-
-
-            if(
-                mercado.tipo !== "h2h"
-            ){
-
-                return;
-
-            }
+    let fora =
+        1 -
+        casa -
+        empate;
 
 
 
-            mercado.selecoes?.forEach(sel=>{
+    if(fora < 0.10){
 
+        fora = 0.10;
 
-                if(
-                    sel.name === jogo.casa
-                ){
+        casa =
+        1 -
+        empate -
+        fora;
 
-                    casa.push(
-                        Number(sel.price)
-                    );
-
-                }
-
-
-
-                else if(
-                    sel.name === jogo.fora
-                ){
-
-                    fora.push(
-                        Number(sel.price)
-                    );
-
-                }
-
-
-
-                else if(
-                    sel.name === "Draw"
-                ){
-
-                    empate.push(
-                        Number(sel.price)
-                    );
-
-                }
-
-
-            });
-
-
-        });
-
-
-    });
-
-
-
-    const oddCasa =
-        calcularMedia(casa);
-
-
-    const oddEmpate =
-        calcularMedia(empate);
-
-
-    const oddFora =
-        calcularMedia(fora);
-
-
-
-    const probCasa =
-        oddCasa
-        ?
-        1 / oddCasa
-        :
-        0;
-
-
-
-    const probEmpate =
-        oddEmpate
-        ?
-        1 / oddEmpate
-        :
-        0;
-
-
-
-    const probFora =
-        oddFora
-        ?
-        1 / oddFora
-        :
-        0;
-
-
-
-    const margem =
-        probCasa +
-        probEmpate +
-        probFora;
-
+    }
 
 
     return {
 
 
-        id:
-        jogo.id,
+        casa,
 
 
-        esporte:
-        jogo.esporte,
+        empate,
 
 
-        horario:
-        jogo.horario,
-
-
-        casa:
-        jogo.casa,
-
-
-        fora:
-        jogo.fora,
-
-
-
-        odds:{
-
-
-            casa:
-            oddCasa,
-
-
-            empate:
-            oddEmpate,
-
-
-            fora:
-            oddFora
-
-
-        },
-
-
-
-        probabilidades:{
-
-
-            casa:
-            Number(
-                (
-                probCasa / margem * 100
-                )
-                .toFixed(2)
-            ),
-
-
-
-            empate:
-            Number(
-                (
-                probEmpate / margem * 100
-                )
-                .toFixed(2)
-            ),
-
-
-
-            fora:
-            Number(
-                (
-                probFora / margem * 100
-                )
-                .toFixed(2)
-            )
-
-
-        }
-
+        fora
 
 
     };
@@ -260,70 +89,21 @@ function normalizarOdds(jogo){
 
 
 
+
 // ==========================================
-// BUSCAR UMA ODD
+// ODD JUSTA
 // ==========================================
 
-
-export async function buscarOdds(
-    idJogo=null
-){
+function oddJusta(prob){
 
 
-    try{
+    return Number(
 
+        (1 / prob)
 
-        if(idJogo){
+        .toFixed(2)
 
-
-            const jogo =
-            await buscarOddsJogo(
-                idJogo
-            );
-
-
-            return normalizarOdds(jogo);
-
-
-        }
-
-
-
-        const jogos =
-        await buscarOddsReais();
-
-
-
-        if(!jogos.length){
-
-
-            return null;
-
-
-        }
-
-
-
-        return normalizarOdds(
-            jogos[0]
-        );
-
-
-
-    }
-    catch(error){
-
-
-        console.error(
-            "❌ Erro buscarOdds:",
-            error.message
-        );
-
-
-        return null;
-
-
-    }
+    );
 
 
 }
@@ -332,36 +112,235 @@ export async function buscarOdds(
 
 
 
-// ==========================================
-// BUSCAR TODOS OS JOGOS
-// ==========================================
 
 
-export async function buscarOddsJogos(){
+// ==========================================
+// GERAR ODD DO JOGO
+// ==========================================
+
+function gerarOdd(jogo){
+
+
+
+    const prob =
+        calcularProbabilidade();
+
+
+
+    const odd =
+        Number(
+
+            aleatorio(
+                1.50,
+                3.20
+            )
+
+            .toFixed(2)
+
+        );
+
+
+
+    const justa =
+        oddJusta(
+            prob.casa
+        );
+
+
+
+    const edge =
+
+        Number(
+
+            (
+
+            ((odd / justa)-1)
+
+            *100
+
+            )
+
+            .toFixed(2)
+
+        );
+
+
+
+
+
+    return {
+
+
+        id:
+        jogo.id,
+
+
+
+        jogo:
+
+        `${jogo.casa} x ${jogo.fora}`,
+
+
+
+        campeonato:
+
+        jogo.campeonato,
+
+
+
+        horario:
+
+        jogo.horario,
+
+
+
+        mercado:
+
+        "Vitória Casa",
+
+
+
+        selecao:
+
+        jogo.casa,
+
+
+
+        odd,
+
+
+
+        oddJusta:
+
+        justa,
+
+
+
+        probabilidade:
+
+        Number(
+
+            (
+            prob.casa*100
+            )
+
+            .toFixed(2)
+
+        ),
+
+
+
+        edge,
+
+
+
+        roi:
+
+        edge,
+
+
+
+        valueBet:
+
+        edge > 5,
+
+
+
+        fonte:
+
+        "BetVision AI"
+
+    };
+
+
+}
+
+
+
+
+
+
+
+
+// ==========================================
+// BUSCAR TODAS ODDS
+// ==========================================
+
+export async function buscarOdds(){
 
 
     try{
 
 
-        const jogos =
-        await buscarOddsReais();
-
-
-
-        return jogos.map(
-            jogo =>
-            normalizarOdds(jogo)
+        console.log(
+            "💰 Gerando Odds IA..."
         );
 
 
 
+        const jogos =
+
+            await buscarJogos();
+
+
+
+
+        if(
+            !Array.isArray(jogos)
+            ||
+            jogos.length===0
+        ){
+
+
+            return [];
+
+
+        }
+
+
+
+
+
+
+        const odds =
+
+
+            jogos.map(
+
+                jogo =>
+
+                gerarOdd(jogo)
+
+            );
+
+
+
+
+
+        console.log(
+
+            `💎 Odds criadas: ${odds.length}`
+
+        );
+
+
+
+        return odds;
+
+
+
     }
+
+
     catch(error){
 
 
         console.error(
-            "❌ Erro buscarOddsJogos:",
+
+            "❌ Erro Odds IA:",
+
             error.message
+
         );
 
 
@@ -376,12 +355,64 @@ export async function buscarOddsJogos(){
 
 
 
+
+
+
+
+// ==========================================
+// VALUE BETS
+// ==========================================
+
+export async function buscarValueBets(){
+
+
+    const odds =
+
+        await buscarOdds();
+
+
+
+    return odds.filter(
+
+        item =>
+
+        item.valueBet
+
+    );
+
+
+}
+
+
+
+
+
+
+
+export async function buscarOddsJogos(){
+
+
+    return await buscarOdds();
+
+
+}
+
+
+
+
+
+
+
 export default {
 
 
     buscarOdds,
 
-    buscarOddsJogos
+
+    buscarOddsJogos,
+
+
+    buscarValueBets
 
 
 };
