@@ -1,13 +1,13 @@
 // ==========================================
 // BetVision AI
 // services/valueBetService.js
-// Versão 7.0
+// Versão 8.0
 // Engine profissional de Value Bets
 // ==========================================
 
+
 /**
- * Serviço responsável pelo cálculo profissional
- * de Value Bets do BetVision AI.
+ * Motor de cálculo Value Bets
  *
  * Entrada:
  *  - odd mercado
@@ -16,32 +16,40 @@
  * Saída:
  *  - odd justa
  *  - edge
- *  - ROI esperado
+ *  - ROI
+ *  - EV
  *  - Kelly
  *  - classificação
  *  - valueBet
  */
 
 
+
 // ==========================================
-// UTILIDADES
+// UTILIDADE
 // ==========================================
 
 
 function numero(valor){
 
+
     const n = Number(valor);
 
+
     return Number.isFinite(n)
-        ? n
-        : 0;
+        ?
+        n
+        :
+        0;
+
 
 }
 
 
 
+
 // ==========================================
-// PROBABILIDADE IMPLÍCITA DA ODD
+// PROBABILIDADE MERCADO
 // ==========================================
 
 
@@ -51,6 +59,7 @@ export function probabilidadeMercado(odd){
     odd = numero(odd);
 
 
+
     if(odd <= 0){
 
         return 0;
@@ -58,9 +67,14 @@ export function probabilidadeMercado(odd){
     }
 
 
+
     return Number(
-        (100 / odd)
+
+        (
+            100 / odd
+        )
         .toFixed(2)
+
     );
 
 
@@ -68,8 +82,9 @@ export function probabilidadeMercado(odd){
 
 
 
+
 // ==========================================
-// ODD JUSTA DA IA
+// ODD JUSTA IA
 // ==========================================
 
 
@@ -94,6 +109,7 @@ export function calcularOddJusta(probabilidadeIA){
         (
             100 /
             probabilidadeIA
+
         )
         .toFixed(2)
 
@@ -101,6 +117,7 @@ export function calcularOddJusta(probabilidadeIA){
 
 
 }
+
 
 
 
@@ -120,15 +137,21 @@ export function calcularEdge(
 
 
     const mercado =
-        probabilidadeMercado(odd);
+
+        probabilidadeMercado(
+            odd
+        );
 
 
 
     return Number(
 
         (
+
             numero(probabilidadeIA)
+
             -
+
             mercado
 
         )
@@ -170,6 +193,7 @@ export function calcularEV(
 
 
     const p =
+
         numero(probabilidadeIA)
         /
         100;
@@ -179,6 +203,7 @@ export function calcularEV(
     return Number(
 
         (
+
             (p * odd)
             -
             1
@@ -195,7 +220,7 @@ export function calcularEV(
 
 
 // ==========================================
-// ROI ESPERADO
+// ROI
 // ==========================================
 
 
@@ -211,11 +236,17 @@ export function calcularROI(
     return Number(
 
         (
+
             calcularEV(
+
                 probabilidadeIA,
+
                 odd
+
             )
+
             *
+
             100
 
         )
@@ -229,8 +260,9 @@ export function calcularROI(
 
 
 
+
 // ==========================================
-// KELLY CRITERION
+// KELLY
 // ==========================================
 
 
@@ -257,6 +289,7 @@ export function calcularKelly(
 
 
     const p =
+
         numero(probabilidadeIA)
         /
         100;
@@ -264,6 +297,7 @@ export function calcularKelly(
 
 
     const b =
+
         odd - 1;
 
 
@@ -271,12 +305,17 @@ export function calcularKelly(
     const kelly =
 
         (
+
             (b * p)
+
             -
-            (1 - p)
+
+            (1-p)
 
         )
+
         /
+
         b;
 
 
@@ -284,14 +323,21 @@ export function calcularKelly(
     return Number(
 
         (
+
             Math.max(
+
                 0,
+
                 kelly
+
             )
+
             *
+
             100
 
         )
+
         .toFixed(2)
 
     );
@@ -302,8 +348,9 @@ export function calcularKelly(
 
 
 
+
 // ==========================================
-// CLASSIFICAÇÃO PROFISSIONAL
+// CLASSIFICAÇÃO
 // ==========================================
 
 
@@ -315,21 +362,21 @@ export function classificarValue(edge){
 
 
 
-    if(edge >= 25){
+    if(edge >= 50){
 
         return "⭐⭐⭐⭐⭐ Excelente";
 
     }
 
 
-    if(edge >= 15){
+    if(edge >= 25){
 
         return "⭐⭐⭐⭐ Muito Boa";
 
     }
 
 
-    if(edge >= 10){
+    if(edge >= 15){
 
         return "⭐⭐⭐ Boa";
 
@@ -343,10 +390,12 @@ export function classificarValue(edge){
     }
 
 
+
     return "Sem Valor";
 
 
 }
+
 
 
 
@@ -356,27 +405,29 @@ export function classificarValue(edge){
 // ==========================================
 
 
-export function calcularValueBet(dados = {}){
+export function calcularValueBet(dados={}){
 
 
     const {
 
 
-        id = null,
+        id=null,
 
-        jogo = "",
+        jogo="",
 
-        campeonato = "",
+        campeonato="",
 
-        horario = "",
+        horario="",
 
-        mercado = "",
+        mercado="",
 
-        selecao = "",
+        selecao="",
 
-        odd = 0,
 
-        probabilidadeIA = 0
+        odd=0,
+
+        probabilidadeIA=0
+
 
 
     } = dados;
@@ -384,13 +435,17 @@ export function calcularValueBet(dados = {}){
 
 
 
+
     const oddNormalizada =
+
         numero(odd);
 
 
 
     const probIA =
+
         numero(probabilidadeIA);
+
 
 
 
@@ -398,66 +453,104 @@ export function calcularValueBet(dados = {}){
     const oddJusta =
 
         calcularOddJusta(
+
             probIA
+
         );
+
+
 
 
 
     const probMercado =
 
         probabilidadeMercado(
+
             oddNormalizada
+
         );
+
+
 
 
 
     const edge =
 
         calcularEdge(
+
             probIA,
+
             oddNormalizada
+
         );
+
+
 
 
 
     const ev =
 
         calcularEV(
+
             probIA,
+
             oddNormalizada
+
         );
+
+
 
 
 
     const roi =
 
         calcularROI(
+
             probIA,
+
             oddNormalizada
+
         );
+
+
 
 
 
     const kelly =
 
         calcularKelly(
+
             probIA,
+
             oddNormalizada
+
         );
 
 
 
 
 
-    // filtro profissional
+    // ==================================
+    // FILTRO VALUE BET
+    // ==================================
+    //
+    // Edge mínimo 5%
+    // EV positivo
+    //
+    // Sem limite máximo
+    // pois odds altas podem gerar grande valor
+    // ==================================
+
 
     const valueBet =
 
         edge >= 5
+
         &&
-        edge <= 35
-        &&
+
         ev > 0;
+
+
 
 
 
@@ -484,29 +577,41 @@ export function calcularValueBet(dados = {}){
         selecao,
 
 
+
         odd:
-            oddNormalizada,
+
+        oddNormalizada,
+
 
 
         oddJusta,
 
 
+
         probabilidade:
-            probIA,
+
+        probIA,
+
 
 
         probabilidadeMercado:
-            probMercado,
+
+        probMercado,
+
 
 
         edge,
 
 
+
         roi,
 
 
+
         expectedValue:
-            ev,
+
+        ev,
+
 
 
         kelly,
@@ -519,26 +624,27 @@ export function calcularValueBet(dados = {}){
 
         classificacao:
 
-            classificarValue(
-                edge
-            ),
+        classificarValue(edge),
 
 
 
         recomendacao:
 
-            valueBet
-            ?
-            "APOSTAR"
-            :
-            "NÃO APOSTAR",
+        valueBet
+
+        ?
+
+        "APOSTAR"
+
+        :
+
+        "NÃO APOSTAR",
 
 
 
         fonte:
 
-            "BetVision AI"
-
+        "BetVision AI"
 
 
     };
@@ -549,48 +655,61 @@ export function calcularValueBet(dados = {}){
 
 
 
+
 // ==========================================
-// GERAR LISTA DE VALUE BETS
+// GERAR LISTA VALUE BETS
 // ==========================================
 
 
-export function gerarValueBets(lista = []){
+export function gerarValueBets(lista=[]){
 
 
-    if(
-        !Array.isArray(lista)
-    ){
+
+    if(!Array.isArray(lista)){
+
 
         return [];
+
 
     }
 
 
 
+
     return lista
 
-        .map(
 
-            item =>
+    .map(
 
-            calcularValueBet(
-                item
-            )
+        item =>
 
-        )
+        calcularValueBet(item)
+
+    )
 
 
-        .sort(
+    .filter(
 
-            (a,b)=>
+        item =>
 
-            b.edge -
-            a.edge
+        item.valueBet === true
 
-        );
+    )
+
+
+    .sort(
+
+        (a,b)=>
+
+        b.edge -
+
+        a.edge
+
+    );
 
 
 }
+
 
 
 
