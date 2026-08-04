@@ -1,92 +1,68 @@
 // ==========================================
 // BetVision AI
-// services/futebolService.js
-// Busca jogos reais
+// services/jogoBancoService.js
+// Salvar jogos PostgreSQL
+// Versão 2.0 - Corrigido Timestamp
 // ==========================================
 
 
-import fs from "fs/promises";
-import path from "path";
-import {
-    fileURLToPath
-} from "url";
-
-
-const __filename =
-fileURLToPath(import.meta.url);
-
-
-const __dirname =
-path.dirname(__filename);
+import db from "../database/database.js";
 
 
 
-const FILE =
+// ==========================================
+// NORMALIZAR DATA DO JOGO
+// ==========================================
 
-path.join(
-    __dirname,
-    "../data/jogos.json"
-);
-
+function normalizarDataJogo(valor){
 
 
+    if(!valor){
 
+        return null;
 
-async function carregarArquivo(){
-
-
-try{
-
-
-const dados =
-
-await fs.readFile(
-    FILE,
-    "utf8"
-);
+    }
 
 
 
-const json =
+    // Já é timestamp ISO
 
-JSON.parse(dados);
+    if(
+        valor.includes("T")
+    ){
 
+        return valor;
 
-
-if(Array.isArray(json)){
-
-return json;
-
-}
+    }
 
 
 
-if(json.jogos){
+    // Formato somente hora
+    // Ex: 20:00
 
-return json.jogos;
-
-}
-
-
-
-return [];
+    if(
+        /^\d{2}:\d{2}$/.test(valor)
+    ){
 
 
+        const data =
 
-}
-
-catch(error){
-
-
-console.log(
-"⚠️ Jogos.json não encontrado"
-);
+            new Date()
+            .toISOString()
+            .split("T")[0];
 
 
-return [];
 
-}
+        return `${data}T${valor}:00`;
 
+
+    }
+
+
+
+    // Caso venha outro formato
+
+    return valor;
 
 
 }
@@ -95,64 +71,162 @@ return [];
 
 
 
-
-function normalizar(jogo){
-
-
-return {
+// ==========================================
+// SALVAR UM JOGO
+// ==========================================
 
 
-id:
-
-jogo.id ||
-
-jogo.idEvent,
+export async function salvarJogo(jogo){
 
 
+    try{
 
-campeonato:
 
-jogo.campeonato ||
+        const dataJogo =
 
-jogo.league ||
-
-"Futebol",
+            normalizarDataJogo(
+                jogo.horario
+            );
 
 
 
-casa:
-
-jogo.casa ||
-
-jogo.homeTeam ||
-jogo.strHomeTeam,
+        await db.query(
 
 
+        `
 
-fora:
+        INSERT INTO jogos
 
-jogo.fora ||
-jogo.awayTeam ||
-jogo.strAwayTeam,
+        (
 
+            api_id,
 
+            campeonato,
 
-horario:
+            time_casa,
 
-jogo.horario ||
-jogo.dateEvent ||
-jogo.utcDate,
+            time_fora,
 
+            data_jogo,
 
+            status
 
-status:
-
-jogo.status ||
-"SCHEDULED"
+        )
 
 
+        VALUES
 
-};
+        (
+
+            $1,
+
+            $2,
+
+            $3,
+
+            $4,
+
+            $5,
+
+            $6
+
+        )
+
+
+        ON CONFLICT(api_id)
+
+        DO UPDATE SET
+
+
+            campeonato =
+            EXCLUDED.campeonato,
+
+
+            time_casa =
+            EXCLUDED.time_casa,
+
+
+            time_fora =
+            EXCLUDED.time_fora,
+
+
+            data_jogo =
+            EXCLUDED.data_jogo,
+
+
+            status =
+            EXCLUDED.status
+
+
+        `,
+
+
+        [
+
+
+            jogo.id || null,
+
+
+            jogo.campeonato || "-",
+
+
+            jogo.casa || "-",
+
+
+            jogo.fora || "-",
+
+
+            dataJogo,
+
+
+            jogo.status || "SCHEDULED"
+
+
+        ]
+
+
+        );
+
+
+
+        console.log(
+
+            "💾 Jogo salvo:",
+
+            jogo.casa,
+
+            "x",
+
+            jogo.fora
+
+        );
+
+
+
+        return true;
+
+
+
+    }
+
+
+    catch(error){
+
+
+        console.error(
+
+
+            "❌ Erro salvar jogo:",
+
+            error.message
+
+        );
+
+
+        return false;
+
+
+    }
 
 
 }
@@ -163,45 +237,74 @@ jogo.status ||
 
 
 
-
-export async function buscarJogos(){
-
-
-
-const jogos =
-
-await carregarArquivo();
+// ==========================================
+// SALVAR LISTA DE JOGOS
+// ==========================================
 
 
+export async function salvarListaJogos(
+
+    jogos = []
+
+){
 
 
-const resultado =
-
-jogos.map(normalizar)
-
-.filter(
-
-j =>
-
-j.casa &&
-j.fora
-
-);
+    if(
+        !Array.isArray(jogos)
+    ){
 
 
+        console.log(
+
+            "⚠ Lista de jogos inválida"
+
+        );
 
 
+        return 0;
 
-console.log(
 
-`⚽ ${resultado.length} jogos carregados`
-
-);
+    }
 
 
 
-return resultado;
+    let total = 0;
 
+
+
+    for(
+        const jogo of jogos
+    ){
+
+
+        const salvo =
+
+            await salvarJogo(
+                jogo
+            );
+
+
+
+        if(salvo){
+
+            total++;
+
+        }
+
+
+    }
+
+
+
+    console.log(
+
+        `⚽ ${total} jogos salvos no PostgreSQL`
+
+    );
+
+
+
+    return total;
 
 
 }
@@ -210,10 +313,87 @@ return resultado;
 
 
 
+
+
+// ==========================================
+// LISTAR JOGOS BANCO
+// ==========================================
+
+
+export async function listarJogos(){
+
+
+    try{
+
+
+        const resultado =
+
+            await db.query(
+
+
+            `
+
+            SELECT *
+
+            FROM jogos
+
+            ORDER BY data_jogo ASC
+
+
+            `
+
+
+            );
+
+
+
+        return resultado.rows;
+
+
+
+    }
+
+
+    catch(error){
+
+
+        console.error(
+
+
+            "❌ Erro listar jogos:",
+
+            error.message
+
+        );
+
+
+        return [];
+
+
+    }
+
+
+}
+
+
+
+
+
+
+
+// ==========================================
+// EXPORT
+// ==========================================
 
 
 export default {
 
-buscarJogos
+
+    salvarJogo,
+
+    salvarListaJogos,
+
+    listarJogos
+
 
 };
