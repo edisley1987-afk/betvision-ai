@@ -1,8 +1,8 @@
 // ==========================================
 // BetVision AI
 // services/historicoService.js
-// Histórico dos Times via PostgreSQL
-// Versão 8.0
+// Histórico de times e jogos
+// Versão 10.0
 // ==========================================
 
 
@@ -10,9 +10,12 @@ import db from "../database/database.js";
 
 
 
+
+
 // ==========================================
 // NORMALIZAR NOME DO TIME
 // ==========================================
+
 
 function normalizarNome(nome = ""){
 
@@ -23,13 +26,15 @@ function normalizarNome(nome = ""){
 
         .normalize("NFD")
 
-        .replace(/[\u0300-\u036f]/g,"")
+        .replace(
+            /[\u0300-\u036f]/g,
+            ""
+        )
 
-        .replace(/\b(fc|fk|sk|afc|cf|sc|ac)\b/g,"")
-
-        .replace(/[^a-z0-9 ]/g,"")
-
-        .replace(/\s+/g," ")
+        .replace(
+            /[^a-z0-9 ]/g,
+            ""
+        )
 
         .trim();
 
@@ -38,327 +43,328 @@ function normalizarNome(nome = ""){
 
 
 
+
+
+
+
 // ==========================================
-// BUSCAR TIME
+// BUSCAR TIME POR NOME
 // ==========================================
 
-async function buscarTime(nome){
+
+export async function buscarTimePorNome(nome){
 
 
     try{
 
 
-        if(!nome){
-
-            return null;
-
-        }
-
-
-        const nomeNormalizado =
+        const nomeLimpo =
             normalizarNome(nome);
 
 
 
-        const resultado =
-            await db.query(
+        const resultado = await db.query(`
 
-            `
-
-            SELECT
-
-                id,
-
-                nome
+            SELECT *
 
             FROM times
 
-
             WHERE
 
-                LOWER(nome) LIKE LOWER($1)
+                LOWER(
+                    TRANSLATE(
+                        nome,
+                        'áàãâäéèêëíìîïóòõôöúùûüç',
+                        'aaaaaeeeeiiiiooooouuuuc'
+                    )
+                )
+
+                LIKE $1
 
 
             LIMIT 1
 
 
-            `,
+        `,
+        [
+
+            `%${nomeLimpo}%`
+
+        ]);
 
 
-            [
 
-                `%${nomeNormalizado}%`
-
-            ]);
 
 
         if(resultado.rows.length){
 
-
             return resultado.rows[0];
 
-
         }
+
+
 
 
 
         /*
-        ======================================
-        SEGUNDA TENTATIVA
-        Busca removendo prefixos
-        ======================================
+        Segunda tentativa:
+        procura parecido
         */
 
 
-        const palavras =
-            nomeNormalizado.split(" ");
+        const todos =
+            await db.query(`
+
+                SELECT *
+
+                FROM times
+
+            `);
 
 
 
-        const resultado2 =
-            await db.query(
 
-            `
-
-            SELECT
-
-                id,
-
-                nome
-
-            FROM times
+        const encontrado =
+            todos.rows.find(time => {
 
 
-            WHERE
-
-                LOWER(nome) LIKE LOWER($1)
-
-
-            LIMIT 1
+                const banco =
+                    normalizarNome(
+                        time.nome
+                    );
 
 
-            `,
+                return (
+
+                    banco.includes(nomeLimpo)
+
+                    ||
+
+                    nomeLimpo.includes(banco)
+
+                );
 
 
-            [
-
-                `%${palavras[palavras.length-1]}%`
-
-            ]);
+            });
 
 
 
-        if(resultado2.rows.length){
 
 
-            return resultado2.rows[0];
+        return encontrado || null;
 
 
-        }
+
+
+    }
+    catch(error){
+
+
+        console.error(
+
+            "Erro buscar time histórico:",
+
+            error.message
+
+        );
+
+
+        return null;
+
+
+    }
+
+
+}
+
+
+
+
+
+
+
+
+// ==========================================
+// BUSCAR HISTÓRICO DO TIME
+// ==========================================
+
+
+export async function buscarHistoricoTime(nomeTime){
+
+
+
+    try{
 
 
 
         console.log(
 
-            "⚠️ Time não cadastrado:",
-
-            nome
+            `📊 Buscando histórico: ${nomeTime}`
 
         );
 
 
 
-        return null;
 
 
+        const time =
 
-    }catch(error){
+            await buscarTimePorNome(
+                nomeTime
+            );
 
 
-        console.error(
 
-            "Erro buscar time:",
 
-            error.message
 
-        );
+        if(!time){
 
 
-        return null;
+            console.warn(
 
+                `⚠️ Time não cadastrado: ${nomeTime}`
 
-    }
+            );
 
 
-}
+            return {
 
 
+                time:null,
 
 
+                jogos:[],
 
-// ==========================================
-// BUSCAR ÚLTIMOS JOGOS
-// ==========================================
 
+                estatisticas:{
 
-async function buscarJogosTime(timeId){
 
 
-    try{
+                    vitorias:0,
 
+                    empates:0,
 
-        const resultado =
-            await db.query(
+                    derrotas:0,
 
-            `
+                    golsMarcados:0,
 
-            SELECT
+                    golsSofridos:0
 
 
-                p.id,
 
+                }
 
-                p.data_partida,
 
 
-                tc.nome AS casa,
+            };
 
 
-                tf.nome AS fora,
+        }
 
 
-                p.gols_casa,
 
 
-                p.gols_fora
 
 
-            FROM partidas p
 
+        /*
+        Busca jogos futuros/passados
+        */
 
 
-            JOIN times tc
+        const jogos =
+            await db.query(`
 
-            ON tc.id = p.time_casa
 
+                SELECT *
 
+                FROM jogos
 
-            JOIN times tf
+                WHERE
 
-            ON tf.id = p.time_fora
+                    mandante_id=$1
 
+                    OR
 
+                    visitante_id=$1
 
-            WHERE
 
+                ORDER BY data DESC
 
-            (
 
-                p.time_casa = $1
-
-                OR
-
-                p.time_fora = $1
-
-            )
-
-
-
-            AND
-
-            p.status = 'finalizado'
-
-
-
-            ORDER BY
-
-            p.data_partida DESC
-
-
-
-            LIMIT 10
-
+                LIMIT 10
 
 
             `,
-
-
             [
 
-                timeId
+                time.id
 
             ]);
 
 
 
 
-        return resultado.rows.map(jogo=>{
-
-
-            return {
-
-
-                data:
-
-                    jogo.data_partida,
 
 
 
-                casa:
-
-                    jogo.casa,
+        return {
 
 
-
-                fora:
-
-                    jogo.fora,
+            time,
 
 
+            jogos:
 
-                placar:{
-
-
-                    casa:
-
-                        Number(
-                            jogo.gols_casa || 0
-                        ),
-
-
-                    fora:
-
-                        Number(
-                            jogo.gols_fora || 0
-                        )
-
-
-                }
-
-
-            };
-
-
-        });
+                jogos.rows,
 
 
 
-    }catch(error){
+            estatisticas:
+
+                calcularEstatisticas(
+                    jogos.rows,
+                    time.id
+                )
+
+
+
+        };
+
+
+
+
+
+
+    }
+    catch(error){
+
 
 
         console.error(
 
-            "Erro buscar jogos time:",
+            "Erro histórico time:",
 
             error.message
 
         );
 
 
-        return [];
+        return {
+
+
+            time:null,
+
+            jogos:[],
+
+            estatisticas:{}
+
+
+        };
 
 
     }
+
 
 
 }
@@ -367,83 +373,116 @@ async function buscarJogosTime(timeId){
 
 
 
+
+
+
+
 // ==========================================
-// HISTÓRICO COMPLETO DA PARTIDA
+// CALCULAR ESTATÍSTICAS
 // ==========================================
 
 
-export async function buscarHistoricoJogo(
+function calcularEstatisticas(
 
-    timeCasa,
+    jogos,
 
-    timeFora
+    timeId
 
 ){
 
 
 
-    console.log(
+    let vitorias = 0;
 
-        "📊 Buscando histórico:",
+    let empates = 0;
 
-        timeCasa
+    let derrotas = 0;
 
-    );
+    let golsMarcados = 0;
 
-
-
-    const casa =
-
-        await buscarTime(timeCasa);
-
-
-
-
-    const fora =
-
-        await buscarTime(timeFora);
+    let golsSofridos = 0;
 
 
 
 
 
-    let historicoCasa=[];
-
-
-    let historicoFora=[];
+    for(const jogo of jogos){
 
 
 
+        const mandante =
+            jogo.mandante_id == timeId;
 
 
-    if(casa){
 
+        const golsPro =
+            mandante
 
-        historicoCasa =
+            ?
 
-            await buscarJogosTime(
+            jogo.gols_mandante
 
-                casa.id
+            :
 
-            );
-
-
-    }
+            jogo.gols_visitante;
 
 
 
 
 
-    if(fora){
+        const golsContra =
+            mandante
+
+            ?
+
+            jogo.gols_visitante
+
+            :
+
+            jogo.gols_mandante;
 
 
-        historicoFora =
 
-            await buscarJogosTime(
 
-                fora.id
 
-            );
+
+        golsMarcados +=
+            golsPro || 0;
+
+
+
+        golsSofridos +=
+            golsContra || 0;
+
+
+
+
+
+
+        if(
+            golsPro >
+            golsContra
+        ){
+
+            vitorias++;
+
+        }
+
+        else if(
+            golsPro ===
+            golsContra
+        ){
+
+            empates++;
+
+        }
+
+        else{
+
+            derrotas++;
+
+        }
+
 
 
     }
@@ -455,16 +494,33 @@ export async function buscarHistoricoJogo(
     return {
 
 
-        historicoCasa,
+        jogos:
+
+            jogos.length,
 
 
-        historicoFora
+        vitorias,
+
+
+        empates,
+
+
+        derrotas,
+
+
+        golsMarcados,
+
+
+        golsSofridos
+
 
 
     };
 
 
 }
+
+
 
 
 
@@ -478,7 +534,9 @@ export async function buscarHistoricoJogo(
 export default {
 
 
-    buscarHistoricoJogo
+    buscarTimePorNome,
+
+    buscarHistoricoTime
 
 
 };
