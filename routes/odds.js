@@ -24,7 +24,9 @@ import {
 
 const router = express.Router();
 
-
+import {
+    listarEsportes
+} from "../services/oddsApi.js";
 
 // ==========================================
 // STATUS DA API DE ODDS
@@ -239,7 +241,13 @@ router.get("/:id", async(req,res)=>{
 });
 
 
+router.get("/sports", async(req,res)=>{
 
+    const esportes = await listarEsportes();
+
+    res.json(esportes);
+
+});
 
 // ==========================================
 // EXPORTAÇÃO
