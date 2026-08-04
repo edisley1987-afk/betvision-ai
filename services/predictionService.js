@@ -1178,8 +1178,9 @@ export function resumoAnalises(
 // BetVision AI
 // services/predictionService.js
 // PARTE 4/4
-// Exportações
+// Exportações corrigidas
 // ==========================================
+
 
 // ==========================================
 // PREVER (COMPATIBILIDADE)
@@ -1191,11 +1192,14 @@ export function prever(dados = {}) {
 
 }
 
+
+
 // ==========================================
 // PREVISÃO RÁPIDA
 // ==========================================
 
 export function previsaoRapida(jogo) {
+
 
     return preverPartida({
 
@@ -1207,7 +1211,10 @@ export function previsaoRapida(jogo) {
 
     });
 
+
 }
+
+
 
 // ==========================================
 // VALIDAÇÃO
@@ -1215,33 +1222,41 @@ export function previsaoRapida(jogo) {
 
 export function validarJogo(jogo) {
 
-    if (!jogo) {
+
+    if(!jogo){
 
         return false;
 
     }
 
-    if (!jogo.id) {
+
+    if(!jogo.id){
 
         return false;
 
     }
 
-    if (!jogo.casa) {
+
+    if(!jogo.casa){
 
         return false;
 
     }
 
-    if (!jogo.fora) {
+
+    if(!jogo.fora){
 
         return false;
 
     }
+
 
     return true;
 
 }
+
+
+
 
 // ==========================================
 // PREVISÃO EM LOTE
@@ -1249,11 +1264,14 @@ export function validarJogo(jogo) {
 
 export function preverJogos(jogos = []) {
 
-    if (!Array.isArray(jogos)) {
+
+    if(!Array.isArray(jogos)){
 
         return [];
 
     }
+
+
 
     return jogos
 
@@ -1265,7 +1283,41 @@ export function preverJogos(jogos = []) {
 
         );
 
+
 }
+
+
+
+// ==========================================
+// RANQUEAR ANÁLISES
+// ==========================================
+
+export function ranquearAnalises(analises=[]){
+
+
+    if(!Array.isArray(analises)){
+
+        return [];
+
+    }
+
+
+    return analises.sort(
+
+        (a,b)=>
+
+            Number(b.confianca || 0)
+
+            -
+
+            Number(a.confianca || 0)
+
+    );
+
+
+}
+
+
 
 // ==========================================
 // VERSÃO DO MODELO
@@ -1273,15 +1325,31 @@ export function preverJogos(jogos = []) {
 
 export const MODELO = {
 
-    nome: "BetVision Prediction Engine",
 
-    versao: "1.0.0",
+    nome:
 
-    algoritmo: "Modelo Estatístico",
+    "BetVision Prediction Engine",
 
-    autor: "BetVision AI"
+
+    versao:
+
+    "2.0.0",
+
+
+    algoritmo:
+
+    "Probabilidade + Estatística + Forma + Gols Esperados",
+
+
+    autor:
+
+    "BetVision AI"
+
 
 };
+
+
+
 
 // ==========================================
 // EXPORT DEFAULT
@@ -1289,11 +1357,10 @@ export const MODELO = {
 
 export default {
 
+
     prever,
 
     preverPartida,
-
-    preverListaJogos,
 
     preverJogos,
 
@@ -1308,5 +1375,6 @@ export default {
     ranquearAnalises,
 
     MODELO
+
 
 };
