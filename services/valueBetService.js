@@ -2,8 +2,7 @@
 // BetVision AI
 // services/valueBetService.js
 // Versão 6.0
-// Motor Value Bets Profissional
-// Preparado para Odds Reais
+// Motor Value Bets + Odds Reais
 // ==========================================
 
 
@@ -15,6 +14,11 @@ import {
 }
 from "./inteligenciaService.js";
 
+
+import {
+    buscarOddsJogo
+}
+from "./oddsService.js";
 
 
 
@@ -30,7 +34,8 @@ const EDGE_MINIMO = 5;
 const ODD_MINIMA = 1.30;
 
 
-const ODD_MAXIMA = 10.00;
+const ODD_MAXIMA = 8.00;
+
 
 
 
@@ -47,7 +52,6 @@ function numero(valor){
     const n = Number(valor);
 
 
-
     return Number.isFinite(n)
 
         ? n
@@ -62,13 +66,8 @@ function numero(valor){
 
 
 
-
 // ==========================================
-// ODD JUSTA IA
-//
-// Probabilidade 60%
-// Odd justa = 100 / 60
-// Resultado 1.66
+// ODD JUSTA
 // ==========================================
 
 
@@ -84,7 +83,6 @@ function calcularOddJusta(probabilidade){
         return 0;
 
     }
-
 
 
 
@@ -110,12 +108,8 @@ function calcularOddJusta(probabilidade){
 
 
 
-
 // ==========================================
-// EDGE REAL
-//
-// Quanto a odd mercado
-// está acima da odd justa
+// EDGE
 // ==========================================
 
 
@@ -155,9 +149,7 @@ function calcularEdge(
 
             )
 
-            -
-
-            1
+            -1
 
         )
 
@@ -177,8 +169,6 @@ function calcularEdge(
 
 
 
-
-
 // ==========================================
 // CLASSIFICAÇÃO
 // ==========================================
@@ -187,57 +177,25 @@ function calcularEdge(
 function nivelValue(edge){
 
 
-
-    if(
-
-        edge >= 25
-
-    ){
-
-        return "⭐⭐⭐⭐⭐ Excelente";
-
-    }
-
-
-
-
-    if(
-
-        edge >= 15
-
-    ){
+    if(edge >= 20){
 
         return "⭐⭐⭐⭐ Muito Boa";
 
     }
 
 
-
-
-    if(
-
-        edge >= 10
-
-    ){
+    if(edge >= 10){
 
         return "⭐⭐⭐ Boa";
 
     }
 
 
-
-
-    if(
-
-        edge >= 5
-
-    ){
+    if(edge >= 5){
 
         return "⭐⭐ Moderada";
 
     }
-
-
 
 
     return "Sem Valor";
@@ -250,12 +208,8 @@ function nivelValue(edge){
 
 
 
-
-
-
 // ==========================================
-// KELLY CRITÉRIO
-// Gestão de banca
+// KELLY
 // ==========================================
 
 
@@ -268,7 +222,6 @@ function calcularKelly(
 ){
 
 
-
     const p =
 
         probabilidade / 100;
@@ -277,7 +230,7 @@ function calcularKelly(
 
     const q =
 
-        1 - p;
+        1-p;
 
 
 
@@ -288,11 +241,7 @@ function calcularKelly(
 
 
 
-    if(
-
-        b <= 0
-
-    ){
+    if(b <=0){
 
         return 0;
 
@@ -300,19 +249,13 @@ function calcularKelly(
 
 
 
-
-
-
     let kelly =
-
 
         (
 
             (
 
-                b *
-
-                p
+                b*p
 
             )
 
@@ -328,34 +271,22 @@ function calcularKelly(
 
 
 
+    if(kelly <0){
 
-
-
-    if(
-
-        kelly < 0
-
-    ){
-
-        kelly = 0;
+        kelly=0;
 
     }
 
 
 
 
-    // segurança máxima 10%
+    // proteção banca
 
-    if(
+    if(kelly >0.10){
 
-        kelly > 0.10
-
-    ){
-
-        kelly = 0.10;
+        kelly=0.10;
 
     }
-
 
 
 
@@ -363,9 +294,7 @@ function calcularKelly(
 
         (
 
-            kelly *
-
-            100
+            kelly*100
 
         )
 
@@ -376,8 +305,8 @@ function calcularKelly(
 
 }
 // ==========================================
-// GERAR VALUE BETS
-// Motor principal
+// CALCULAR VALUE BETS
+// Odds reais + IA
 // ==========================================
 
 
@@ -388,19 +317,14 @@ export async function calcularValueBets(){
 
 
         console.log(
-
             "💎 Calculando Value Bets..."
-
         );
-
-
 
 
 
         const analises =
 
             await listarAnalises();
-
 
 
 
@@ -416,14 +340,16 @@ export async function calcularValueBets(){
 
         ){
 
+
             console.log(
 
-                "⚠️ Nenhuma análise disponível"
+                "⚠️ Nenhuma análise IA encontrada"
 
             );
 
 
             return [];
+
 
         }
 
@@ -431,9 +357,8 @@ export async function calcularValueBets(){
 
 
 
+        const resultados=[];
 
-
-        const resultados = [];
 
 
 
@@ -469,21 +394,16 @@ export async function calcularValueBets(){
 
 
 
+            let probabilidade;
 
+            let mercado;
 
-            let probabilidade = 0;
-
-
-            let mercado = "";
-
+            let selecao;
 
 
 
 
 
-            // ==================================
-            // ESCOLHER FAVORITO
-            // ==================================
 
 
             if(
@@ -493,12 +413,31 @@ export async function calcularValueBets(){
             ){
 
 
-                probabilidade = probCasa;
-
 
                 mercado =
 
-                "Vitória Casa";
+                    "Vitória Casa";
+
+
+
+                selecao =
+
+                    analise.jogo
+
+                    ?
+
+                    analise.jogo.split(" x ")[0]
+
+                    :
+
+                    "Casa";
+
+
+
+                probabilidade =
+
+                    probCasa;
+
 
 
             }
@@ -506,31 +445,36 @@ export async function calcularValueBets(){
             else{
 
 
-                probabilidade = probFora;
-
 
                 mercado =
 
-                "Vitória Fora";
+                    "Vitória Fora";
+
+
+
+                selecao =
+
+                    analise.jogo
+
+                    ?
+
+                    analise.jogo.split(" x ")[1]
+
+                    :
+
+                    "Fora";
+
+
+
+                probabilidade =
+
+                    probFora;
+
 
 
             }
 
 
-
-
-
-
-
-            if(
-
-                probabilidade <= 0
-
-            ){
-
-                continue;
-
-            }
 
 
 
@@ -554,30 +498,12 @@ export async function calcularValueBets(){
 
             /*
             
-            IMPORTANTE
-
-            Neste momento não existe
-            API de odds conectada.
-
-            Portanto não vamos criar
-            odds falsas.
-
-            A Value Bet somente será
-            criada quando existir
-            odd real.
+            Buscar odd real cadastrada
 
             */
 
 
-            const oddMercado =
-
-                numero(
-
-                    analise.odd_mercado
-
-                );
-
-
+            let odds=[];
 
 
 
@@ -585,12 +511,18 @@ export async function calcularValueBets(){
 
             if(
 
-                oddMercado <= 0
+                analise.jogo_id
 
             ){
 
 
-                continue;
+                odds =
+
+                    await buscarOddsJogo(
+
+                        analise.jogo_id
+
+                    );
 
 
             }
@@ -601,17 +533,27 @@ export async function calcularValueBets(){
 
 
 
+            /*
+            
+            Caso ainda não exista API de odds,
+            não gerar odd falsa como real.
+
+            */
+
+
             if(
 
-                oddMercado < ODD_MINIMA
+                !Array.isArray(odds)
 
                 ||
 
-                oddMercado > ODD_MAXIMA
+                odds.length===0
 
             ){
 
+
                 continue;
+
 
             }
 
@@ -621,90 +563,120 @@ export async function calcularValueBets(){
 
 
 
-            const edge =
-
-                calcularEdge(
-
-                    oddMercado,
-
-                    oddJusta
-
-                );
 
 
+            for(
 
-
-
-
-
-
-            if(
-
-                edge < EDGE_MINIMO
+                const odd of odds
 
             ){
 
-                continue;
-
-            }
 
 
 
 
+                const oddMercado =
 
+                    numero(
 
+                        odd.odd
 
-            const kelly =
-
-                calcularKelly(
-
-                    probabilidade,
-
-                    oddMercado
-
-                );
+                    );
 
 
 
 
 
 
+                if(
 
-            const roi =
+                    oddMercado < ODD_MINIMA
 
-                Number(
+                    ||
 
-                    (
+                    oddMercado > ODD_MAXIMA
+
+                ){
+
+
+                    continue;
+
+
+                }
+
+
+
+
+
+
+
+                const edge =
+
+                    calcularEdge(
+
+                        oddMercado,
+
+                        oddJusta
+
+                    );
+
+
+
+
+
+
+                if(
+
+                    edge < EDGE_MINIMO
+
+                ){
+
+
+                    continue;
+
+
+                }
+
+
+
+
+
+
+
+
+                const roi =
+
+                    Number(
 
                         (
 
                             (
 
-                                probabilidade /
+                                (
 
-                                100
+                                    probabilidade /100
+
+                                )
+
+                                *
+
+                                oddMercado
+
+                                -
+
+                                1
 
                             )
 
                             *
 
-                            oddMercado
-
-                            -
-
-                            1
+                            100
 
                         )
 
-                        *
+                        .toFixed(2)
 
-                        100
-
-                    )
-
-                    .toFixed(2)
-
-                );
+                    );
 
 
 
@@ -712,76 +684,135 @@ export async function calcularValueBets(){
 
 
 
-            resultados.push({
+                const kelly =
 
+                    calcularKelly(
 
+                        probabilidade,
 
-                jogo:
+                        oddMercado
 
-                analise.jogo,
-
-
-
-
-                mercado,
-
-
-
-
-                probabilidade,
+                    );
 
 
 
 
-                oddMercado,
+
+
+
+                resultados.push({
+
+
+
+                    jogo:
+
+                    analise.jogo,
+
+
+
+                    jogo_id:
+
+                    analise.jogo_id,
+
+
+
+                    mercado,
+
+
+
+                    selecao,
+
+
+
+                    bookmaker:
+
+                    odd.bookmaker || "Não informado",
 
 
 
 
-                oddJusta,
+                    odd:
+
+                    oddMercado,
+
+
+
+                    oddMercado,
+
+
+
+                    oddJusta,
+
+
+
+                    probabilidade,
+
+
+
+                    edge,
+
+
+
+                    roi,
+
+
+
+                    kelly,
+
+
+
+                    valueBet:true,
+
+
+
+                    classificacao:
+
+                    nivelValue(
+
+                        edge
+
+                    ),
+
+
+
+                    fonte:
+
+                    odd.bookmaker
+
+                    ?
+
+                    "API Odds"
+
+                    :
+
+                    "BetVision AI"
 
 
 
 
-                edge,
+                });
 
 
 
-
-                roi,
-
-
-
-
-                kelly,
-
-
-
-
-                classificacao:
-
-                nivelValue(
-
-                    edge
-
-                ),
-
-
-
-
-                origem:
-
-                "Modelo IA + Odds Real"
-
-
-
-
-            });
-
+            }
 
 
 
         }
+
+
+
+
+
+
+
+        resultados.sort(
+
+            (a,b)=>
+
+            b.edge-a.edge
+
+        );
 
 
 
@@ -800,9 +831,7 @@ export async function calcularValueBets(){
 
 
 
-
         return resultados;
-
 
 
 
@@ -824,7 +853,6 @@ export async function calcularValueBets(){
 
 
         return [];
-
 
     }
 
@@ -849,7 +877,6 @@ export async function gerarValueBets(){
 
 
 
-
 // ==========================================
 // SALVAR VALUE BETS NO BANCO
 // ==========================================
@@ -861,11 +888,9 @@ export async function salvarValueBets(){
     try{
 
 
-
         const valueBets =
 
             await calcularValueBets();
-
 
 
 
@@ -877,7 +902,7 @@ export async function salvarValueBets(){
 
             ||
 
-            valueBets.length === 0
+            valueBets.length===0
 
         ){
 
@@ -890,6 +915,7 @@ export async function salvarValueBets(){
 
 
             return [];
+
 
         }
 
@@ -912,30 +938,51 @@ export async function salvarValueBets(){
 
                 INSERT INTO valuebets
 
+
                 (
+
 
                     jogo,
 
+
                     mercado,
+
+
+                    selecao,
+
 
                     odd_mercado,
 
+
                     odd_justa,
+
+
+                    probabilidade,
+
 
                     edge,
 
+
                     roi,
+
 
                     kelly,
 
+
                     classificacao,
 
+
+                    bookmaker,
+
+
                     origem
+
 
                 )
 
 
                 VALUES
+
 
                 (
 
@@ -955,7 +1002,13 @@ export async function salvarValueBets(){
 
                     $8,
 
-                    $9
+                    $9,
+
+                    $10,
+
+                    $11,
+
+                    $12
 
                 )
 
@@ -967,36 +1020,37 @@ export async function salvarValueBets(){
                 bet.jogo,
 
 
-
                 bet.mercado,
 
+
+                bet.selecao,
 
 
                 bet.oddMercado,
 
 
-
                 bet.oddJusta,
 
+
+                bet.probabilidade,
 
 
                 bet.edge,
 
 
-
                 bet.roi,
-
 
 
                 bet.kelly,
 
 
-
                 bet.classificacao,
 
 
+                bet.bookmaker,
 
-                bet.origem
+
+                bet.fonte
 
 
 
@@ -1028,6 +1082,7 @@ export async function salvarValueBets(){
 
 
 
+
     }
 
 
@@ -1044,14 +1099,13 @@ export async function salvarValueBets(){
         );
 
 
-        return [];
 
+        return [];
 
     }
 
 
 }
-
 
 
 
@@ -1071,28 +1125,26 @@ export async function listarValueBets(){
     try{
 
 
-
         const resultado =
 
-
-            await db.query(`
-
-
-
-                SELECT *
-
-
-                FROM valuebets
-
-
-                ORDER BY id DESC
-
-
-                LIMIT 50
+        await db.query(`
 
 
 
-            `);
+            SELECT *
+
+
+            FROM valuebets
+
+
+            ORDER BY id DESC
+
+
+            LIMIT 50
+
+
+
+        `);
 
 
 
@@ -1100,7 +1152,6 @@ export async function listarValueBets(){
 
 
         return resultado.rows || [];
-
 
 
 
@@ -1123,12 +1174,10 @@ export async function listarValueBets(){
 
         return [];
 
-
     }
 
 
 }
-
 
 
 
@@ -1206,7 +1255,6 @@ export async function limparValueBets(){
 
 
 
-
 // ==========================================
 // EXPORT DEFAULT
 // ==========================================
@@ -1229,6 +1277,7 @@ export default {
 
 
     limparValueBets
+
 
 
 };
