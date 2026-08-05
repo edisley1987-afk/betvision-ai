@@ -1139,13 +1139,8 @@ await sincronizarSistema();
 
 
 console.log(
-
-`🌎 ${resultadoSync.total} campeonatos sincronizados`
-
+`🌎 ${resultadoSync.campeonatos} campeonatos sincronizados`
 );
-
-
-
 
 // Atualização IA a cada 30 segundos
 
