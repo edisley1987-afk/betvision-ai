@@ -1,8 +1,8 @@
 // ==========================================
 // BetVision AI
 // services/iaService.js
-// Motor IA v7.0
-// Integração jogos reais
+// Motor IA v7.1
+// Integração PostgreSQL v4.1
 // ==========================================
 
 
@@ -22,6 +22,8 @@ export async function gerarAnalise(jogo = {}) {
 
         jogo.homeTeam ||
 
+        jogo.home ||
+
         "Casa";
 
 
@@ -32,8 +34,9 @@ export async function gerarAnalise(jogo = {}) {
 
         jogo.awayTeam ||
 
-        "Fora";
+        jogo.away ||
 
+        "Fora";
 
 
 
@@ -41,14 +44,17 @@ export async function gerarAnalise(jogo = {}) {
 
         jogo.campeonato ||
 
+        jogo.league ||
+
         "Futebol";
 
 
 
 
-    // ===============================
-    // MODELO ESTATÍSTICO BASE
-    // ===============================
+
+    // ======================================
+    // MODELO PROBABILÍSTICO BASE
+    // ======================================
 
 
     let probCasa = 45;
@@ -59,7 +65,9 @@ export async function gerarAnalise(jogo = {}) {
 
 
 
-    // ajuste simples pelo tamanho do nome
+
+
+    // Ajuste simples de força
 
     if(casa.length > fora.length){
 
@@ -82,7 +90,10 @@ export async function gerarAnalise(jogo = {}) {
 
 
 
-    // normalizar
+
+    // ======================================
+    // NORMALIZAÇÃO
+    // ======================================
 
 
     const total =
@@ -95,35 +106,29 @@ export async function gerarAnalise(jogo = {}) {
 
 
 
-    probCasa =
+    probCasa = Number(
 
-        Number(
+        ((probCasa / total) * 100)
 
-            ((probCasa / total) * 100)
+        .toFixed(2)
 
-            .toFixed(2)
-
-        );
+    );
 
 
 
-    probEmpate =
+    probEmpate = Number(
 
-        Number(
+        ((probEmpate / total) * 100)
 
-            ((probEmpate / total) * 100)
+        .toFixed(2)
 
-            .toFixed(2)
-
-        );
+    );
 
 
 
-    probFora =
+    probFora = Number(
 
-        Number(
-
-            (
+        (
 
             100 -
 
@@ -131,20 +136,19 @@ export async function gerarAnalise(jogo = {}) {
 
             probEmpate
 
-            )
+        )
 
-            .toFixed(2)
+        .toFixed(2)
 
-        );
-
-
+    );
 
 
 
 
-    // ===============================
-    // FAVORITO
-    // ===============================
+
+    // ======================================
+    // IDENTIFICAR FAVORITO
+    // ======================================
 
 
     let favorito = casa;
@@ -175,25 +179,26 @@ export async function gerarAnalise(jogo = {}) {
 
 
 
-
-    // ===============================
-    // PLACAR IA
-    // ===============================
+    // ======================================
+    // PLACAR PREVISTO IA
+    // ======================================
 
 
     let placar = "1x1";
 
 
+
     if(favorito === casa){
 
-        placar="2x1";
+        placar = "2x1";
 
     }
 
 
+
     if(favorito === fora){
 
-        placar="1x2";
+        placar = "1x2";
 
     }
 
@@ -221,80 +226,158 @@ export async function gerarAnalise(jogo = {}) {
 
 
 
+    // ======================================
+    // PREVISÃO DE GOLS
+    // ======================================
 
-    // ===============================
-    // GOLS ESPERADOS
-    // ===============================
+
+    const golsEsperados = Number(
+
+        (
+
+            1.8 +
+
+            Math.random()
+
+        )
+
+        .toFixed(2)
+
+    );
 
 
-    const golsEsperados =
+
+
+
+
+
+    // ======================================
+    // CONFIANÇA MODELO
+    // ======================================
+
+
+    let confianca = 40;
+
+
+
+    if(maior >= 55){
+
+        confianca = 60;
+
+    }
+
+
+
+    if(maior >= 65){
+
+        confianca = 80;
+
+    }
+
+
+
+    if(maior >= 75){
+
+        confianca = 90;
+
+    }
+
+
+
+
+
+    // ======================================
+    // VALUE BET
+    // ======================================
+
+
+    const valueBet =
+
+        maior >= 58;
+
+
+
+
+
+    const valorEsperado =
+
+        valueBet
+
+        ?
 
         Number(
 
             (
 
-            1.8 +
+                (maior / 100) * 100
 
-            Math.random()*1
+                -
+
+                100 / 2
 
             )
 
             .toFixed(2)
 
-        );
+        )
+
+        :
+
+        0;
 
 
 
 
 
 
-    // ===============================
-    // CONFIANÇA
-    // ===============================
+    // ======================================
+    // RECOMENDAÇÃO
+    // ======================================
 
 
-    let confianca="Baixa";
+    let recomendacao =
+
+        "Sem aposta recomendada";
 
 
-    if(maior >=55){
 
-        confianca="Média";
+    if(valueBet){
+
+
+        recomendacao =
+
+        `Valor encontrado para ${favorito}`;
+
 
     }
 
 
-    if(maior >=65){
-
-        confianca="Alta";
-
-    }
 
 
 
 
 
-
-    // ===============================
-    // VALUE BET
-    // ===============================
-
-
-    const valueBet =
-
-        maior >=58;
-
-
-
-
-
+    // ======================================
+    // RETORNO FINAL
+    // ======================================
 
 
     return {
 
 
+
         jogo:
 
         `${casa} x ${fora}`,
+
+
+
+        casa,
+
+
+
+        fora,
+
 
 
         campeonato,
@@ -347,17 +430,28 @@ export async function gerarAnalise(jogo = {}) {
 
 
 
+        valor_esperado:
+
+        valorEsperado,
+
+
+
+        recomendacao,
+
+
+
         confianca,
 
 
 
-        algoritmo:
+        modelo:
 
-        "BetVision Statistical AI v7.0"
+        "BetVision Statistical AI v7.1"
 
 
 
     };
+
 
 
 }
@@ -368,6 +462,8 @@ export async function gerarAnalise(jogo = {}) {
 
 export default {
 
+
     gerarAnalise
+
 
 };
