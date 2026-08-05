@@ -1,34 +1,39 @@
 // ==========================================
 // BetVision AI
 // services/valueBetService.js
-// Versão 8.0
-// Engine profissional de Value Bets
+// Versão 5.0
+// Motor Value Bets
 // ==========================================
 
 
-/**
- * Motor de cálculo Value Bets
- *
- * Entrada:
- *  - odd mercado
- *  - probabilidade IA
- *
- * Saída:
- *  - odd justa
- *  - edge
- *  - ROI
- *  - EV
- *  - Kelly
- *  - classificação
- *  - valueBet
- */
+import db from "../database/database.js";
+
+import {
+    listarAnalises
+} from "./inteligenciaService.js";
+
+
 
 
 
 // ==========================================
-// UTILIDADE
+// CONFIGURAÇÃO
 // ==========================================
 
+const EDGE_MINIMO = 5;
+
+const ODD_MINIMA = 1.30;
+
+const ODD_MAXIMA = 8.00;
+
+
+
+
+
+
+// ==========================================
+// NORMALIZAÇÃO
+// ==========================================
 
 function numero(valor){
 
@@ -37,10 +42,10 @@ function numero(valor){
 
 
     return Number.isFinite(n)
-        ?
-        n
-        :
-        0;
+
+        ? n
+
+        : 0;
 
 
 }
@@ -48,19 +53,25 @@ function numero(valor){
 
 
 
+
+
+
 // ==========================================
-// PROBABILIDADE MERCADO
+// ODD JUSTA
+//
+// Probabilidade 60%
+// Odd justa = 1 / 0.60
+// Resultado = 1.66
 // ==========================================
 
-
-export function probabilidadeMercado(odd){
-
-
-    odd = numero(odd);
+function calcularOddJusta(probabilidade){
 
 
+    if(
 
-    if(odd <= 0){
+        probabilidade <= 0
+
+    ){
 
         return 0;
 
@@ -71,52 +82,21 @@ export function probabilidadeMercado(odd){
     return Number(
 
         (
-            100 / odd
-        )
-        .toFixed(2)
 
-    );
-
-
-}
-
-
-
-
-// ==========================================
-// ODD JUSTA IA
-// ==========================================
-
-
-export function calcularOddJusta(probabilidadeIA){
-
-
-    probabilidadeIA =
-        numero(probabilidadeIA);
-
-
-
-    if(probabilidadeIA <= 0){
-
-        return 0;
-
-    }
-
-
-
-    return Number(
-
-        (
             100 /
-            probabilidadeIA
+
+            probabilidade
 
         )
+
         .toFixed(2)
 
     );
 
 
 }
+
+
 
 
 
@@ -124,67 +104,27 @@ export function calcularOddJusta(probabilidadeIA){
 
 // ==========================================
 // EDGE
+//
+// Diferença entre odd mercado
+// e odd justa
 // ==========================================
 
+function calcularEdge(
 
-export function calcularEdge(
+    oddMercado,
 
-    probabilidadeIA,
-
-    odd
+    oddJusta
 
 ){
 
 
-    const mercado =
+    if(
 
-        probabilidadeMercado(
-            odd
-        );
+        oddMercado <= 0 ||
 
+        oddJusta <= 0
 
-
-    return Number(
-
-        (
-
-            numero(probabilidadeIA)
-
-            -
-
-            mercado
-
-        )
-        .toFixed(2)
-
-    );
-
-
-}
-
-
-
-
-// ==========================================
-// EXPECTED VALUE
-// ==========================================
-
-
-export function calcularEV(
-
-    probabilidadeIA,
-
-    odd
-
-){
-
-
-    odd =
-        numero(odd);
-
-
-
-    if(odd <= 0){
+    ){
 
         return 0;
 
@@ -192,158 +132,36 @@ export function calcularEV(
 
 
 
-    const p =
-
-        numero(probabilidadeIA)
-        /
-        100;
-
-
 
     return Number(
 
         (
 
-            (p * odd)
-            -
-            1
+            (
 
-        )
-        .toFixed(4)
+                oddMercado /
 
-    );
-
-
-}
-
-
-
-
-// ==========================================
-// ROI
-// ==========================================
-
-
-export function calcularROI(
-
-    probabilidadeIA,
-
-    odd
-
-){
-
-
-    return Number(
-
-        (
-
-            calcularEV(
-
-                probabilidadeIA,
-
-                odd
+                oddJusta
 
             )
 
-            *
-
-            100
+            - 1
 
         )
-        .toFixed(2)
 
-    );
+        *
+
+        100
+
+    )
+
+    .toFixed(2);
 
 
 }
 
 
 
-
-
-// ==========================================
-// KELLY
-// ==========================================
-
-
-export function calcularKelly(
-
-    probabilidadeIA,
-
-    odd
-
-){
-
-
-    odd =
-        numero(odd);
-
-
-
-    if(odd <= 1){
-
-        return 0;
-
-    }
-
-
-
-    const p =
-
-        numero(probabilidadeIA)
-        /
-        100;
-
-
-
-    const b =
-
-        odd - 1;
-
-
-
-    const kelly =
-
-        (
-
-            (b * p)
-
-            -
-
-            (1-p)
-
-        )
-
-        /
-
-        b;
-
-
-
-    return Number(
-
-        (
-
-            Math.max(
-
-                0,
-
-                kelly
-
-            )
-
-            *
-
-            100
-
-        )
-
-        .toFixed(2)
-
-    );
-
-
-}
 
 
 
@@ -353,34 +171,23 @@ export function calcularKelly(
 // CLASSIFICAÇÃO
 // ==========================================
 
-
-export function classificarValue(edge){
-
-
-    edge =
-        numero(edge);
+function nivelValue(edge){
 
 
-
-    if(edge >= 50){
-
-        return "⭐⭐⭐⭐⭐ Excelente";
-
-    }
-
-
-    if(edge >= 25){
+    if(edge >= 20){
 
         return "⭐⭐⭐⭐ Muito Boa";
 
     }
 
 
-    if(edge >= 15){
+
+    if(edge >= 10){
 
         return "⭐⭐⭐ Boa";
 
     }
+
 
 
     if(edge >= 5){
@@ -396,314 +203,111 @@ export function classificarValue(edge){
 
 }
 
-
-
-
-
 // ==========================================
-// CALCULAR VALUE BET
-// ==========================================
-
-
-export function calcularValueBet(dados={}){
-
-
-    const {
-
-
-        id=null,
-
-        jogo="",
-
-        campeonato="",
-
-        horario="",
-
-        mercado="",
-
-        selecao="",
-
-
-        odd=0,
-
-        probabilidadeIA=0
-
-
-
-    } = dados;
-
-
-
-
-
-    const oddNormalizada =
-
-        numero(odd);
-
-
-
-    const probIA =
-
-        numero(probabilidadeIA);
-
-
-
-
-
-    const oddJusta =
-
-        calcularOddJusta(
-
-            probIA
-
-        );
-
-
-
-
-
-    const probMercado =
-
-        probabilidadeMercado(
-
-            oddNormalizada
-
-        );
-
-
-
-
-
-    const edge =
-
-        calcularEdge(
-
-            probIA,
-
-            oddNormalizada
-
-        );
-
-
-
-
-
-    const ev =
-
-        calcularEV(
-
-            probIA,
-
-            oddNormalizada
-
-        );
-
-
-
-
-
-    const roi =
-
-        calcularROI(
-
-            probIA,
-
-            oddNormalizada
-
-        );
-
-
-
-
-
-    const kelly =
-
-        calcularKelly(
-
-            probIA,
-
-            oddNormalizada
-
-        );
-
-
-
-
-
-    // ==================================
-    // FILTRO VALUE BET
-    // ==================================
-    //
-    // Edge mínimo 5%
-    // EV positivo
-    //
-    // Sem limite máximo
-    // pois odds altas podem gerar grande valor
-    // ==================================
-
-
-    const valueBet =
-
-        edge >= 5
-
-        &&
-
-        ev > 0;
-
-
-
-
-
-
-
-    return {
-
-
-        id,
-
-
-        jogo,
-
-
-        campeonato,
-
-
-        horario,
-
-
-        mercado,
-
-
-        selecao,
-
-
-
-        odd:
-
-        oddNormalizada,
-
-
-
-        oddJusta,
-
-
-
-        probabilidade:
-
-        probIA,
-
-
-
-        probabilidadeMercado:
-
-        probMercado,
-
-
-
-        edge,
-
-
-
-        roi,
-
-
-
-        expectedValue:
-
-        ev,
-
-
-
-        kelly,
-
-
-
-        valueBet,
-
-
-
-        classificacao:
-
-        classificarValue(edge),
-
-
-
-        recomendacao:
-
-        valueBet
-
-        ?
-
-        "APOSTAR"
-
-        :
-
-        "NÃO APOSTAR",
-
-
-
-        fonte:
-
-        "BetVision AI"
-
-
-    };
-
-
-}
-
-
-
-
-
-// ==========================================
-// GERAR LISTA VALUE BETS
+// KELLY CRITÉRIO
+//
+// Gestão de banca
+// Evita valores exagerados
 // ==========================================
 
+function calcularKelly(
 
-export function gerarValueBets(lista=[]){
+    probabilidade,
+
+    odd
+
+){
+
+
+    const p =
+
+        probabilidade / 100;
 
 
 
-    if(!Array.isArray(lista)){
+    const q =
+
+        1 - p;
 
 
-        return [];
 
+    const b =
+
+        odd - 1;
+
+
+
+    if(
+
+        b <= 0
+
+    ){
+
+        return 0;
 
     }
 
 
 
 
-    return lista
+
+    let kelly =
+
+        (
+
+            (
+
+                b * p
+
+            )
+
+            -
+
+            q
+
+        )
+
+        /
+
+        b;
 
 
-    .map(
-
-        item =>
-
-        calcularValueBet(item)
-
-    )
 
 
-    .filter(
 
-        item =>
+    if(kelly < 0){
 
-        item.valueBet === true
+        kelly = 0;
 
-    )
+    }
 
 
-    .sort(
 
-        (a,b)=>
 
-        b.edge -
 
-        a.edge
+    // Limite de segurança
+
+    if(kelly > 0.10){
+
+        kelly = 0.10;
+
+    }
+
+
+
+
+
+    return Number(
+
+        (
+
+            kelly *
+
+            100
+
+        )
+
+        .toFixed(2)
 
     );
 
@@ -714,31 +318,711 @@ export function gerarValueBets(lista=[]){
 
 
 
+
+
+
+
+// ==========================================
+// GERAR VALUE BETS
+// ==========================================
+
+export async function calcularValueBets(){
+
+
+    try{
+
+
+
+        console.log(
+
+            "💎 Calculando Value Bets..."
+
+        );
+
+
+
+
+
+
+        const analises =
+
+            await listarAnalises();
+
+
+
+
+
+
+        if(
+
+            !analises ||
+
+            analises.length === 0
+
+        ){
+
+
+            return [];
+
+
+        }
+
+
+
+
+
+
+
+        const resultados=[];
+
+
+
+
+
+
+
+        for(
+
+            const analise of analises
+
+        ){
+
+
+
+
+
+            const probabilidade =
+
+                Math.max(
+
+                    numero(
+
+                        analise.probabilidade_casa
+
+                    ),
+
+
+                    numero(
+
+                        analise.probabilidade_fora
+
+                    )
+
+                );
+
+
+
+
+
+
+
+
+            if(
+
+                probabilidade <= 0
+
+            ){
+
+                continue;
+
+            }
+
+
+
+
+
+
+
+
+            const oddJusta =
+
+                calcularOddJusta(
+
+                    probabilidade
+
+                );
+
+
+
+
+
+
+
+
+            /*
+            
+            ATENÇÃO:
+
+            Até integrar uma API real
+            de odds, NÃO usar valores
+            aleatórios.
+
+            Será marcada como simulada
+            para não apresentar como real.
+
+            */
+
+
+
+
+            const oddMercado =
+
+                Number(
+
+                    (
+
+                        oddJusta *
+
+                        1.15
+
+                    )
+
+                    .toFixed(2)
+
+                );
+
+
+
+
+
+
+
+
+            if(
+
+                oddMercado <
+
+                ODD_MINIMA ||
+
+                oddMercado >
+
+                ODD_MAXIMA
+
+            ){
+
+                continue;
+
+            }
+
+
+
+
+
+
+
+
+            const edge =
+
+                calcularEdge(
+
+                    oddMercado,
+
+                    oddJusta
+
+                );
+
+
+
+
+
+
+
+
+            if(
+
+                edge < EDGE_MINIMO
+
+            ){
+
+                continue;
+
+            }
+
+
+
+
+
+
+
+
+            const kelly =
+
+                calcularKelly(
+
+                    probabilidade,
+
+                    oddMercado
+
+                );
+
+
+
+
+
+
+
+
+            resultados.push({
+
+
+                jogo:
+
+                analise.jogo,
+
+
+
+                mercado:
+
+                "Vitória Casa/Fora",
+
+
+
+
+                probabilidade,
+
+
+
+                oddMercado,
+
+
+
+                oddJusta,
+
+
+
+                edge,
+
+
+
+                roi:
+
+                Number(
+
+                    (
+
+                        edge *
+
+                        oddMercado
+
+                    )
+
+                    .toFixed(2)
+
+                ),
+
+
+
+
+                kelly,
+
+
+
+                classificacao:
+
+                nivelValue(
+
+                    edge
+
+                ),
+
+
+
+                origem:
+
+                "Modelo IA"
+
+
+
+            });
+
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+        console.log(
+
+            `💎 ${resultados.length} Value Bets encontradas`
+
+        );
+
+
+
+
+
+
+        return resultados;
+
+
+
+
+
+    }
+
+    catch(error){
+
+
+
+        console.error(
+
+            "❌ Erro Value Bets:",
+
+            error.message
+
+        );
+
+
+
+        return [];
+
+    }
+
+
+}
+
+// ==========================================
+// SALVAR VALUE BETS NO BANCO
+// ==========================================
+
+export async function salvarValueBets(){
+
+
+    try{
+
+
+        const valueBets =
+
+            await calcularValueBets();
+
+
+
+
+
+        if(
+
+            valueBets.length === 0
+
+        ){
+
+            console.log(
+
+                "💎 Nenhuma Value Bet encontrada"
+
+            );
+
+
+            return [];
+
+        }
+
+
+
+
+
+
+
+        for(
+
+            const bet of valueBets
+
+        ){
+
+
+
+            await db.query(`
+
+
+                INSERT INTO valuebets
+
+
+                (
+
+                    jogo,
+
+                    mercado,
+
+                    odd_mercado,
+
+                    odd_justa,
+
+                    edge,
+
+                    roi,
+
+                    kelly,
+
+                    classificacao,
+
+                    origem
+
+                )
+
+
+                VALUES
+
+                (
+
+                    $1,$2,$3,$4,$5,$6,$7,$8,$9
+
+                )
+
+
+            `,[
+
+
+
+                bet.jogo,
+
+
+                bet.mercado,
+
+
+                bet.oddMercado,
+
+
+                bet.oddJusta,
+
+
+                bet.edge,
+
+
+                bet.roi,
+
+
+                bet.kelly,
+
+
+                bet.classificacao,
+
+
+                bet.origem
+
+
+
+            ]);
+
+
+
+        }
+
+
+
+
+
+
+        console.log(
+
+            `💎 ${valueBets.length} Value Bets salvas`
+
+        );
+
+
+
+
+
+        return valueBets;
+
+
+
+    }
+
+    catch(error){
+
+
+
+        console.error(
+
+            "❌ Erro salvar Value Bets:",
+
+            error.message
+
+        );
+
+
+        return [];
+
+
+    }
+
+
+}
+
+
+
+
+
+
+
+
+
+// ==========================================
+// LISTAR VALUE BETS
+// ==========================================
+
+export async function listarValueBets(){
+
+
+    try{
+
+
+
+        const resultado =
+
+        await db.query(`
+
+
+
+            SELECT *
+
+
+            FROM valuebets
+
+
+            ORDER BY id DESC
+
+
+            LIMIT 50
+
+
+
+        `);
+
+
+
+
+
+
+        return resultado.rows;
+
+
+
+
+    }
+
+    catch(error){
+
+
+
+        console.error(
+
+            "❌ Erro listar Value Bets:",
+
+            error.message
+
+        );
+
+
+
+        return [];
+
+    }
+
+
+}
+
+
+
+
+
+
+
+
+
+// ==========================================
+// LIMPAR VALUE BETS ANTIGAS
+// ==========================================
+
+export async function limparValueBets(){
+
+
+    try{
+
+
+
+        await db.query(`
+
+
+
+            DELETE FROM valuebets
+
+
+            WHERE criado_em <
+
+            NOW() - INTERVAL '30 days'
+
+
+
+        `);
+
+
+
+
+
+
+        console.log(
+
+            "🧹 Value Bets antigas removidas"
+
+        );
+
+
+
+
+
+    }
+
+    catch(error){
+
+
+
+        console.error(
+
+            "❌ Erro limpar Value Bets:",
+
+            error.message
+
+        );
+
+
+    }
+
+
+}
+
+
+
+
+
+
+
+
+
 // ==========================================
 // EXPORT DEFAULT
 // ==========================================
 
-
 export default {
 
 
-    probabilidadeMercado,
-
-    calcularOddJusta,
-
-    calcularEdge,
-
-    calcularEV,
-
-    calcularROI,
-
-    calcularKelly,
-
-    classificarValue,
-
-    calcularValueBet,
-
-    gerarValueBets
+    calcularValueBets,
 
 
-};
+    salvarValueBets,
+
+
+    listarValueBets,
+
+
+    limparValueBets
+
+
+
+}; 
