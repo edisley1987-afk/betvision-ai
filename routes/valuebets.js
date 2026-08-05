@@ -460,98 +460,31 @@ router.get("/", async(req,res)=>{
 // GET VALUE BETS SALVAS
 // /api/valuebets/salvas
 // ==========================================
-
-
-router.get("/", async(req,res)=>{
+router.get("/salvas", async(req,res)=>{
 
     try{
 
-        console.log(
-            "💎 Calculando Value Bets..."
-        );
-
-
-        const resultado =
-
-            await gerarValueBets();
-
+        const resultado = await db.query(`
+            SELECT *
+            FROM valuebets
+            ORDER BY id DESC
+            LIMIT 50
+        `);
 
 
         res.json({
 
             sucesso:true,
 
-            total:
+            total:resultado.rows.length,
 
-            resultado.length,
-
-
-            valuebets:
-
-            resultado.map(item=>({
-
-
-                jogo:item.jogo,
-
-
-                mercado:item.mercado,
-
-
-                selecao:item.selecao,
-
-
-                bookmaker:item.bookmaker,
-
-
-                odd:item.odd,
-
-
-                oddJusta:item.oddJusta,
-
-
-                probabilidade:item.probabilidade,
-
-
-                edge:item.edge,
-
-
-                roi:item.roi,
-
-
-                kelly:item.kelly,
-
-
-                classificacao:item.classificacao,
-
-
-                valueBet:true
-
-
-            })),
-
-
-            atualizadoEm:
-
-            new Date()
-
+            valuebets:resultado.rows
 
         });
 
 
     }
-
-
     catch(error){
-
-
-        console.error(
-
-            "❌ Erro Value Bets:",
-
-            error.message
-
-        );
-
 
         res.status(500).json({
 
@@ -561,12 +494,14 @@ router.get("/", async(req,res)=>{
 
         });
 
-
     }
+
+});
+
+
+
 // ==========================================
 // EXPORT ROUTER
 // ==========================================
 
 export default router;
-
-});
