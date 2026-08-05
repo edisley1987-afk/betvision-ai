@@ -1,8 +1,9 @@
 // ==========================================
 // BetVision AI
 // routes/valuebets.js
-// Versão 9.0
-// Engine Value Bets Integrada
+// Versão 10.0
+// Engine Value Bets corrigida
+// Compatível PostgreSQL
 // ==========================================
 
 
@@ -27,9 +28,10 @@ const router = express.Router();
 
 
 
+
 // ==========================================
 // GET /api/valuebets
-// Gerar e listar Value Bets
+// Gerar Value Bets
 // ==========================================
 
 
@@ -45,11 +47,6 @@ router.get("/", async(req,res)=>{
 
 
 
-        // ================================
-        // Buscar jogos cadastrados
-        // ================================
-
-
         const jogos = await listarJogos();
 
 
@@ -62,15 +59,11 @@ router.get("/", async(req,res)=>{
 
             return res.json({
 
-
                 sucesso:true,
-
 
                 total:0,
 
-
                 valuebets:[]
-
 
             });
 
@@ -81,9 +74,9 @@ router.get("/", async(req,res)=>{
 
 
 
-        // ================================
-        // Criar probabilidades IA
-        // ================================
+        // ==================================
+        // Preparar jogos para IA
+        // ==================================
 
 
         const jogosAnalise = jogos.map(jogo=>{
@@ -92,8 +85,11 @@ router.get("/", async(req,res)=>{
             const probabilidadeIA =
 
                 45 +
+
                 Math.floor(
+
                     Math.random() * 20
+
                 );
 
 
@@ -103,10 +99,13 @@ router.get("/", async(req,res)=>{
                 Number(
 
                     (
+
                         1.50 +
-                        Math.random() * 2
+
+                        Math.random()*2
 
                     )
+
                     .toFixed(2)
 
                 );
@@ -117,24 +116,29 @@ router.get("/", async(req,res)=>{
 
 
                 id:
+
                 jogo.id,
+
 
 
                 jogo:
 
-                `${jogo.casa} x ${jogo.fora}`,
+
+                `${jogo.time_casa} x ${jogo.time_fora}`,
+
 
 
                 campeonato:
 
-                jogo.campeonato || 
-                "Futebol",
+
+                jogo.campeonato || "Futebol",
 
 
 
                 horario:
 
-                jogo.horario || "",
+
+                jogo.data_jogo || "",
 
 
 
@@ -146,7 +150,8 @@ router.get("/", async(req,res)=>{
 
                 selecao:
 
-                jogo.casa,
+
+                jogo.time_casa,
 
 
 
@@ -167,9 +172,10 @@ router.get("/", async(req,res)=>{
 
 
 
-        // ================================
-        // Calcular Value Bets
-        // ================================
+
+        // ==================================
+        // Gerar Value Bets
+        // ==================================
 
 
         const resultado =
@@ -185,13 +191,16 @@ router.get("/", async(req,res)=>{
 
 
 
-        // ================================
-        // Salvar oportunidades
-        // ================================
+
+        // ==================================
+        // Salvar no PostgreSQL
+        // ==================================
 
 
         for(
+
             const item of resultado
+
         ){
 
 
@@ -214,21 +223,22 @@ router.get("/", async(req,res)=>{
 
                 `,
 
-
                 [
 
                     item.jogo
 
                 ]
 
-
                 );
 
 
 
 
+
                 if(
+
                     existe.rows.length === 0
+
                 ){
 
 
@@ -257,7 +267,21 @@ router.get("/", async(req,res)=>{
 
                     VALUES
 
-                    ($1,$2,$3,$4,$5,$6)
+                    (
+
+                        $1,
+
+                        $2,
+
+                        $3,
+
+                        $4,
+
+                        $5,
+
+                        $6
+
+                    )
 
                     `,
 
@@ -285,11 +309,11 @@ router.get("/", async(req,res)=>{
 
                     ]
 
-
                     );
 
 
                 }
+
 
 
             }
@@ -300,6 +324,7 @@ router.get("/", async(req,res)=>{
                 console.log(
 
                     "⚠️ Erro salvar ValueBet:",
+
                     error.message
 
                 );
@@ -314,9 +339,11 @@ router.get("/", async(req,res)=>{
 
 
 
-        // ================================
+
+
+        // ==================================
         // Resposta Dashboard
-        // ================================
+        // ==================================
 
 
         res.json({
@@ -327,6 +354,7 @@ router.get("/", async(req,res)=>{
 
             total:
 
+
             resultado.length,
 
 
@@ -334,15 +362,52 @@ router.get("/", async(req,res)=>{
             valuebets:
 
 
+            resultado.map(item=>({
 
-            resultado,
+
+                jogo:item.jogo,
+
+
+                campeonato:item.campeonato,
+
+
+                horario:item.horario,
+
+
+                mercado:item.mercado,
+
+
+                selecao:item.selecao,
+
+
+                odd:item.odd,
+
+
+                oddJusta:item.oddJusta,
+
+
+                edge:item.edge,
+
+
+                roi:item.roi,
+
+
+                kelly:item.kelly,
+
+
+                classificacao:item.classificacao,
+
+
+                recomendacao:item.recomendacao
+
+
+            })),
 
 
 
             atualizadoEm:
 
             new Date()
-            .toISOString()
 
 
         });
@@ -361,6 +426,7 @@ router.get("/", async(req,res)=>{
         console.error(
 
             "❌ Erro Value Bets:",
+
             error.message
 
         );
@@ -375,17 +441,10 @@ router.get("/", async(req,res)=>{
 
             erro:
 
-            "Erro ao calcular Value Bets",
-
-
-
-            detalhe:
-
             error.message
 
 
         });
-
 
 
     }
@@ -401,8 +460,9 @@ router.get("/", async(req,res)=>{
 
 
 
+
 // ==========================================
-// GET BANCO
+// GET VALUE BETS SALVAS
 // /api/valuebets/salvas
 // ==========================================
 
@@ -427,10 +487,10 @@ router.get("/salvas", async(req,res)=>{
 
         LIMIT 50
 
-
         `
 
         );
+
 
 
 
@@ -443,6 +503,7 @@ router.get("/salvas", async(req,res)=>{
             total:
 
             resultado.rows.length,
+
 
 
             valuebets:
@@ -459,13 +520,16 @@ router.get("/salvas", async(req,res)=>{
     catch(error){
 
 
+
         res.status(500).json({
 
 
             sucesso:false,
 
 
-            erro:error.message
+            erro:
+
+            error.message
 
 
         });
@@ -474,8 +538,8 @@ router.get("/salvas", async(req,res)=>{
     }
 
 
-
 });
+
 
 
 
