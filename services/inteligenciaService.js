@@ -409,67 +409,30 @@ export async function analisarJogo(jogo){
 
         await salvarAnalise({
 
+    jogo_id: jogo.id,
 
-            jogo:
+    jogo: jogoNome,
 
-                jogoNome,
+    probabilidade_casa: prob.casa,
 
+    probabilidade_empate: prob.empate,
 
-            probabilidade_casa:
+    probabilidade_fora: prob.fora,
 
-                prob.casa,
+    gols_esperados: golsEsperados,
 
+    placar_previsto: placar,
 
-            probabilidade_empate:
+    value_bet: Math.max(
+        prob.casa,
+        prob.fora
+    ) >= 55,
 
-                prob.empate,
+    confianca: modelo.confianca,
 
+    algoritmo: "BetVision AI Fase 3"
 
-            probabilidade_fora:
-
-                prob.fora,
-
-
-            gols_esperados:
-
-                golsEsperados,
-
-
-            placar_previsto:
-
-                placar,
-
-
-            value_bet:
-
-                Math.max(
-
-                    prob.casa,
-
-                    prob.fora
-
-                ) >= 55,
-
-
-
-            confianca:
-
-                modelo.confianca,
-
-
-
-            algoritmo:
-
-                "BetVision AI Fase 3"
-
-
-        });
-
-
-
-
-
-
+});
 
 
         return {
