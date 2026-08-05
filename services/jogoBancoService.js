@@ -1,218 +1,273 @@
 // ==========================================
 // BetVision AI
-// services/futebolService.js
-// Busca jogos reais
+// services/jogoBancoService.js
+// PostgreSQL Jogos
+// Versão 10.0
 // ==========================================
 
-import fs from "fs/promises";
-import path from "path";
-import {
-    fileURLToPath
-} from "url";
+import db from "../database/database.js";
 
 
-const __filename =
-fileURLToPath(import.meta.url);
+// ==========================================
+// NORMALIZAR DATA
+// ==========================================
 
+function normalizarData(data) {
 
-const __dirname =
-path.dirname(__filename);
+    if (!data) {
 
+        return new Date();
 
+    }
 
-const FILE =
+    // Já veio ISO
+    if (String(data).includes("T")) {
 
-path.join(
-    __dirname,
-    "../data/jogos.json"
-);
+        return new Date(data);
 
+    }
 
+    // Veio apenas horário (20:00)
+    if (/^\d{2}:\d{2}$/.test(String(data))) {
 
+        const hoje = new Date();
 
+        const [hora, minuto] = data.split(":");
 
-async function carregarArquivo(){
+        hoje.setHours(Number(hora));
+        hoje.setMinutes(Number(minuto));
+        hoje.setSeconds(0);
+        hoje.setMilliseconds(0);
 
+        return hoje;
 
-try{
+    }
 
+    const d = new Date(data);
 
-const dados =
+    if (isNaN(d.getTime())) {
 
-await fs.readFile(
-    FILE,
-    "utf8"
-);
+        return new Date();
 
+    }
 
-
-const json =
-
-JSON.parse(dados);
-
-
-
-if(Array.isArray(json)){
-
-return json;
+    return d;
 
 }
 
 
 
-if(json.jogos){
+// ==========================================
+// SALVAR JOGO
+// ==========================================
 
-return json.jogos;
+export async function salvarJogo(jogo = {}) {
 
-}
+    try {
 
+        await db.query(
 
+            `
+            INSERT INTO jogos
+            (
+                api_id,
+                campeonato,
+                time_casa,
+                time_fora,
+                data_jogo,
+                status
+            )
 
-return [];
+            VALUES
+            (
+                $1,$2,$3,$4,$5,$6
+            )
 
+            ON CONFLICT(api_id)
 
+            DO UPDATE SET
 
-}
+                campeonato = EXCLUDED.campeonato,
+                time_casa   = EXCLUDED.time_casa,
+                time_fora   = EXCLUDED.time_fora,
+                data_jogo   = EXCLUDED.data_jogo,
+                status      = EXCLUDED.status
+            `,
 
-catch(error){
+            [
 
+                jogo.id,
 
-console.log(
-"⚠️ Jogos.json não encontrado"
-);
+                jogo.campeonato || "-",
 
+                jogo.casa || "-",
 
-return [];
+                jogo.fora || "-",
 
-}
+                normalizarData(jogo.horario),
 
+                jogo.status || "SCHEDULED"
 
+            ]
 
-}
+        );
 
+        return true;
 
+    }
 
+    catch (error) {
 
+        console.error("❌ Erro salvar jogo:", error.message);
 
+        return false;
 
-function normalizar(jogo){
-
-
-return {
-
-
-id:
-
-jogo.id ||
-
-jogo.idEvent,
-
-
-
-campeonato:
-
-jogo.campeonato ||
-
-jogo.league ||
-
-"Futebol",
-
-
-
-casa:
-
-jogo.casa ||
-
-jogo.homeTeam ||
-jogo.strHomeTeam,
-
-
-
-fora:
-
-jogo.fora ||
-jogo.awayTeam ||
-jogo.strAwayTeam,
-
-
-
-horario:
-
-jogo.horario ||
-jogo.dateEvent ||
-jogo.utcDate,
-
-
-
-status:
-
-jogo.status ||
-"SCHEDULED"
-
-
-
-};
-
+    }
 
 }
 
 
 
+// ==========================================
+// SALVAR LISTA
+// ==========================================
 
+export async function salvarListaJogos(jogos = []) {
 
+    let total = 0;
 
+    for (const jogo of jogos) {
 
+        const salvo = await salvarJogo(jogo);
 
-export async function buscarJogos(){
+        if (salvo) {
 
+            total++;
 
+        }
 
-const jogos =
+    }
 
-await carregarArquivo();
+    console.log(`⚽ ${total} jogos salvos no PostgreSQL`);
 
-
-
-
-const resultado =
-
-jogos.map(normalizar)
-
-.filter(
-
-j =>
-
-j.casa &&
-j.fora
-
-);
-
-
-
-
-
-console.log(
-
-`⚽ ${resultado.length} jogos carregados`
-
-);
-
-
-
-return resultado;
-
-
+    return total;
 
 }
 
 
 
+// ==========================================
+// LISTAR JOGOS
+// ==========================================
+
+export async function listarJogos() {
+
+    try {
+
+        const resultado = await db.query(
+
+            `
+            SELECT *
+            FROM jogos
+            ORDER BY data_jogo ASC
+            `
+
+        );
+
+        return resultado.rows;
+
+    }
+
+    catch (error) {
+
+        console.error("❌ Erro listar jogos:", error.message);
+
+        return [];
+
+    }
+
+}
 
 
 
+// ==========================================
+// BUSCAR JOGO
+// ==========================================
+
+export async function buscarJogo(id) {
+
+    try {
+
+        const resultado = await db.query(
+
+            `
+            SELECT *
+            FROM jogos
+            WHERE api_id = $1
+            LIMIT 1
+            `,
+
+            [id]
+
+        );
+
+        return resultado.rows[0] || null;
+
+    }
+
+    catch {
+
+        return null;
+
+    }
+
+}
+
+
+
+// ==========================================
+// REMOVER JOGOS ANTIGOS
+// ==========================================
+
+export async function limparJogosAntigos() {
+
+    try {
+
+        await db.query(
+
+            `
+            DELETE FROM jogos
+            WHERE data_jogo < NOW() - INTERVAL '7 days'
+            `
+
+        );
+
+    }
+
+    catch (error) {
+
+        console.log(error.message);
+
+    }
+
+}
+
+
+
+// ==========================================
+// EXPORT
+// ==========================================
 
 export default {
 
-buscarJogos
+    salvarJogo,
+
+    salvarListaJogos,
+
+    listarJogos,
+
+    buscarJogo,
+
+    limparJogosAntigos
 
 };
