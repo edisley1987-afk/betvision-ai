@@ -1,16 +1,14 @@
 // ==========================================
 // BetVision AI
 // services/futebolService.js
-// Versão 11.0
-// Serviço Futebol
-// Busca jogos e normaliza dados
+// Versão 12.0
+// Serviço Futebol Integrado
 // ==========================================
 
 
 import dotenv from "dotenv";
 
 dotenv.config();
-
 
 
 
@@ -46,12 +44,35 @@ export async function buscarJogosDia(){
     try{
 
 
+        console.log(
+            "================================"
+        );
+
+
+        console.log(
+            "⚽ BUSCANDO JOGOS DO DIA"
+        );
+
+
+        console.log(
+            "================================"
+        );
+
+
+
+
+
+        // ===============================
+        // SEM API KEY
+        // ===============================
+
+
         if(!API_KEY){
 
 
             console.log(
 
-                "⚠️ Football-Data sem chave API"
+                "⚠️ Football-Data sem chave"
 
             );
 
@@ -66,6 +87,7 @@ export async function buscarJogosDia(){
 
 
 
+
         const resposta =
 
         await fetch(
@@ -73,6 +95,9 @@ export async function buscarJogosDia(){
             `${API_URL}/matches`,
 
             {
+
+
+                method:"GET",
 
 
                 headers:{
@@ -94,22 +119,40 @@ export async function buscarJogosDia(){
 
 
 
+
+
+        // ===============================
+        // ERRO API
+        // ===============================
+
+
         if(!resposta.ok){
+
+
+            const erro =
+
+            await resposta.json()
+
+            .catch(()=>({}));
+
+
 
 
             console.log(
 
                 "❌ Football-Data erro:",
 
-                resposta.status
+                erro
 
             );
+
 
 
             return jogosFallback();
 
 
         }
+
 
 
 
@@ -151,59 +194,89 @@ export async function buscarJogosDia(){
 
 
 
+
+
         const jogos =
 
         dados.matches.map(
 
-            jogo=>({
+            partida=>{
+
+
+                return {
+
+
+                    id:
+
+                    partida.id,
 
 
 
-                id:
+                    campeonato:
 
-                jogo.id,
+                    partida.competition?.name
 
+                    ||
 
-
-                campeonato:
-
-                jogo.competition?.name ||
-
-                "Futebol",
+                    "Futebol",
 
 
 
-                casa:
-
-                jogo.homeTeam?.name ||
-
-                "Casa",
 
 
+                    casa:
 
-                fora:
+                    partida.homeTeam?.name
 
-                jogo.awayTeam?.name ||
+                    ||
 
-                "Fora",
+                    "Time Casa",
 
 
 
-                horario:
-
-                jogo.utcDate,
 
 
+                    fora:
 
-                status:
+                    partida.awayTeam?.name
 
-                jogo.status || "SCHEDULED"
+                    ||
+
+                    "Time Fora",
 
 
 
-            })
+
+
+                    horario:
+
+                    partida.utcDate
+
+                    ||
+
+                    new Date(),
+
+
+
+
+
+                    status:
+
+                    partida.status
+
+                    ||
+
+                    "SCHEDULED"
+
+
+
+                };
+
+
+            }
 
         );
+
 
 
 
@@ -231,16 +304,19 @@ export async function buscarJogosDia(){
     catch(error){
 
 
+
         console.log(
 
-            "❌ Erro futebol:",
+            "❌ Erro futebolService:",
 
             error.message
 
         );
 
 
+
         return jogosFallback();
+
 
 
     }
@@ -255,12 +331,60 @@ export async function buscarJogosDia(){
 
 
 
+
+
+// ==========================================
+// BUSCAR TODOS JOGOS
+// COMPATIBILIDADE
+// ==========================================
+
+
+export async function buscarJogos(){
+
+
+    return await buscarJogosDia();
+
+
+}
+
+
+
+
+
+
+
+
+
+// ==========================================
+// BUSCAR EVENTOS
+// COMPATIBILIDADE ANTIGA
+// ==========================================
+
+
+export async function buscarEventos(){
+
+
+    return await buscarJogosDia();
+
+
+}
+
+
+
+
+
+
+
+
+
 // ==========================================
 // FALLBACK LOCAL
+// QUANDO API FALHA
 // ==========================================
 
 
 function jogosFallback(){
+
 
 
     return [
@@ -269,16 +393,28 @@ function jogosFallback(){
         {
 
 
-            id:999001,
+            id:
+
+            Date.now(),
 
 
-            campeonato:"Brasileirão",
+
+            campeonato:
+
+            "Brasileirão",
 
 
-            casa:"Time A",
+
+            casa:
+
+            "Time A",
 
 
-            fora:"Time B",
+
+            fora:
+
+            "Time B",
+
 
 
             horario:
@@ -287,15 +423,20 @@ function jogosFallback(){
 
                 Date.now()+
 
-                3600000
+                7200000
 
             ),
 
 
-            status:"SCHEDULED"
+
+            status:
+
+            "SCHEDULED"
+
 
 
         }
+
 
 
     ];
@@ -311,27 +452,18 @@ function jogosFallback(){
 
 
 
+
 // ==========================================
-// ALIAS COMPATIBILIDADE
+// EXPORT DEFAULT
 // ==========================================
-
-
-export async function buscarEventos(){
-
-
-    return buscarJogosDia();
-
-
-}
-
-
-
 
 
 export default {
 
 
     buscarJogosDia,
+
+    buscarJogos,
 
     buscarEventos
 
