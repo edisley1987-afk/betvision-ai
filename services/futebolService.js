@@ -1,88 +1,34 @@
 // ==========================================
 // BetVision AI
 // services/futebolService.js
+// Versão 11.0
 // Serviço Futebol
-// Versão 8.0
-// Jogos + Banco + Fallback
+// Busca jogos e normaliza dados
 // ==========================================
 
 
-import fs from "fs";
+import dotenv from "dotenv";
 
-import {
-    salvarListaJogos
-}
-from "./jogoBancoService.js";
-
-// ==========================================
-// ARQUIVO CACHE LOCAL
-// ==========================================
-
-
-const CACHE_FILE =
-
-    "./data/jogos.json";
-
+dotenv.config();
 
 
 
 
 
 // ==========================================
-// NORMALIZAR HORÁRIO
+// CONFIGURAÇÃO
 // ==========================================
 
 
-function normalizarHorario(valor){
+const API_KEY =
 
-
-    if(!valor){
-
-        return null;
-
-    }
+process.env.FOOTBALL_DATA_KEY;
 
 
 
-    // Já vem ISO
+const API_URL =
 
-    if(
-        valor.includes("T")
-    ){
-
-        return valor;
-
-    }
-
-
-
-    // Somente HH:mm
-
-    if(
-        /^\d{2}:\d{2}$/.test(valor)
-    ){
-
-
-        const hoje =
-
-            new Date()
-            .toISOString()
-            .split("T")[0];
-
-
-
-        return `${hoje}T${valor}:00`;
-
-
-    }
-
-
-
-    return valor;
-
-
-}
-
+"https://api.football-data.org/v4";
 
 
 
@@ -90,200 +36,193 @@ function normalizarHorario(valor){
 
 
 // ==========================================
-// LER CACHE LOCAL
+// BUSCAR JOGOS DO DIA
 // ==========================================
 
 
-function carregarCache(){
+export async function buscarJogosDia(){
 
 
     try{
 
 
-        if(
-            fs.existsSync(
-                CACHE_FILE
-            )
-        ){
+        if(!API_KEY){
 
 
-            return JSON.parse(
+            console.log(
 
-                fs.readFileSync(
-
-                    CACHE_FILE,
-
-                    "utf8"
-
-                )
+                "⚠️ Football-Data sem chave API"
 
             );
+
+
+            return jogosFallback();
 
 
         }
 
 
-    }
 
-    catch(error){
 
 
-        console.log(
 
-            "⚠ Erro lendo cache:",
+        const resposta =
 
-            error.message
+        await fetch(
 
-        );
-
-
-    }
-
-
-
-    return [];
-
-}
-
-
-
-
-
-
-
-// ==========================================
-// SALVAR CACHE
-// ==========================================
-
-
-function salvarCache(jogos){
-
-
-    try{
-
-
-        fs.writeFileSync(
-
-            CACHE_FILE,
-
-            JSON.stringify(
-
-                jogos,
-
-                null,
-
-                2
-
-            )
-
-        );
-
-
-    }
-
-    catch(error){
-
-
-        console.log(
-
-            "⚠ Erro salvar cache:",
-
-            error.message
-
-        );
-
-
-    }
-
-
-}
-
-
-
-
-
-
-
-
-// ==========================================
-// BUSCAR JOGOS
-// ==========================================
-
-
-export async function buscarJogos(){
-
-
-    console.log(
-        "===================================="
-    );
-
-
-    console.log(
-        "⚽ API JOGOS DO DIA"
-    );
-
-
-    console.log(
-        "===================================="
-    );
-
-
-
-
-    let jogos = [];
-
-
-
-
-
-    try{
-
-
-        /*
-        ==============================
-        AQUI ENTRA API FUTEBOL
-        ==============================
-        
-        Futuramente:
-        API-Football
-        Football-Data
-        TheSportsDB
-        
-        */
-
-
-        // exemplo temporário
-        // substitui quando API estiver ativa
-
-
-        jogos = [
+            `${API_URL}/matches`,
 
             {
 
-                id:1,
 
-                campeonato:
-                "Brasileirão",
+                headers:{
 
 
-                casa:
-                "Time A",
+                    "X-Auth-Token":
+
+                    API_KEY
 
 
-                fora:
-                "Time B",
+                }
 
-
-                horario:
-                "20:00",
-
-
-                status:
-                "SCHEDULED"
 
             }
 
-        ];
+        );
+
+
+
+
+
+        if(!resposta.ok){
+
+
+            console.log(
+
+                "❌ Football-Data erro:",
+
+                resposta.status
+
+            );
+
+
+            return jogosFallback();
+
+
+        }
+
+
+
+
+
+
+        const dados =
+
+        await resposta.json();
+
+
+
+
+
+
+        if(
+
+            !dados.matches ||
+
+            dados.matches.length === 0
+
+        ){
+
+
+            console.log(
+
+                "⚽ 0 jogos encontrados"
+
+            );
+
+
+            return jogosFallback();
+
+
+        }
+
+
+
+
+
+
+        const jogos =
+
+        dados.matches.map(
+
+            jogo=>({
+
+
+
+                id:
+
+                jogo.id,
+
+
+
+                campeonato:
+
+                jogo.competition?.name ||
+
+                "Futebol",
+
+
+
+                casa:
+
+                jogo.homeTeam?.name ||
+
+                "Casa",
+
+
+
+                fora:
+
+                jogo.awayTeam?.name ||
+
+                "Fora",
+
+
+
+                horario:
+
+                jogo.utcDate,
+
+
+
+                status:
+
+                jogo.status || "SCHEDULED"
+
+
+
+            })
+
+        );
+
+
+
+
+
+
+
+        console.log(
+
+            `⚽ ${jogos.length} jogos carregados`
+
+        );
+
+
+
+
+        return jogos;
+
+
 
 
 
@@ -292,149 +231,75 @@ export async function buscarJogos(){
     catch(error){
 
 
-        console.error(
+        console.log(
 
-            "❌ Erro buscar jogos:",
+            "❌ Erro futebol:",
 
             error.message
 
         );
 
 
-    }
-
-
-
-
-
-
-    // =================================
-    // FALLBACK CACHE
-    // =================================
-
-
-    if(
-        !jogos ||
-        jogos.length === 0
-    ){
-
-
-        console.log(
-
-            "⚠ Usando cache local"
-
-        );
-
-
-        jogos =
-            carregarCache();
+        return jogosFallback();
 
 
     }
 
 
 
-
-
-    // =================================
-    // NORMALIZAÇÃO
-    // =================================
-
-
-    jogos = jogos.map(
-
-        jogo => ({
-
-
-            id:
-            jogo.id,
-
-
-            campeonato:
-            jogo.campeonato || "Futebol",
+}
 
 
 
-            casa:
-            jogo.casa || "-",
 
 
 
-            fora:
-            jogo.fora || "-",
 
+// ==========================================
+// FALLBACK LOCAL
+// ==========================================
+
+
+function jogosFallback(){
+
+
+    return [
+
+
+        {
+
+
+            id:999001,
+
+
+            campeonato:"Brasileirão",
+
+
+            casa:"Time A",
+
+
+            fora:"Time B",
 
 
             horario:
 
-            normalizarHorario(
+            new Date(
 
-                jogo.horario
+                Date.now()+
+
+                3600000
 
             ),
 
 
-
-            status:
-
-            jogo.status ||
-            "SCHEDULED"
+            status:"SCHEDULED"
 
 
-
-        })
-
-
-    );
+        }
 
 
+    ];
 
-
-
-
-    console.log(
-
-        `⚽ ${jogos.length} jogos carregados`
-
-    );
-
-
-
-
-
-    // salva cache
-
-    salvarCache(
-        jogos
-    );
-
-
-
-
-
-    // salva PostgreSQL
-
-    await salvarListaJogos(
-
-        jogos
-
-    );
-
-
-
-
-
-    console.log(
-
-        "💾 Jogos salvos PostgreSQL"
-
-    );
-
-
-
-
-
-    return jogos;
 
 
 }
@@ -445,15 +310,30 @@ export async function buscarJogos(){
 
 
 
+
 // ==========================================
-// EXPORT
+// ALIAS COMPATIBILIDADE
 // ==========================================
+
+
+export async function buscarEventos(){
+
+
+    return buscarJogosDia();
+
+
+}
+
+
+
 
 
 export default {
 
 
-    buscarJogos
+    buscarJogosDia,
+
+    buscarEventos
 
 
 };
