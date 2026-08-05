@@ -836,37 +836,38 @@ export async function gerarAnaliseIA(jogos=[]){
 
 export async function listarAnalises(){
 
-
     try{
 
 
-        const resultado =
+        const resultado = await db.query(`
 
+            SELECT *
 
-            await db.query(`
+            FROM analises
 
+            ORDER BY id DESC
 
-                SELECT *
+            LIMIT 200
 
-
-                FROM analises
-
-
-                ORDER BY id DESC
-
-
-                LIMIT 200
+        `);
 
 
 
-            `);
+        // PostgreSQL retorna objeto:
+        // { rows: [] }
+
+        if(
+            resultado &&
+            Array.isArray(resultado.rows)
+        ){
+
+            return resultado.rows;
+
+        }
 
 
 
-
-
-        return resultado.rows || [];
-
+        return [];
 
 
     }
@@ -884,7 +885,6 @@ export async function listarAnalises(){
         );
 
 
-
         return [];
 
 
@@ -892,10 +892,6 @@ export async function listarAnalises(){
 
 
 }
-
-
-
-
 
 
 
