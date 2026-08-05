@@ -1009,20 +1009,37 @@ export async function limparValueBets(){
 // EXPORT DEFAULT
 // ==========================================
 
+// ==========================================
+// COMPATIBILIDADE COM ROTAS ANTIGAS
+// ==========================================
+
+export async function gerarValueBets(){
+
+
+    return await calcularValueBets();
+
+
+}
+
+
+
+
+// ==========================================
+// EXPORT DEFAULT
+// ==========================================
+
 export default {
 
 
     calcularValueBets,
 
+    gerarValueBets,
 
     salvarValueBets,
 
-
     listarValueBets,
-
 
     limparValueBets
 
 
-
-}; 
+};
