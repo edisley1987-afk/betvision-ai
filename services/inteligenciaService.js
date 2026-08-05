@@ -605,78 +605,64 @@ export async function salvarAnalise(dados){
     try{
 
 
-        await db.query(`
+       await db.query(
 
+`
+INSERT INTO analises
+(
 
-            INSERT INTO analises
+    jogo_id,
 
+    jogo,
 
-            (
+    probabilidade_casa,
 
-                jogo,
+    probabilidade_empate,
 
-                probabilidade_casa,
+    probabilidade_fora,
 
-                probabilidade_empate,
+    gols_esperados,
 
-                probabilidade_fora,
+    placar_previsto,
 
-                gols_esperados,
+    value_bet,
 
-                placar_previsto,
+    confianca,
 
-                value_bet,
+    algoritmo
 
-                confianca,
+)
 
-                algoritmo
+VALUES
+(
 
-            )
+    $1,$2,$3,$4,$5,$6,$7,$8,$9,$10
 
+)
+`,
+[
 
-            VALUES
+    dados.jogo_id,
 
-            (
+    dados.jogo,
 
-                $1,$2,$3,$4,$5,$6,$7,$8,$9
+    dados.probabilidade_casa,
 
-            )
+    dados.probabilidade_empate,
 
+    dados.probabilidade_fora,
 
-        `,[
+    dados.gols_esperados,
 
+    dados.placar_previsto,
 
+    dados.value_bet,
 
-            dados.jogo,
+    dados.confianca,
 
+    dados.algoritmo
 
-            dados.probabilidade_casa,
-
-
-            dados.probabilidade_empate,
-
-
-            dados.probabilidade_fora,
-
-
-            dados.gols_esperados,
-
-
-            dados.placar_previsto,
-
-
-            dados.value_bet,
-
-
-            dados.confianca,
-
-
-            dados.algoritmo
-
-
-
-        ]);
-
+]);
 
 
         return true;
