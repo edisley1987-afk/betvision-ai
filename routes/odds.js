@@ -1,8 +1,8 @@
 // ==========================================
 // BetVision AI
 // routes/odds.js
-// API de Odds
-// Versão corrigida 9.0
+// Fase 3
+// API Odds
 // ==========================================
 
 
@@ -11,9 +11,16 @@ import express from "express";
 
 import {
 
-    buscarOdds
+    salvarOdd,
 
-} from "../services/oddsService.js";
+    buscarOddsJogo,
+
+    listarOdds
+
+}
+
+from "../services/oddsService.js";
+
 
 
 
@@ -22,86 +29,35 @@ const router = express.Router();
 
 
 
+
 // ==========================================
-// TODAS AS ODDS
 // GET /api/odds
+// Lista odds disponíveis
 // ==========================================
 
 
-router.get(
-
-"/",
-
-async (req,res)=>{
+router.get("/", async(req,res)=>{
 
 
     try{
 
 
-        console.log("");
-
-        console.log(
-            "================================="
-        );
-
-
-        console.log(
-            "💰 API ODDS BETVISION AI"
-        );
-
-
-        console.log(
-            "================================="
-        );
-
-
-
-
         const odds =
 
-            await buscarOdds();
+            await listarOdds();
 
 
 
+        res.json({
 
 
-        console.log(
-
-            `💎 Odds retornadas: ${odds.length}`
-
-        );
+            sucesso:true,
 
 
+            total:odds.length,
 
 
-
-
-        return res.json({
-
-
-            sucesso:
-
-                true,
-
-
-
-            total:
-
-                odds.length,
-
-
-
-            jogos:
-
-                odds,
-
-
-
-            atualizadoEm:
-
-                new Date()
-
-                .toISOString()
+            odds
 
 
 
@@ -109,9 +65,8 @@ async (req,res)=>{
 
 
 
-
-
     }
+
 
     catch(error){
 
@@ -119,59 +74,31 @@ async (req,res)=>{
 
         console.error(
 
-
-            "❌ Erro rota odds:",
-
+            "❌ Erro API odds:",
 
             error.message
-
 
         );
 
 
 
+        res.status(500).json({
 
 
-        return res.status(500).json({
+            sucesso:false,
 
 
-
-            sucesso:
-
-                false,
-
-
-
-            total:
-
-                0,
-
-
-
-            jogos:
-
-                [],
-
-
-
-            erro:
-
-                error.message
-
+            erro:error.message
 
 
         });
 
 
-
     }
 
 
-}
 
-);
-
-
+});
 
 
 
@@ -180,16 +107,12 @@ async (req,res)=>{
 
 
 // ==========================================
-// ODDS POR ID
-// GET /api/odds/:id
+// GET /api/odds/:jogo_id
+// Odds de um jogo
 // ==========================================
 
 
-router.get(
-
-"/:id",
-
-async(req,res)=>{
+router.get("/:jogo_id", async(req,res)=>{
 
 
     try{
@@ -197,69 +120,26 @@ async(req,res)=>{
 
         const odds =
 
-            await buscarOdds();
 
+            await buscarOddsJogo(
 
-
-
-
-        const jogo =
-
-            odds.find(
-
-
-                item =>
-
-
-                String(item.id) ===
-
-                String(req.params.id)
-
-
+                req.params.jogo_id
 
             );
 
 
 
 
+        res.json({
 
 
-        return res.json(
+            sucesso:true,
 
 
-            jogo ||
-
-            null
+            total:odds.length,
 
 
-        );
-
-
-
-
-    }
-
-    catch(error){
-
-
-
-        console.error(
-
-            "❌ Erro consultar odd:",
-
-            error.message
-
-        );
-
-
-
-        return res.status(500).json({
-
-
-
-            erro:
-
-                "Erro consultar odd"
+            odds
 
 
 
@@ -270,10 +150,28 @@ async(req,res)=>{
     }
 
 
-}
+    catch(error){
 
-);
 
+
+        res.status(500).json({
+
+
+            sucesso:false,
+
+
+            erro:error.message
+
+
+        });
+
+
+
+    }
+
+
+
+});
 
 
 
@@ -283,8 +181,70 @@ async(req,res)=>{
 
 
 // ==========================================
-// EXPORTAÇÃO
+// POST /api/odds
+// Inserir odd
+// Preparado para API externa
 // ==========================================
+
+
+router.post("/", async(req,res)=>{
+
+
+    try{
+
+
+        const resultado =
+
+
+            await salvarOdd(
+
+                req.body
+
+            );
+
+
+
+
+        res.json({
+
+
+            sucesso:resultado
+
+
+
+        });
+
+
+
+    }
+
+
+    catch(error){
+
+
+
+        res.status(500).json({
+
+
+            sucesso:false,
+
+
+            erro:error.message
+
+
+        });
+
+
+
+    }
+
+
+
+});
+
+
+
+
 
 
 export default router;
