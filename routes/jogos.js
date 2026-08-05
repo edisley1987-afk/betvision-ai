@@ -1,20 +1,29 @@
 // ==========================================
 // BetVision AI
 // routes/jogos.js
-// Buscar jogos reais
-// API Jogos do Dia v2
+// Versão 11.0
+// API Jogos corrigida
+// Compatível PostgreSQL
 // ==========================================
+
 
 import express from "express";
 
 import {
-    buscarJogos
-} from "../services/futebolService.js";
+
+    salvarListaJogos,
+
+    listarJogos
+
+} from "../services/jogoBancoService.js";
+
 
 
 import {
-    salvarListaJogos
-} from "../services/jogoBancoService.js";
+
+    buscarJogosDia
+
+} from "../services/futebolService.js";
 
 
 
@@ -22,107 +31,175 @@ const router = express.Router();
 
 
 
+
+
+
+
 // ==========================================
-// GET JOGOS DO DIA
+// GET /api/jogos
+// Jogos do dia
 // ==========================================
 
-router.get(
-"/",
-async (req,res)=>{
+
+router.get("/", async(req,res)=>{
 
 
     try{
 
 
-        console.log("");
         console.log(
-            "===================================="
-        );
 
-        console.log(
             "⚽ API JOGOS DO DIA"
-        );
 
-
-        console.log(
-            "===================================="
         );
 
 
 
-        // Buscar jogos reais
-
-        const jogos =
-            await buscarJogos();
 
 
-
-        console.log(
-            `⚽ Jogos encontrados: ${jogos.length}`
-        );
+        let jogos=[];
 
 
 
-        // ==================================
-        // SALVAR NO BANCO
-        // NÃO BLOQUEIA RESPOSTA
-        // ==================================
-
-        if(jogos.length > 0){
 
 
-            try{
+        // ==============================
+        // Buscar API Futebol
+        // ==============================
 
 
-                await salvarListaJogos(
-                    jogos
-                );
+        try{
 
 
-                console.log(
-                    "💾 Jogos salvos PostgreSQL"
-                );
+            jogos =
+
+            await buscarJogosDia();
 
 
-            }
-            catch(erro){
+
+        }
+
+        catch(error){
 
 
-                console.error(
-                    "⚠️ Erro salvando jogos:",
-                    erro.message
-                );
+            console.log(
 
+                "⚠️ API futebol indisponível:",
 
-            }
+                error.message
+
+            );
 
 
         }
 
 
 
-        // ==================================
-        // RESPOSTA FRONTEND
-        // ==================================
-
-        return res.json({
 
 
-            sucesso:
-                true,
+
+
+        // ==============================
+        // Salvar banco
+        // ==============================
+
+
+        if(
+
+            jogos.length > 0
+
+        ){
+
+
+            await salvarListaJogos(jogos);
+
+
+
+            console.log(
+
+                "💾 Jogos salvos PostgreSQL"
+
+            );
+
+
+        }
+
+
+
+
+
+
+
+
+        // ==============================
+        // Buscar banco atualizado
+        // ==============================
+
+
+        const banco =
+
+        await listarJogos();
+
+
+
+
+
+        res.json({
+
+
+            sucesso:true,
 
 
             total:
-                jogos.length,
+
+            banco.length,
+
 
 
             jogos:
-                jogos,
 
 
-            atualizadoEm:
-                new Date()
-                .toISOString()
+            banco.map(jogo=>({
+
+
+
+                id:
+
+                jogo.id,
+
+
+
+                campeonato:
+
+                jogo.campeonato || "Futebol",
+
+
+
+                casa:
+
+                jogo.time_casa,
+
+
+
+                fora:
+
+                jogo.time_fora,
+
+
+
+                horario:
+
+                jogo.data_jogo,
+
+
+
+                status:
+
+                jogo.status || "agendado"
+
+
+
+            }))
 
 
 
@@ -130,45 +207,122 @@ async (req,res)=>{
 
 
 
+
+
     }
+
     catch(error){
 
 
 
         console.error(
-            "❌ Erro rota jogos:",
+
+            "❌ Erro jogos:",
+
             error.message
+
         );
 
 
 
-        return res.status(500).json({
+        res.status(500).json({
 
 
-            sucesso:
-                false,
+            sucesso:false,
+
+
+            erro:error.message
+
+
+        });
+
+
+
+    }
+
+
+
+});
+
+
+
+
+
+
+
+
+
+// ==========================================
+// GET /api/jogos/banco
+// Somente PostgreSQL
+// ==========================================
+
+
+router.get(
+
+"/banco",
+
+async(req,res)=>{
+
+
+    try{
+
+
+        const jogos =
+
+        await listarJogos();
+
+
+
+
+        res.json({
+
+
+            sucesso:true,
 
 
             total:
-                0,
+
+            jogos.length,
 
 
-            jogos:
-                [],
-
-
-            erro:
-                error.message
+            jogos
 
 
 
         });
 
 
+
+    }
+
+    catch(error){
+
+
+
+        res.status(500).json({
+
+
+            sucesso:false,
+
+
+            erro:error.message
+
+
+        });
+
+
+
     }
 
 
+
 });
+
+
+
+
+
 
 
 
