@@ -210,12 +210,11 @@ function calcularGolsEsperados(
 function limitar(valor,min,max){
 
     return Math.min(
-
         Math.max(valor,min),
-
         max
-
     );
+
+}
     // ==========================================
 // PROBABILIDADES IA
 // ==========================================
@@ -1145,12 +1144,6 @@ export async function limparAnalises(){
 
 }
 
-
-
-
-
-
-
 // ==========================================
 // EXPORT DEFAULT
 // ==========================================
@@ -1168,5 +1161,3 @@ export default {
 
 
 };
-
-}
