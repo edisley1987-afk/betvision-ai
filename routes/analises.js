@@ -1,9 +1,8 @@
 // ==========================================
 // BetVision AI
 // routes/analises.js
-// Versão 11.0
-// API Análises IA
-// Compatível PostgreSQL
+// Versão 12.0
+// API Análises IA Corrigida
 // ==========================================
 
 
@@ -13,13 +12,16 @@ import db from "../database/database.js";
 
 
 import {
-    analisarJogo
-} from "../services/inteligenciaService.js";
+    analisarJogo,
+    listarAnalises
+}
+from "../services/inteligenciaService.js";
 
 
 import {
     listarJogos
-} from "../services/jogoBancoService.js";
+}
+from "../services/jogoBancoService.js";
 
 
 
@@ -28,12 +30,10 @@ const router = express.Router();
 
 
 
-
 // ==========================================
 // GET /api/analises
-// Gerar e listar análises IA
+// Apenas consultar análises salvas
 // ==========================================
-
 
 router.get("/", async(req,res)=>{
 
@@ -42,17 +42,97 @@ router.get("/", async(req,res)=>{
 
 
         console.log(
+            "📊 Consultando análises IA..."
+        );
 
-            "🤖 Buscando análises IA..."
+
+
+        const dados =
+
+            await listarAnalises();
+
+
+
+
+        res.json({
+
+
+            sucesso:true,
+
+
+            total:
+
+            dados.length,
+
+
+            analises:
+
+            dados
+
+
+
+        });
+
+
+
+
+    }
+
+
+    catch(error){
+
+
+        console.error(
+
+            "❌ Erro consultar análises:",
+
+            error.message
 
         );
 
 
 
+        res.status(500).json({
+
+
+            sucesso:false,
+
+
+            erro:error.message
+
+
+
+        });
+
+
+
+    }
+
+
+});
+// ==========================================
+// POST /api/analises/gerar
+// Executar nova análise IA
+// ==========================================
+
+router.post("/gerar", async(req,res)=>{
+
+
+    try{
+
+
+        console.log(
+
+            "🤖 Gerando novas análises IA..."
+
+        );
+
+
+
+
         const jogos =
 
-        await listarJogos();
-
+            await listarJogos();
 
 
 
@@ -78,6 +158,7 @@ router.get("/", async(req,res)=>{
                 analises:[]
 
 
+
             });
 
 
@@ -88,7 +169,7 @@ router.get("/", async(req,res)=>{
 
 
 
-        const analises=[];
+        const resultados = [];
 
 
 
@@ -102,9 +183,15 @@ router.get("/", async(req,res)=>{
         ){
 
 
+
             const analise =
 
-            await analisarJogo(jogo);
+                await analisarJogo(
+
+                    jogo
+
+                );
+
 
 
 
@@ -112,7 +199,11 @@ router.get("/", async(req,res)=>{
             if(analise){
 
 
-                analises.push(analise);
+                resultados.push(
+
+                    analise
+
+                );
 
 
             }
@@ -125,26 +216,27 @@ router.get("/", async(req,res)=>{
 
 
 
-
-
         res.json({
+
 
 
             sucesso:true,
 
 
+
             total:
 
-            analises.length,
+            resultados.length,
 
 
 
-            analises
+            analises:
+
+            resultados
 
 
 
         });
-
 
 
 
@@ -159,11 +251,12 @@ router.get("/", async(req,res)=>{
 
         console.error(
 
-            "❌ Erro API análises:",
+            "❌ Erro gerar análises:",
 
             error.message
 
         );
+
 
 
 
@@ -174,6 +267,7 @@ router.get("/", async(req,res)=>{
 
 
             erro:error.message
+
 
 
         });
@@ -192,19 +286,12 @@ router.get("/", async(req,res)=>{
 
 
 
-
-
 // ==========================================
 // GET /api/analises/salvas
-// Buscar histórico IA
+// Histórico IA PostgreSQL
 // ==========================================
 
-
-router.get(
-
-"/salvas",
-
-async(req,res)=>{
+router.get("/salvas", async(req,res)=>{
 
 
     try{
@@ -233,7 +320,9 @@ async(req,res)=>{
         res.json({
 
 
+
             sucesso:true,
+
 
 
             total:
@@ -247,17 +336,32 @@ async(req,res)=>{
             resultado.rows
 
 
+
         });
+
+
 
 
 
     }
 
+
     catch(error){
 
 
 
+        console.error(
+
+            "❌ Erro buscar histórico:",
+
+            error.message
+
+        );
+
+
+
         res.status(500).json({
+
 
 
             sucesso:false,
@@ -266,7 +370,9 @@ async(req,res)=>{
             erro:error.message
 
 
+
         });
+
 
 
     }
@@ -274,26 +380,12 @@ async(req,res)=>{
 
 
 });
-
-
-
-
-
-
-
-
-
 // ==========================================
 // GET /api/analises/:id
 // Buscar análise específica
 // ==========================================
 
-
-router.get(
-
-"/:id",
-
-async(req,res)=>{
+router.get("/:id", async(req,res)=>{
 
 
     try{
@@ -308,14 +400,16 @@ async(req,res)=>{
 
             FROM analises
 
-            WHERE id=$1
+            WHERE id = $1
+
+            LIMIT 1
 
 
-        `,
+        `,[
 
-        [
 
             req.params.id
+
 
         ]);
 
@@ -325,7 +419,7 @@ async(req,res)=>{
 
         if(
 
-            resultado.rows.length===0
+            resultado.rows.length === 0
 
         ){
 
@@ -339,6 +433,7 @@ async(req,res)=>{
                 erro:
 
                 "Análise não encontrada"
+
 
 
             });
@@ -361,6 +456,7 @@ async(req,res)=>{
             resultado.rows[0]
 
 
+
         });
 
 
@@ -369,7 +465,19 @@ async(req,res)=>{
 
     }
 
+
     catch(error){
+
+
+
+        console.error(
+
+            "❌ Erro buscar análise:",
+
+            error.message
+
+        );
+
 
 
         res.status(500).json({
@@ -381,7 +489,9 @@ async(req,res)=>{
             erro:error.message
 
 
+
         });
+
 
 
     }
@@ -395,5 +505,102 @@ async(req,res)=>{
 
 
 
+
+
+// ==========================================
+// DELETE /api/analises/limpar
+// Limpar análises antigas
+// ==========================================
+
+router.delete("/limpar", async(req,res)=>{
+
+
+    try{
+
+
+        const resultado =
+
+        await db.query(`
+
+
+            DELETE FROM analises
+
+            WHERE criado_em < NOW() - INTERVAL '30 days'
+
+
+        `);
+
+
+
+
+
+        res.json({
+
+
+
+            sucesso:true,
+
+
+
+            removidos:
+
+            resultado.rowCount
+
+
+
+        });
+
+
+
+
+
+    }
+
+
+    catch(error){
+
+
+
+        console.error(
+
+            "❌ Erro limpar análises:",
+
+            error.message
+
+        );
+
+
+
+        res.status(500).json({
+
+
+            sucesso:false,
+
+
+            erro:error.message
+
+
+
+        });
+
+
+
+    }
+
+
+
+});
+
+
+
+
+
+
+
+
+
+// ==========================================
+// EXPORT
+// ==========================================
 
 export default router;
