@@ -65,6 +65,36 @@ export async function salvarJogo(jogo = {}) {
 
     try {
 
+        // Normaliza o ID para caber em INTEGER
+        let apiId = Number(jogo.id);
+
+        if (!Number.isInteger(apiId) || apiId > 2147483647) {
+
+            apiId = Number(String(Date.now()).slice(-9));
+
+        }
+
+        const timeCasa =
+            jogo.time_casa ||
+            jogo.casa ||
+            "-";
+
+        const timeFora =
+            jogo.time_fora ||
+            jogo.fora ||
+            "-";
+
+        const campeonato =
+            jogo.campeonato ||
+            jogo.league ||
+            "-";
+
+        const dataJogo =
+            jogo.data_jogo ||
+            jogo.horario ||
+            jogo.data ||
+            new Date();
+
         await db.query(
 
             `
@@ -88,23 +118,23 @@ export async function salvarJogo(jogo = {}) {
             DO UPDATE SET
 
                 campeonato = EXCLUDED.campeonato,
-                time_casa   = EXCLUDED.time_casa,
-                time_fora   = EXCLUDED.time_fora,
-                data_jogo   = EXCLUDED.data_jogo,
-                status      = EXCLUDED.status
+                time_casa  = EXCLUDED.time_casa,
+                time_fora  = EXCLUDED.time_fora,
+                data_jogo  = EXCLUDED.data_jogo,
+                status     = EXCLUDED.status
             `,
 
             [
 
-                jogo.id,
+                apiId,
 
-                jogo.campeonato || "-",
+                campeonato,
 
-                jogo.casa || "-",
+                timeCasa,
 
-                jogo.fora || "-",
+                timeFora,
 
-                normalizarData(jogo.horario),
+                normalizarData(dataJogo),
 
                 jogo.status || "SCHEDULED"
 
@@ -125,7 +155,6 @@ export async function salvarJogo(jogo = {}) {
     }
 
 }
-
 
 
 // ==========================================
