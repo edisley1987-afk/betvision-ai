@@ -180,12 +180,7 @@ router.get("/", async(req,res)=>{
 
         const resultado =
 
-            gerarValueBets(
-
-                jogosAnalise
-
-            );
-
+    await gerarValueBets();
 
 
 
@@ -467,70 +462,102 @@ router.get("/", async(req,res)=>{
 // ==========================================
 
 
-router.get("/salvas", async(req,res)=>{
-
+router.get("/", async(req,res)=>{
 
     try{
+
+        console.log(
+            "💎 Calculando Value Bets..."
+        );
 
 
         const resultado =
 
-        await db.query(
-
-        `
-
-        SELECT *
-
-        FROM valuebets
-
-        ORDER BY id DESC
-
-        LIMIT 50
-
-        `
-
-        );
-
+            await gerarValueBets();
 
 
 
         res.json({
 
-
             sucesso:true,
-
 
             total:
 
-            resultado.rows.length,
-
+            resultado.length,
 
 
             valuebets:
 
-            resultado.rows
+            resultado.map(item=>({
+
+
+                jogo:item.jogo,
+
+
+                mercado:item.mercado,
+
+
+                selecao:item.selecao,
+
+
+                bookmaker:item.bookmaker,
+
+
+                odd:item.odd,
+
+
+                oddJusta:item.oddJusta,
+
+
+                probabilidade:item.probabilidade,
+
+
+                edge:item.edge,
+
+
+                roi:item.roi,
+
+
+                kelly:item.kelly,
+
+
+                classificacao:item.classificacao,
+
+
+                valueBet:true
+
+
+            })),
+
+
+            atualizadoEm:
+
+            new Date()
 
 
         });
 
 
-
     }
+
 
     catch(error){
 
 
+        console.error(
 
-        res.status(500).json({
-
-
-            sucesso:false,
-
-
-            erro:
+            "❌ Erro Value Bets:",
 
             error.message
 
+        );
+
+
+        res.status(500).json({
+
+            sucesso:false,
+
+            erro:error.message
 
         });
 
@@ -539,11 +566,3 @@ router.get("/salvas", async(req,res)=>{
 
 
 });
-
-
-
-
-
-
-
-export default router;
