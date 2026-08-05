@@ -1,8 +1,8 @@
 // ==========================================
 // BetVision AI
 // routes/analises.js
-// Versão 10.0
-// Engine Análises IA corrigida
+// Versão 11.0
+// API Análises IA
 // Compatível PostgreSQL
 // ==========================================
 
@@ -13,8 +13,14 @@ import db from "../database/database.js";
 
 
 import {
+    analisarJogo
+} from "../services/inteligenciaService.js";
+
+
+import {
     listarJogos
 } from "../services/jogoBancoService.js";
+
 
 
 const router = express.Router();
@@ -24,223 +30,8 @@ const router = express.Router();
 
 
 // ==========================================
-// GERAR ANÁLISE IA
-// ==========================================
-
-
-function gerarAnalise(jogo){
-
-
-    const probCasa =
-
-        Math.floor(
-
-            45 +
-
-            Math.random()*20
-
-        );
-
-
-
-    const probEmpate =
-
-        Math.floor(
-
-            20 +
-
-            Math.random()*10
-
-        );
-
-
-
-    const probFora =
-
-        100 -
-
-        probCasa -
-
-        probEmpate;
-
-
-
-    const golsEsperados =
-
-        Number(
-
-            (
-
-                1.8 +
-
-                Math.random()*1.5
-
-            )
-
-            .toFixed(1)
-
-        );
-
-
-
-
-
-    let favorito =
-
-        jogo.time_casa;
-
-
-
-    if(probFora > probCasa){
-
-        favorito = jogo.time_fora;
-
-    }
-
-
-
-    if(
-
-        probCasa < 40 &&
-
-        probFora < 40
-
-    ){
-
-        favorito = "Empate";
-
-    }
-
-
-
-
-
-    let confianca = "Média";
-
-
-
-    if(probCasa >= 60 || probFora >= 60){
-
-        confianca = "Alta";
-
-    }
-
-
-
-    if(probCasa < 50 && probFora < 50){
-
-        confianca = "Baixa";
-
-    }
-
-
-
-
-
-    return {
-
-
-
-        jogo:
-
-
-        `${jogo.time_casa} x ${jogo.time_fora}`,
-
-
-
-        campeonato:
-
-
-        jogo.campeonato || "Futebol",
-
-
-
-        horario:
-
-
-        jogo.data_jogo,
-
-
-
-        favorito,
-
-
-
-        probabilidade:
-
-
-        Math.max(
-
-            probCasa,
-
-            probFora
-
-        ),
-
-
-
-        probabilidadeCasa:
-
-        probCasa,
-
-
-
-        probabilidadeEmpate:
-
-        probEmpate,
-
-
-
-        probabilidadeFora:
-
-        probFora,
-
-
-
-        golsEsperados,
-
-
-
-        placarPrevisto:
-
-
-        probCasa > probFora
-
-        ?
-
-        "2 x 1"
-
-        :
-
-        "1 x 2",
-
-
-
-        confianca,
-
-
-
-        algoritmo:
-
-        "Probabilidade + Estatística"
-
-
-    };
-
-
-}
-
-
-
-
-
-
-
-
-
-// ==========================================
 // GET /api/analises
-// Listar análises IA
+// Gerar e listar análises IA
 // ==========================================
 
 
@@ -252,7 +43,7 @@ router.get("/", async(req,res)=>{
 
         console.log(
 
-            "🤖 Gerando análises IA..."
+            "🤖 Buscando análises IA..."
 
         );
 
@@ -296,171 +87,39 @@ router.get("/", async(req,res)=>{
 
 
 
-        const analises =
 
-        jogos.map(jogo=>{
-
-
-            return gerarAnalise(jogo);
-
-
-        });
+        const analises=[];
 
 
 
 
-
-
-
-        // ==============================
-        // Salvar banco
-        // ==============================
 
 
         for(
 
-            const item of analises
+            const jogo of jogos.slice(0,20)
 
         ){
 
 
-            try{
+            const analise =
 
+            await analisarJogo(jogo);
 
-                const existe =
 
-                await db.query(
 
-                `
 
-                SELECT id
+            if(analise){
 
-                FROM analises
 
-                WHERE jogo=$1
-
-                LIMIT 1
-
-                `,
-
-
-                [
-
-                    item.jogo
-
-                ]
-
-                );
-
-
-
-
-
-                if(
-
-                    existe.rows.length === 0
-
-                ){
-
-
-                    await db.query(
-
-                    `
-
-                    INSERT INTO analises
-
-                    (
-
-                        jogo,
-
-                        probabilidade_casa,
-
-                        probabilidade_empate,
-
-                        probabilidade_fora,
-
-                        gols_esperados,
-
-                        placar_previsto,
-
-                        value_bet,
-
-                        confianca,
-
-                        algoritmo
-
-                    )
-
-
-                    VALUES
-
-                    (
-
-                        $1,$2,$3,$4,$5,$6,$7,$8,$9
-
-                    )
-
-                    `,
-
-
-                    [
-
-
-                        item.jogo,
-
-
-                        item.probabilidadeCasa,
-
-
-                        item.probabilidadeEmpate,
-
-
-                        item.probabilidadeFora,
-
-
-                        item.golsEsperados,
-
-
-                        item.placarPrevisto,
-
-
-                        false,
-
-
-                        item.confianca,
-
-
-                        item.algoritmo
-
-
-                    ]
-
-                    );
-
-
-                }
-
+                analises.push(analise);
 
 
             }
 
-            catch(error){
-
-
-                console.log(
-
-                    "⚠️ Erro salvar análise:",
-
-                    error.message
-
-                );
-
-
-            }
 
 
         }
-
 
 
 
@@ -476,7 +135,6 @@ router.get("/", async(req,res)=>{
 
             total:
 
-
             analises.length,
 
 
@@ -490,15 +148,18 @@ router.get("/", async(req,res)=>{
 
 
 
+
+
     }
 
 
     catch(error){
 
 
+
         console.error(
 
-            "❌ Erro análises:",
+            "❌ Erro API análises:",
 
             error.message
 
@@ -518,6 +179,7 @@ router.get("/", async(req,res)=>{
         });
 
 
+
     }
 
 
@@ -533,8 +195,8 @@ router.get("/", async(req,res)=>{
 
 
 // ==========================================
-// GET ANALISES SALVAS
-// /api/analises/salvas
+// GET /api/analises/salvas
+// Buscar histórico IA
 // ==========================================
 
 
@@ -550,21 +212,21 @@ async(req,res)=>{
 
         const resultado =
 
-        await db.query(
+        await db.query(`
 
-        `
 
-        SELECT *
+            SELECT *
 
-        FROM analises
+            FROM analises
 
-        ORDER BY id DESC
+            ORDER BY id DESC
 
-        LIMIT 50
+            LIMIT 50
 
-        `
 
-        );
+        `);
+
+
 
 
 
@@ -594,6 +256,7 @@ async(req,res)=>{
     catch(error){
 
 
+
         res.status(500).json({
 
 
@@ -612,6 +275,120 @@ async(req,res)=>{
 
 });
 
+
+
+
+
+
+
+
+
+// ==========================================
+// GET /api/analises/:id
+// Buscar análise específica
+// ==========================================
+
+
+router.get(
+
+"/:id",
+
+async(req,res)=>{
+
+
+    try{
+
+
+        const resultado =
+
+        await db.query(`
+
+
+            SELECT *
+
+            FROM analises
+
+            WHERE id=$1
+
+
+        `,
+
+        [
+
+            req.params.id
+
+        ]);
+
+
+
+
+
+        if(
+
+            resultado.rows.length===0
+
+        ){
+
+
+            return res.status(404).json({
+
+
+                sucesso:false,
+
+
+                erro:
+
+                "Análise não encontrada"
+
+
+            });
+
+
+        }
+
+
+
+
+
+        res.json({
+
+
+            sucesso:true,
+
+
+            analise:
+
+            resultado.rows[0]
+
+
+        });
+
+
+
+
+
+    }
+
+    catch(error){
+
+
+        res.status(500).json({
+
+
+            sucesso:false,
+
+
+            erro:error.message
+
+
+        });
+
+
+    }
+
+
+
+});
 
 
 
