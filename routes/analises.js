@@ -6,7 +6,6 @@
 // PostgreSQL
 // ==========================================
 
-
 import express from "express";
 
 import db from "../database/database.js";
