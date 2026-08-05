@@ -1,8 +1,8 @@
 // ==========================================
 // BetVision AI
 // services/sincronizacaoService.js
-// Versão 11.0
-// Sincronização Football-Data.org
+// Versão 12.0
+// Sincronização Football-Data
 // Campeonatos + Times
 // ==========================================
 
@@ -24,13 +24,10 @@ import {
 
     inserirCampeonato,
 
-    inserirTime,
-
-    listarTimes
+    inserirTime
 
 }
 from "./bancoService.js";
-
 
 
 
@@ -43,16 +40,13 @@ from "./bancoService.js";
 
 function esperar(ms){
 
+    return new Promise(resolve=>
 
-    return new Promise(resolve =>
-
-        setTimeout(resolve, ms)
+        setTimeout(resolve,ms)
 
     );
 
-
 }
-
 
 
 
@@ -67,549 +61,309 @@ export async function sincronizarSistema(){
 
 
 
-    console.log("================================");
+console.log("================================");
+console.log("🌎 INICIANDO SINCRONIZAÇÃO");
+console.log("================================");
 
-    console.log(
-        "🌎 INICIANDO SINCRONIZAÇÃO"
-    );
 
-    console.log("================================");
 
+let totalCampeonatos = 0;
 
+let totalTimes = 0;
 
+let erros = 0;
 
-    let totalCampeonatos = 0;
 
-    let totalTimes = 0;
 
-    let erros = 0;
 
 
+try{
 
 
 
-    try{
+const campeonatosAPI =
 
+await buscarCompeticoes();
 
 
-        /*
-        ==================================
-        BUSCAR CAMPEONATOS
-        ==================================
-        */
 
 
-        const campeonatosAPI =
+if(!Array.isArray(campeonatosAPI)){
 
-            await buscarCompeticoes();
 
+throw new Error(
+"API não retornou campeonatos"
+);
 
 
+}
 
-        if(
 
-            !Array.isArray(campeonatosAPI)
 
-        ){
 
 
-            throw new Error(
+console.log(
 
-                "Nenhum campeonato retornado pela API"
+`🏆 Campeonatos encontrados: ${campeonatosAPI.length}`
 
-            );
+);
 
 
-        }
 
 
 
+for(const campeonatoAPI of campeonatosAPI){
 
 
-        console.log(
 
-            `🏆 Campeonatos encontrados: ${campeonatosAPI.length}`
+try{
 
-        );
 
 
+const campeonato = {
 
 
+id:
 
+Number(campeonatoAPI.id),
 
 
 
-        /*
-        ==================================
-        TIMES JÁ SALVOS
-        ==================================
-        */
+nome:
 
+campeonatoAPI.name ||
 
-        const timesBanco =
+"Sem nome",
 
-            await listarTimes();
 
 
+pais:
 
+campeonatoAPI.area?.name ||
 
-        const idsTimes =
+"",
 
-            new Set(
 
-                timesBanco.map(
 
-                    t => Number(t.id)
+codigo:
 
-                )
+campeonatoAPI.code || ""
 
-            );
 
 
+};
 
 
 
 
 
 
-        /*
-        ==================================
-        PROCESSAR CAMPEONATOS
-        ==================================
-        */
+console.log(
 
+`🏆 ${campeonato.nome}`
 
-        for(
+);
 
-            const campeonatoAPI of campeonatosAPI
 
-        ){
 
 
 
-            try{
 
+await inserirCampeonato(
 
+campeonato
 
+);
 
 
-                const campeonato = {
 
+totalCampeonatos++;
 
 
-                    id:
 
-                        campeonatoAPI.id,
 
 
 
-                    nome:
 
-                        campeonatoAPI.name || 
-                        "Sem nome",
+await esperar(1500);
 
 
 
-                    pais:
 
-                        campeonatoAPI.area?.name || "",
 
 
 
-                    codigo:
+let timesAPI=[];
 
-                        campeonatoAPI.code || ""
 
 
+try{
 
-                };
 
 
+timesAPI =
 
+await buscarTimesCompeticao(
 
+campeonato.id
 
+);
 
 
 
-                console.log(
+}
 
-                    `🏆 ${campeonato.nome}`
+catch(error){
 
-                );
 
 
+console.log(
 
+"⚠️ Erro buscando times:",
 
+error.message
 
+);
 
-                await inserirCampeonato(
 
-                    campeonato
 
-                );
+await esperar(5000);
 
 
 
-                totalCampeonatos++;
+continue;
 
 
+}
 
 
 
 
 
 
+if(!Array.isArray(timesAPI)){
 
-                /*
-                =============================
-                BUSCAR TIMES
-                =============================
-                */
 
+continue;
 
 
-                const timesAPI =
+}
 
 
-                    await buscarTimesCompeticao(
 
-                        campeonato.id
 
-                    );
 
 
+console.log(
 
+`⚽ ${timesAPI.length} times encontrados`
 
+);
 
 
-                console.log(
 
-                    `⚽ ${timesAPI.length} times encontrados`
 
-                );
 
 
 
 
+for(const item of timesAPI){
 
 
 
+try{
 
-                for(
 
-                    const item of timesAPI
 
-                ){
+const time =
 
+normalizarTime(item);
 
 
-                    try{
 
 
 
-                        const time =
 
-                            normalizarTime(
+if(!time || !time.id){
 
-                                item
 
-                            );
+continue;
 
 
+}
 
 
 
-                        if(
 
-                            idsTimes.has(
 
-                                Number(time.id)
 
-                            )
+await inserirTime({
 
-                        ){
 
 
-                            continue;
+id:
 
+Number(time.id),
 
-                        }
 
 
+campeonato_id:
 
+Number(campeonato.id),
 
 
 
+nome:
 
-                        await inserirTime({
+time.nome || "Sem nome",
 
 
 
-                            id:
+pais:
 
-                                time.id,
+time.pais || ""
 
 
 
-                            campeonato_id:
+});
 
-                                campeonato.id,
 
 
 
-                            nome:
 
-                                time.nome,
 
+totalTimes++;
 
 
-                            pais:
 
-                                time.pais
 
 
+}
 
-                        });
+catch(error){
 
 
 
+erros++;
 
 
+console.log(
 
+"❌ Erro salvar time:",
 
-                        idsTimes.add(
+error.message
 
-                            Number(time.id)
+);
 
-                        );
 
 
+}
 
-                        totalTimes++;
 
 
 
 
-
-                    }
-
-                    catch(error){
-
-
-
-                        erros++;
-
-
-                        console.error(
-
-                            "❌ Erro salvar time:",
-
-                            error.message
-
-                        );
-
-
-                    }
-
-
-
-
-
-
-
-                    await esperar(200);
-
-
-
-
-                }
-
-
-
-
-
-
-
-
-
-                /*
-                ==================================
-                CONTROLE API
-                ==================================
-                */
-
-
-                await esperar(1000);
-
-
-
-
-
-            }
-
-
-            catch(error){
-
-
-
-                erros++;
-
-
-
-                console.error(
-
-                    "❌ Erro campeonato:",
-
-                    campeonatoAPI.name,
-
-                    error.message
-
-                );
-
-
-
-
-            }
-
-
-
-
-
-        }
-
-
-
-
-
-
-
-
-
-        console.log("================================");
-
-
-        console.log(
-
-            "✅ SINCRONIZAÇÃO CONCLUÍDA"
-
-        );
-
-
-
-        console.log(
-
-            `🏆 Campeonatos: ${totalCampeonatos}`
-
-        );
-
-
-
-        console.log(
-
-            `⚽ Times cadastrados: ${totalTimes}`
-
-        );
-
-
-
-        console.log(
-
-            `⚠️ Erros: ${erros}`
-
-        );
-
-
-
-        console.log("================================");
-
-
-
-
-
-
-
-
-        return {
-
-
-
-            sucesso:true,
-
-
-            campeonatos:
-
-                totalCampeonatos,
-
-
-            times:
-
-                totalTimes,
-
-
-            erros,
-
-
-
-            mensagem:
-
-                "Sincronização concluída"
-
-
-
-        };
-
-
-
-
-
-
-
-    }
-
-
-
-    catch(error){
-
-
-
-        console.error(
-
-            "❌ Falha sincronização:",
-
-            error.message
-
-        );
-
-
-
-
-        return {
-
-
-
-            sucesso:false,
-
-
-            campeonatos:0,
-
-
-            times:0,
-
-
-            erros:1,
-
-
-            mensagem:
-
-                error.message
-
-
-
-        };
-
-
-
-    }
+await esperar(300);
 
 
 
@@ -621,15 +375,158 @@ export async function sincronizarSistema(){
 
 
 
-// ==========================================
-// EXPORT
-// ==========================================
+}
+
+catch(error){
+
+
+
+erros++;
+
+
+console.log(
+
+"❌ Erro campeonato:",
+
+campeonatoAPI.name,
+
+error.message
+
+);
+
+
+
+}
+
+
+
+
+
+
+
+// pausa entre campeonatos
+
+await esperar(3000);
+
+
+
+}
+
+
+
+
+
+
+
+
+console.log("================================");
+console.log("✅ SINCRONIZAÇÃO CONCLUÍDA");
+
+console.log(
+
+`🏆 Campeonatos: ${totalCampeonatos}`
+
+);
+
+
+console.log(
+
+`⚽ Times cadastrados: ${totalTimes}`
+
+);
+
+
+console.log(
+
+`⚠️ Erros: ${erros}`
+
+);
+
+console.log("================================");
+
+
+
+
+
+
+
+return {
+
+
+sucesso:true,
+
+
+campeonatos:
+
+totalCampeonatos,
+
+
+times:
+
+totalTimes,
+
+
+erros
+
+
+
+};
+
+
+
+
+
+
+}
+catch(error){
+
+
+
+console.error(
+
+"❌ Falha sincronização:",
+
+error.message
+
+);
+
+
+
+
+
+return {
+
+
+sucesso:false,
+
+
+campeonatos:0,
+
+
+times:0,
+
+
+erros:1
+
+
+};
+
+
+
+}
+
+
+
+}
+
+
+
 
 
 export default {
 
 
-    sincronizarSistema
+sincronizarSistema
 
 
 };
