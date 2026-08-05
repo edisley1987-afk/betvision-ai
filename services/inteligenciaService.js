@@ -1,8 +1,8 @@
 // ==========================================
 // BetVision AI
 // services/inteligenciaService.js
-// Versão 10.0
-// Motor Inteligência IA
+// Versão 11.0
+// Motor Inteligência IA Estatística
 // ==========================================
 
 
@@ -15,7 +15,7 @@ import {
 
 
 // ==========================================
-// CONFIGURAÇÃO
+// CONTROLE
 // ==========================================
 
 let ultimaAnalise = 0;
@@ -24,43 +24,351 @@ const INTERVALO_ANALISE = 30000;
 
 
 
+
 // ==========================================
-// GERAR PROBABILIDADE IA
+// NORMALIZAÇÃO
 // ==========================================
 
-function calcularProbabilidade(){
+function numero(valor){
+
+    const n = Number(valor);
+
+    return Number.isFinite(n)
+        ? n
+        : 0;
+
+}
 
 
-    const casa =
+
+
+// ==========================================
+// FORÇA DOS TIMES
+// Modelo base
+// ==========================================
+
+function calcularForcaTime(nome=""){
+
+
+    if(!nome){
+
+        return 50;
+
+    }
+
+
+    let hash = 0;
+
+
+    for(
+        let i = 0;
+        i < nome.length;
+        i++
+    ){
+
+        hash +=
+        nome.charCodeAt(i);
+
+    }
+
+
+    return (
+
         45 +
-        Math.floor(
-            Math.random()*15
-        );
+
+        (
+            hash % 40
+        )
+
+    );
 
 
-    const empate =
-        20 +
-        Math.floor(
-            Math.random()*10
-        );
+}
 
 
-    const fora =
-        100 -
-        casa -
-        empate;
+
+
+// ==========================================
+// ATAQUE E DEFESA
+// ==========================================
+
+function calcularAtaque(forca){
+
+    return Number(
+
+        (
+            forca / 50
+
+        )
+        .toFixed(2)
+
+    );
+
+}
+
+
+
+function calcularDefesa(forca){
+
+    return Number(
+
+        (
+            forca / 55
+
+        )
+        .toFixed(2)
+
+    );
+
+}
+
+
+
+
+// ==========================================
+// GOLS ESPERADOS
+// ==========================================
+
+function calcularGolsEsperados(
+
+    ataqueCasa,
+
+    defesaCasa,
+
+    ataqueFora,
+
+    defesaFora
+
+){
+
+
+    const golsCasa =
+
+        1.1 +
+
+        (ataqueCasa * 0.45)
+
+        -
+
+        (defesaFora * 0.20);
+
+
+
+    const golsFora =
+
+
+        0.8 +
+
+        (ataqueFora * 0.35)
+
+        -
+
+        (defesaCasa * 0.18);
+
 
 
     return {
 
 
+        casa:
+
+        Math.max(
+
+            0.2,
+
+            Number(
+                golsCasa.toFixed(2)
+            )
+
+        ),
+
+
+
+        fora:
+
+        Math.max(
+
+            0.2,
+
+            Number(
+                golsFora.toFixed(2)
+            )
+
+        )
+
+    };
+
+
+}
+
+
+
+// ==========================================
+// POISSON SIMPLIFICADO
+// ==========================================
+
+function limitar(valor,min,max){
+
+    return Math.min(
+
+        Math.max(valor,min),
+
+        max
+
+    );
+    // ==========================================
+// PROBABILIDADES IA
+// ==========================================
+
+function calcularProbabilidades(
+
+    forcaCasa,
+
+    forcaFora
+
+){
+
+
+    const diferenca =
+
+        forcaCasa -
+
+        forcaFora;
+
+
+
+    let casa =
+
+        50 +
+
+        (diferenca * 0.8);
+
+
+
+    let fora =
+
+        50 -
+
+        (diferenca * 0.8);
+
+
+
+    let empate =
+
+        25 -
+
+        Math.abs(diferenca) * 0.25;
+
+
+
+
+    casa = limitar(
+
         casa,
 
+        15,
+
+        75
+
+    );
+
+
+    fora = limitar(
+
+        fora,
+
+        10,
+
+        60
+
+    );
+
+
+    empate = limitar(
 
         empate,
 
+        10,
 
-        fora
+        35
+
+    );
+
+
+
+
+
+    const total =
+
+        casa +
+
+        empate +
+
+        fora;
+
+
+
+    return {
+
+
+        casa:
+
+        Number(
+
+            (
+
+                casa /
+
+                total *
+
+                100
+
+            )
+
+            .toFixed(2)
+
+        ),
+
+
+
+        empate:
+
+        Number(
+
+            (
+
+                empate /
+
+                total *
+
+                100
+
+            )
+
+            .toFixed(2)
+
+        ),
+
+
+
+        fora:
+
+        Number(
+
+            (
+
+                fora /
+
+                total *
+
+                100
+
+            )
+
+            .toFixed(2)
+
+        )
+
 
 
     };
@@ -73,28 +381,66 @@ function calcularProbabilidade(){
 
 
 // ==========================================
-// PLACAR IA
+// GERAR PLACAR PROVÁVEL
 // ==========================================
 
-function gerarPlacar(){
+function gerarPlacar(
+
+    golsCasa,
+
+    golsFora
+
+){
 
 
-    const golsCasa =
-        Math.floor(
-            Math.random()*4
+    let casa =
+
+        Math.round(
+
+            golsCasa
+
         );
 
 
-    const golsFora =
-        Math.floor(
-            Math.random()*3
+
+    let fora =
+
+        Math.round(
+
+            golsFora
+
         );
 
 
-    return `${golsCasa} x ${golsFora}`;
+
+    casa = limitar(
+
+        casa,
+
+        0,
+
+        5
+
+    );
+
+
+    fora = limitar(
+
+        fora,
+
+        0,
+
+        5
+
+    );
+
+
+
+    return `${casa} x ${fora}`;
 
 
 }
+
 
 
 
@@ -103,21 +449,36 @@ function gerarPlacar(){
 // CONFIANÇA
 // ==========================================
 
-function calcularConfianca(prob){
+function calcularConfianca(
+
+    probabilidade
+
+){
 
 
-    if(prob >= 60){
+    if(
+
+        probabilidade >= 65
+
+    ){
 
         return "Alta";
 
+
     }
 
 
-    if(prob >= 50){
+    if(
+
+        probabilidade >= 50
+
+    ){
 
         return "Média";
 
+
     }
+
 
 
     return "Baixa";
@@ -129,9 +490,8 @@ function calcularConfianca(prob){
 
 
 
-
 // ==========================================
-// ANALISAR UM JOGO
+// ANALISAR JOGO INDIVIDUAL
 // ==========================================
 
 export async function analisarJogo(jogo){
@@ -140,41 +500,168 @@ export async function analisarJogo(jogo){
     try{
 
 
+
+        const timeCasa =
+
+            jogo.time_casa ||
+
+            "Casa";
+
+
+
+        const timeFora =
+
+            jogo.time_fora ||
+
+            "Fora";
+
+
+
+
+
+
+        // Força calculada dos clubes
+
+        const forcaCasa =
+
+            calcularForcaTime(
+
+                timeCasa
+
+            );
+
+
+
+        const forcaFora =
+
+            calcularForcaTime(
+
+                timeFora
+
+            );
+
+
+
+
+
+        const ataqueCasa =
+
+            calcularAtaque(
+
+                forcaCasa
+
+            );
+
+
+        const defesaCasa =
+
+            calcularDefesa(
+
+                forcaCasa
+
+            );
+
+
+
+        const ataqueFora =
+
+            calcularAtaque(
+
+                forcaFora
+
+            );
+
+
+        const defesaFora =
+
+            calcularDefesa(
+
+                forcaFora
+
+            );
+
+
+
+
+
+
+        // Gols esperados
+
+        const gols =
+
+            calcularGolsEsperados(
+
+                ataqueCasa,
+
+                defesaCasa,
+
+                ataqueFora,
+
+                defesaFora
+
+            );
+
+
+
+
+
+        // Probabilidades
+
         const prob =
-            calcularProbabilidade();
 
+            calcularProbabilidades(
 
+                forcaCasa,
 
-        const favorito =
+                forcaFora
 
-            prob.casa >= prob.fora
-
-            ?
-
-            jogo.time_casa
-
-            :
-
-            jogo.time_fora;
+            );
 
 
 
 
 
         const placar =
-            gerarPlacar();
+
+            gerarPlacar(
+
+                gols.casa,
+
+                gols.fora
+
+            );
 
 
 
 
 
-        const golsEsperados =
-            Number(
-                (
-                    1.8 +
-                    Math.random()*1.5
-                )
-                .toFixed(2)
+        const favorito =
+
+
+            prob.casa >= prob.fora
+
+            ?
+
+            timeCasa
+
+            :
+
+            timeFora;
+
+
+
+
+
+        const maiorProb =
+
+            Math.max(
+
+                prob.casa,
+
+                prob.fora,
+
+                prob.empate
+
             );
 
 
@@ -185,10 +672,7 @@ export async function analisarJogo(jogo){
 
             calcularConfianca(
 
-                Math.max(
-                    prob.casa,
-                    prob.fora
-                )
+                maiorProb
 
             );
 
@@ -199,25 +683,28 @@ export async function analisarJogo(jogo){
 
         const recomendacao =
 
-        prob.casa > prob.fora
 
-        ?
+            prob.casa >
 
-        "Vitória Casa"
-
-        :
-
-        "Vitória Fora";
+            prob.fora
 
 
+            ?
+
+
+            "Vitória Casa"
+
+
+            :
+
+
+            "Vitória Fora";
 
 
 
         await db.query(`
 
-
             INSERT INTO analises
-
 
             (
 
@@ -241,49 +728,63 @@ export async function analisarJogo(jogo){
 
             )
 
-
             VALUES
 
-            (
-
-                $1,$2,$3,$4,$5,$6,$7,$8,$9
-
-            )
-
+            ($1,$2,$3,$4,$5,$6,$7,$8,$9)
 
         `,[
 
 
-            `${jogo.time_casa} x ${jogo.time_fora}`,
+
+            `${timeCasa} x ${timeFora}`,
+
 
 
             prob.casa,
 
 
+
             prob.empate,
+
 
 
             prob.fora,
 
 
-            golsEsperados,
+
+            Number(
+
+                (
+
+                    gols.casa +
+
+                    gols.fora
+
+                )
+
+                .toFixed(2)
+
+            ),
+
 
 
             placar,
 
 
-            true,
+
+            maiorProb >= 55,
+
 
 
             confianca,
 
 
-            "BetVision AI Probabilidade + Estatística"
+
+            "BetVision AI Estatística v11"
+
 
 
         ]);
-
-
 
 
 
@@ -293,19 +794,40 @@ export async function analisarJogo(jogo){
 
             jogo:
 
-            `${jogo.time_casa} x ${jogo.time_fora}`,
+            `${timeCasa} x ${timeFora}`,
 
 
             favorito,
 
 
-            probabilidade:
+            probabilidadeCasa:
 
-            Math.max(
+            prob.casa,
 
-                prob.casa,
 
-                prob.fora
+            probabilidadeEmpate:
+
+            prob.empate,
+
+
+            probabilidadeFora:
+
+            prob.fora,
+
+
+            golsEsperados:
+
+            Number(
+
+                (
+
+                    gols.casa +
+
+                    gols.fora
+
+                )
+
+                .toFixed(2)
 
             ),
 
@@ -313,14 +835,10 @@ export async function analisarJogo(jogo){
             placar,
 
 
-            golsEsperados,
-
-
             recomendacao,
 
 
             confianca
-
 
 
         };
@@ -332,7 +850,7 @@ export async function analisarJogo(jogo){
     catch(error){
 
 
-        console.log(
+        console.error(
 
             "❌ Erro análise jogo:",
 
@@ -348,18 +866,10 @@ export async function analisarJogo(jogo){
 
 
 }
-
-
-
-
-
-
-
-// ==========================================
+    // ==========================================
 // ANALISAR MERCADO
 // Chamado pelo server.js
 // ==========================================
-
 
 export async function analisarMercado(){
 
@@ -368,13 +878,16 @@ export async function analisarMercado(){
 
 
         const agora =
+
             Date.now();
 
 
 
         if(
 
-            agora - ultimaAnalise
+            agora -
+
+            ultimaAnalise
 
             <
 
@@ -393,11 +906,8 @@ export async function analisarMercado(){
 
 
 
-
         console.log(
-
-            "🤖 Iniciando análise IA..."
-
+            "🤖 Iniciando análise IA estatística..."
         );
 
 
@@ -422,9 +932,7 @@ export async function analisarMercado(){
 
 
             console.log(
-
-                "⚠️ Nenhum jogo encontrado"
-
+                "⚠️ Nenhum jogo disponível"
             );
 
 
@@ -438,8 +946,7 @@ export async function analisarMercado(){
 
 
 
-        let resultados=[];
-
+        const resultados = [];
 
 
 
@@ -454,7 +961,11 @@ export async function analisarMercado(){
 
             const resultado =
 
-                await analisarJogo(jogo);
+                await analisarJogo(
+
+                    jogo
+
+                );
 
 
 
@@ -462,7 +973,11 @@ export async function analisarMercado(){
             if(resultado){
 
 
-                resultados.push(resultado);
+                resultados.push(
+
+                    resultado
+
+                );
 
 
             }
@@ -489,22 +1004,25 @@ export async function analisarMercado(){
 
     }
 
+
     catch(error){
+
 
 
         console.error(
 
-            "❌ Erro Inteligência IA:",
+            "❌ Erro analisar mercado:",
 
             error.message
 
         );
 
 
+
         return [];
 
-
     }
+
 
 
 }
@@ -516,9 +1034,8 @@ export async function analisarMercado(){
 
 
 // ==========================================
-// BUSCAR ÚLTIMAS ANÁLISES
+// LISTAR ÚLTIMAS ANÁLISES
 // ==========================================
-
 
 export async function listarAnalises(){
 
@@ -547,12 +1064,15 @@ export async function listarAnalises(){
         return resultado.rows;
 
 
+
     }
+
 
     catch(error){
 
 
-        console.log(
+
+        console.error(
 
             "Erro listar análises:",
 
@@ -575,6 +1095,66 @@ export async function listarAnalises(){
 
 
 
+// ==========================================
+// LIMPAR ANÁLISES ANTIGAS
+// ==========================================
+
+export async function limparAnalises(){
+
+
+    try{
+
+
+        await db.query(`
+
+
+            DELETE FROM analises
+
+            WHERE criado_em < NOW() - INTERVAL '30 days'
+
+
+        `);
+
+
+
+        console.log(
+
+            "🧹 Análises antigas removidas"
+
+        );
+
+
+
+    }
+
+
+    catch(error){
+
+
+        console.error(
+
+            "Erro limpar análises:",
+
+            error.message
+
+        );
+
+
+    }
+
+
+}
+
+
+
+
+
+
+
+// ==========================================
+// EXPORT DEFAULT
+// ==========================================
+
 export default {
 
 
@@ -582,7 +1162,11 @@ export default {
 
     analisarJogo,
 
-    listarAnalises
+    listarAnalises,
+
+    limparAnalises
 
 
 };
+
+}
