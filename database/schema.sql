@@ -1,33 +1,19 @@
-/*
-==================================================
-BETVISION AI
-PostgreSQL Schema v5.0
-==================================================
-*/
+-- ==================================================
+-- BETVISION AI
+-- PostgreSQL Schema v3.0
+-- NeonDB
+-- ==================================================
 
--- ==========================================
--- REMOVER VIEWS ANTIGAS
--- ==========================================
 
-DROP VIEW IF EXISTS analises CASCADE;
-
--- ==========================================
--- REMOVER TABELAS ANTIGAS
--- ==========================================
-
-DROP TABLE IF EXISTS apostas_historico CASCADE;
-DROP TABLE IF EXISTS previsoes_ia CASCADE;
-DROP TABLE IF EXISTS odds CASCADE;
-DROP TABLE IF EXISTS analises_ia CASCADE;
-DROP TABLE IF EXISTS partidas CASCADE;
-
--- ==========================================
+-- ==================================================
 -- CAMPEONATOS
--- ==========================================
+-- ==================================================
 
 CREATE TABLE IF NOT EXISTS campeonatos (
 
-    id INTEGER PRIMARY KEY,
+    id SERIAL PRIMARY KEY,
+
+    api_id INTEGER UNIQUE,
 
     nome VARCHAR(150) NOT NULL,
 
@@ -37,384 +23,368 @@ CREATE TABLE IF NOT EXISTS campeonatos (
 
     temporada VARCHAR(20),
 
+    logo TEXT,
+
     ativo BOOLEAN DEFAULT TRUE,
 
     criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 
 );
 
--- ==========================================
+
+
+-- ==================================================
 -- TIMES
--- ==========================================
+-- ==================================================
 
 CREATE TABLE IF NOT EXISTS times (
 
-    id INTEGER PRIMARY KEY,
+    id SERIAL PRIMARY KEY,
 
-    campeonato_id INTEGER
-        REFERENCES campeonatos(id)
-        ON DELETE CASCADE,
+    api_id INTEGER UNIQUE,
+
+    campeonato_id INTEGER,
 
     nome VARCHAR(150) NOT NULL,
 
     pais VARCHAR(100),
 
-    ataque INTEGER DEFAULT 50,
+    logo TEXT,
 
-    defesa INTEGER DEFAULT 50,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
-    forma NUMERIC(5,2) DEFAULT 50,
 
-    media_gols NUMERIC(5,2) DEFAULT 0,
+    CONSTRAINT fk_time_campeonato
 
-    media_sofridos NUMERIC(5,2) DEFAULT 0,
+    FOREIGN KEY(campeonato_id)
 
-    vitorias INTEGER DEFAULT 0,
+    REFERENCES campeonatos(id)
 
-    empates INTEGER DEFAULT 0,
-
-    derrotas INTEGER DEFAULT 0,
-
-    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ON DELETE CASCADE
 
 );
 
--- ==========================================
+
+
+
+
+-- ==================================================
 -- JOGOS
--- ==========================================
+-- ==================================================
 
 CREATE TABLE IF NOT EXISTS jogos (
 
     id SERIAL PRIMARY KEY,
 
-    api_id BIGINT UNIQUE,
 
-    campeonato VARCHAR(150),
+    api_id INTEGER UNIQUE,
 
-    time_casa VARCHAR(150),
 
-    time_fora VARCHAR(150),
+    campeonato_id INTEGER,
+
+
+    time_casa_id INTEGER,
+
+
+    time_fora_id INTEGER,
+
 
     data_jogo TIMESTAMP,
 
-    status VARCHAR(40) DEFAULT 'SCHEDULED',
+
+    status VARCHAR(50),
+
 
     gols_casa INTEGER DEFAULT 0,
 
+
     gols_fora INTEGER DEFAULT 0,
 
-    rodada INTEGER,
 
-    estadio VARCHAR(150),
+    temporada VARCHAR(20),
 
-    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 
-);
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
--- ==========================================
--- ANALISES IA
--- ==========================================
 
-CREATE TABLE IF NOT EXISTS analises (
 
-    id SERIAL PRIMARY KEY,
+    FOREIGN KEY(campeonato_id)
 
-    jogo_id INTEGER
-        REFERENCES jogos(id)
-        ON DELETE CASCADE,
+    REFERENCES campeonatos(id),
 
-    jogo VARCHAR(250),
 
-    probabilidade_casa NUMERIC(5,2),
 
-    probabilidade_empate NUMERIC(5,2),
+    FOREIGN KEY(time_casa_id)
 
-    probabilidade_fora NUMERIC(5,2),
+    REFERENCES times(id),
 
-    gols_esperados NUMERIC(5,2),
 
-    placar_previsto VARCHAR(20),
 
-    value_bet BOOLEAN DEFAULT FALSE,
+    FOREIGN KEY(time_fora_id)
 
-    confianca VARCHAR(30),
-
-    algoritmo VARCHAR(100),
-
-    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    REFERENCES times(id)
 
 );
--- ==========================================
+
+
+
+
+
+
+-- ==================================================
 -- ODDS
--- ==========================================
+-- ==================================================
 
 CREATE TABLE IF NOT EXISTS odds (
 
     id SERIAL PRIMARY KEY,
 
-    jogo_id INTEGER
-        REFERENCES jogos(id)
-        ON DELETE CASCADE,
 
-    casa VARCHAR(100),
+    jogo_id INTEGER NOT NULL,
+
+
+    casa_aposta VARCHAR(100),
+
 
     mercado VARCHAR(100),
 
-    odd NUMERIC(8,2),
 
-    atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    selecao VARCHAR(100),
+
+
+    odd NUMERIC(6,2),
+
+
+    atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+
+
+    FOREIGN KEY(jogo_id)
+
+    REFERENCES jogos(id)
+
+    ON DELETE CASCADE
 
 );
 
 
--- ==========================================
--- PREVISÕES IA
--- ==========================================
 
-CREATE TABLE IF NOT EXISTS previsoes_ia (
+
+
+
+-- ==================================================
+-- ANALISES IA
+-- ==================================================
+
+CREATE TABLE IF NOT EXISTS analises (
 
     id SERIAL PRIMARY KEY,
 
-    jogo_id INTEGER
-        REFERENCES jogos(id)
-        ON DELETE CASCADE,
 
-    modelo VARCHAR(100),
+    jogo_id INTEGER NOT NULL,
+
+
+    probabilidade_casa NUMERIC(5,2),
+
+
+    probabilidade_empate NUMERIC(5,2),
+
+
+    probabilidade_fora NUMERIC(5,2),
+
 
     previsao VARCHAR(100),
 
-    probabilidade NUMERIC(5,2),
 
-    precisao NUMERIC(5,2),
+    confianca NUMERIC(5,2),
 
-    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+    modelo VARCHAR(100),
+
+
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+
+
+    FOREIGN KEY(jogo_id)
+
+    REFERENCES jogos(id)
+
+    ON DELETE CASCADE
 
 );
 
 
--- ==========================================
+
+
+
+
+
+-- ==================================================
 -- VALUE BETS
--- ==========================================
+-- ==================================================
 
 CREATE TABLE IF NOT EXISTS value_bets (
 
     id SERIAL PRIMARY KEY,
 
-    jogo_id INTEGER
-        REFERENCES jogos(id)
-        ON DELETE CASCADE,
+
+    jogo_id INTEGER,
+
 
     mercado VARCHAR(100),
 
-    odd_mercado NUMERIC(8,2),
 
-    probabilidade_real NUMERIC(5,2),
+    odd_mercado NUMERIC(6,2),
 
-    valor_esperado NUMERIC(8,2),
 
-    confianca VARCHAR(30),
+    probabilidade NUMERIC(5,2),
 
-    status VARCHAR(30) DEFAULT 'ATIVA',
 
-    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    odd_justa NUMERIC(6,2),
+
+
+    valor_esperado NUMERIC(6,2),
+
+
+    recomendacao VARCHAR(100),
+
+
+    ativo BOOLEAN DEFAULT TRUE,
+
+
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+
+
+    FOREIGN KEY(jogo_id)
+
+    REFERENCES jogos(id)
+
+    ON DELETE CASCADE
 
 );
 
 
--- ==========================================
--- APOSTAS HISTÓRICO
--- ==========================================
 
-CREATE TABLE IF NOT EXISTS apostas_historico (
+
+
+
+
+-- ==================================================
+-- HISTÓRICO DE PREVISÕES
+-- ==================================================
+
+CREATE TABLE IF NOT EXISTS historico_previsoes (
 
     id SERIAL PRIMARY KEY,
 
-    jogo_id INTEGER
-        REFERENCES jogos(id)
-        ON DELETE CASCADE,
 
-    mercado VARCHAR(100),
+    jogo_id INTEGER,
 
-    odd NUMERIC(8,2),
 
-    resultado VARCHAR(30),
+    previsao VARCHAR(100),
 
-    lucro NUMERIC(10,2),
 
-    roi NUMERIC(8,2),
+    resultado_real VARCHAR(100),
 
-    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+    acertou BOOLEAN,
+
+
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+
+
+    FOREIGN KEY(jogo_id)
+
+    REFERENCES jogos(id)
 
 );
 
 
--- ==========================================
--- CONFIGURAÇÃO DO SISTEMA
--- ==========================================
 
-CREATE TABLE IF NOT EXISTS configuracoes (
+
+
+
+
+-- ==================================================
+-- LOG DE SINCRONIZAÇÃO
+-- ==================================================
+
+CREATE TABLE IF NOT EXISTS sincronizacao (
 
     id SERIAL PRIMARY KEY,
 
-    chave VARCHAR(100) UNIQUE,
 
-    valor TEXT,
+    servico VARCHAR(100),
 
-    atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+    ultima_execucao TIMESTAMP,
+
+
+    registros INTEGER DEFAULT 0,
+
+
+    status VARCHAR(50),
+
+
+    mensagem TEXT
 
 );
--- ==========================================
--- ÍNDICES DE PERFORMANCE
--- ==========================================
+
+
+
+
+
+
+-- ==================================================
+-- ÍNDICES
+-- ==================================================
 
 CREATE INDEX IF NOT EXISTS idx_jogos_data
+
 ON jogos(data_jogo);
 
 
+
 CREATE INDEX IF NOT EXISTS idx_jogos_status
+
 ON jogos(status);
 
 
-CREATE INDEX IF NOT EXISTS idx_jogos_campeonato
-ON jogos(campeonato);
 
+CREATE INDEX IF NOT EXISTS idx_valuebets_ativo
 
-CREATE INDEX IF NOT EXISTS idx_times_campeonato
-ON times(campeonato_id);
-
-
-CREATE INDEX IF NOT EXISTS idx_analises_jogo
-ON analises(jogo_id);
-
-
-CREATE INDEX IF NOT EXISTS idx_odds_jogo
-ON odds(jogo_id);
-
-
-CREATE INDEX IF NOT EXISTS idx_valuebets_status
-ON value_bets(status);
+ON value_bets(ativo);
 
 
 
--- ==========================================
--- DADOS INICIAIS
--- ==========================================
+CREATE INDEX IF NOT EXISTS idx_campeonatos_api
 
-INSERT INTO configuracoes
+ON campeonatos(api_id);
+
+
+
+-- ==================================================
+-- FINAL
+-- ==================================================
+
+INSERT INTO sincronizacao
 (
-    chave,
-    valor
+servico,
+ultima_execucao,
+status,
+mensagem
 )
 
 VALUES
 
 (
-    'modelo_ia',
-    'Probabilidade + Estatística'
-),
-
-(
-    'versao_sistema',
-    'BetVision AI v5.0'
-),
-
-(
-    'precisao_meta',
-    '75'
+'BetVision AI',
+NOW(),
+'instalado',
+'Banco criado com sucesso'
 )
 
-ON CONFLICT (chave)
-DO NOTHING;
-
-
-
--- ==========================================
--- VIEW DASHBOARD
--- ==========================================
-
-CREATE OR REPLACE VIEW dashboard_status AS
-
-SELECT
-
-    (
-        SELECT COUNT(*)
-        FROM jogos
-        WHERE DATE(data_jogo)=CURRENT_DATE
-    )
-    AS jogos_hoje,
-
-
-    (
-        SELECT COUNT(*)
-        FROM campeonatos
-    )
-    AS campeonatos,
-
-
-    (
-        SELECT COUNT(*)
-        FROM analises
-    )
-    AS analises_ia,
-
-
-    (
-        SELECT COUNT(*)
-        FROM value_bets
-        WHERE status='ATIVA'
-    )
-    AS value_bets,
-
-
-    (
-        SELECT COALESCE(AVG(precisao),0)
-        FROM previsoes_ia
-    )
-    AS precisao_ia;
--- ==========================================
--- FUNÇÕES AUXILIARES
--- ==========================================
-
-CREATE OR REPLACE FUNCTION atualizar_timestamp()
-
-RETURNS TRIGGER AS $$
-
-BEGIN
-
-    NEW.atualizado_em = CURRENT_TIMESTAMP;
-
-    RETURN NEW;
-
-END;
-
-$$ LANGUAGE plpgsql;
-
-
-
--- ==========================================
--- TRIGGER CONFIGURAÇÕES
--- ==========================================
-
-DROP TRIGGER IF EXISTS trigger_configuracoes_update
-ON configuracoes;
-
-
-CREATE TRIGGER trigger_configuracoes_update
-
-BEFORE UPDATE
-ON configuracoes
-
-FOR EACH ROW
-
-EXECUTE FUNCTION atualizar_timestamp();
-
-
-
--- ==========================================
--- FINALIZAÇÃO SCHEMA BETVISION AI v5.0
--- ==========================================
-
-SELECT
-
-    'BetVision AI Database Schema v5.0 instalado com sucesso'
-    AS status;
+ON CONFLICT DO NOTHING;
