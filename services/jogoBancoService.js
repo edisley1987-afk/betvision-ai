@@ -2,7 +2,8 @@
 // ==================================================
 // BETVISION AI
 // services/jogoBancoService.js
-// Controle de Jogos PostgreSQL v5.0
+// Controle de Jogos PostgreSQL v5.1
+// Compatibilidade Rotas Antigas + Novas
 // ==================================================
 
 
@@ -13,13 +14,11 @@ import {
 
 
 // ==================================================
-// SALVAR JOGO DA API
+// SALVAR JOGO INDIVIDUAL DA API
 // ==================================================
 
+export async function salvarJogoAPI(jogo){
 
-export async function salvarJogoAPI(
-    jogo
-){
 
     const {
 
@@ -38,83 +37,75 @@ export async function salvarJogoAPI(
 
 
 
-    const resultado =
-        await query(
+    const resultado = await query(
 
-            `
-            INSERT INTO jogos
+        `
+        INSERT INTO jogos
 
-            (
+        (
+            api_id,
+            campeonato,
+            time_casa,
+            time_fora,
+            data_jogo,
+            status,
+            gols_casa,
+            gols_fora,
+            rodada,
+            estadio
+        )
 
-                api_id,
-                campeonato,
-                time_casa,
-                time_fora,
-                data_jogo,
-                status,
-                gols_casa,
-                gols_fora,
-                rodada,
-                estadio
+        VALUES
 
-            )
+        (
+            $1,$2,$3,$4,$5,
+            $6,$7,$8,$9,$10
+        )
 
+        ON CONFLICT(api_id)
 
-            VALUES
+        DO UPDATE SET
 
-            (
+            campeonato = EXCLUDED.campeonato,
 
-                $1,$2,$3,$4,$5,
-                $6,$7,$8,$9,$10
+            time_casa = EXCLUDED.time_casa,
 
-            )
+            time_fora = EXCLUDED.time_fora,
 
+            data_jogo = EXCLUDED.data_jogo,
 
-            ON CONFLICT(api_id)
+            status = EXCLUDED.status,
 
-            DO UPDATE SET
+            gols_casa = EXCLUDED.gols_casa,
 
+            gols_fora = EXCLUDED.gols_fora,
 
-                campeonato = EXCLUDED.campeonato,
+            rodada = EXCLUDED.rodada,
 
-                time_casa = EXCLUDED.time_casa,
-
-                time_fora = EXCLUDED.time_fora,
-
-                data_jogo = EXCLUDED.data_jogo,
-
-                status = EXCLUDED.status,
-
-                gols_casa = EXCLUDED.gols_casa,
-
-                gols_fora = EXCLUDED.gols_fora,
-
-                rodada = EXCLUDED.rodada,
-
-                estadio = EXCLUDED.estadio
+            estadio = EXCLUDED.estadio
 
 
-            RETURNING *
+        RETURNING *
 
-            `,
+        `,
 
 
-            [
+        [
 
-                api_id,
-                campeonato,
-                time_casa,
-                time_fora,
-                data_jogo,
-                status,
-                gols_casa,
-                gols_fora,
-                rodada,
-                estadio
+            api_id,
+            campeonato,
+            time_casa,
+            time_fora,
+            data_jogo,
+            status,
+            gols_casa,
+            gols_fora,
+            rodada,
+            estadio
 
-            ]
+        ]
 
-        );
+    );
 
 
     return resultado.rows[0];
@@ -124,34 +115,94 @@ export async function salvarJogoAPI(
 
 
 // ==================================================
-// BUSCAR JOGO PELO ID DA API
+// SALVAR LISTA DE JOGOS
+// COMPATIBILIDADE ROTAS ANTIGAS
 // ==================================================
 
+export async function salvarListaJogos(
+    jogos = []
+){
+
+    const lista = [];
+
+
+    for(const jogo of jogos){
+
+
+        const salvo =
+            await salvarJogoAPI(
+                jogo
+            );
+
+
+        lista.push(
+            salvo
+        );
+
+
+    }
+
+
+    return lista;
+
+}
+
+
+
+// ==================================================
+// BUSCAR JOGO PELO ID API
+// ==================================================
 
 export async function buscarPorApiId(
     api_id
 ){
 
-    const resultado =
-        await query(
+    const resultado = await query(
 
-            `
-            SELECT *
+        `
+        SELECT *
 
-            FROM jogos
+        FROM jogos
 
-            WHERE api_id=$1
+        WHERE api_id=$1
 
-            `,
+        `,
 
-            [
-                api_id
-            ]
+        [
+            api_id
+        ]
 
-        );
+    );
 
 
     return resultado.rows[0];
+
+}
+
+
+
+// ==================================================
+// LISTAR TODOS OS JOGOS
+// COMPATIBILIDADE ROTAS
+// ==================================================
+
+export async function listarJogos(){
+
+    const resultado = await query(
+
+        `
+        SELECT *
+
+        FROM jogos
+
+        ORDER BY data_jogo DESC
+
+        `
+
+    );
+
+
+    return resultado.rows;
 
 }
 
@@ -161,27 +212,24 @@ export async function buscarPorApiId(
 // BUSCAR JOGOS DO DIA
 // ==================================================
 
-
 export async function buscarJogosDoDia(){
 
-    const resultado =
-        await query(
+    const resultado = await query(
 
-            `
-            SELECT *
+        `
+        SELECT *
 
-            FROM jogos
+        FROM jogos
 
-            WHERE DATE(data_jogo)
-            =
-            CURRENT_DATE
+        WHERE DATE(data_jogo)
+        =
+        CURRENT_DATE
 
+        ORDER BY data_jogo
 
-            ORDER BY data_jogo
+        `
 
-            `
-
-        );
+    );
 
 
     return resultado.rows;
@@ -194,35 +242,30 @@ export async function buscarJogosDoDia(){
 // BUSCAR PRÓXIMOS JOGOS
 // ==================================================
 
-
 export async function buscarProximosJogos(
     limite = 20
 ){
 
-    const resultado =
-        await query(
+    const resultado = await query(
 
-            `
-            SELECT *
+        `
+        SELECT *
 
-            FROM jogos
+        FROM jogos
 
+        WHERE data_jogo >= NOW()
 
-            WHERE data_jogo >= NOW()
+        ORDER BY data_jogo ASC
 
+        LIMIT $1
 
-            ORDER BY data_jogo ASC
+        `,
 
+        [
+            limite
+        ]
 
-            LIMIT $1
-
-            `,
-
-            [
-                limite
-            ]
-
-        );
+    );
 
 
     return resultado.rows;
@@ -235,50 +278,52 @@ export async function buscarProximosJogos(
 // ATUALIZAR RESULTADO
 // ==================================================
 
-
 export async function atualizarResultado(
+
     api_id,
+
     gols_casa,
+
     gols_fora,
+
     status
+
 ){
 
-    const resultado =
-        await query(
+    const resultado = await query(
 
-            `
-            UPDATE jogos
+        `
+        UPDATE jogos
 
-            SET
+        SET
 
-                gols_casa=$2,
+            gols_casa=$2,
 
-                gols_fora=$3,
+            gols_fora=$3,
 
-                status=$4
-
-
-            WHERE api_id=$1
+            status=$4
 
 
-            RETURNING *
-
-            `,
+        WHERE api_id=$1
 
 
-            [
+        RETURNING *
 
-                api_id,
+        `,
 
-                gols_casa,
+        [
 
-                gols_fora,
+            api_id,
 
-                status
+            gols_casa,
 
-            ]
+            gols_fora,
 
-        );
+            status
+
+        ]
+
+    );
 
 
     return resultado.rows[0];
@@ -291,26 +336,25 @@ export async function atualizarResultado(
 // REMOVER JOGOS ANTIGOS
 // ==================================================
 
-
 export async function removerJogosAntigos(
     dias = 90
 ){
 
-    const resultado =
-        await query(
+    const resultado = await query(
 
-            `
-            DELETE FROM jogos
+        `
+        DELETE FROM jogos
 
-            WHERE data_jogo <
-            
-            NOW() - INTERVAL '${dias} days'
+        WHERE data_jogo <
+        
+        NOW() - INTERVAL '${dias} days'
 
-            RETURNING id
 
-            `
+        RETURNING id
 
-        );
+        `
+
+    );
 
 
     return resultado.rowCount;
@@ -320,77 +364,51 @@ export async function removerJogosAntigos(
 
 
 // ==================================================
-// ESTATÍSTICAS DE JOGOS
+// ESTATÍSTICAS DOS JOGOS
 // ==================================================
-
 
 export async function estatisticasJogos(){
 
-    const resultado =
-        await query(
+    const resultado = await query(
 
-            `
-            SELECT
-
-
-            COUNT(*) AS total,
+        `
+        SELECT
 
 
-            COUNT(
-                CASE 
-                    WHEN status='FINISHED'
-                    THEN 1
-                END
-            ) AS finalizados,
+        COUNT(*) AS total,
 
 
-            COUNT(
-                CASE 
-                    WHEN status='SCHEDULED'
-                    THEN 1
-                END
-            ) AS agendados
+        COUNT(
+            CASE
+                WHEN status='FINISHED'
+                THEN 1
+            END
+        ) AS finalizados,
 
 
-            FROM jogos
+        COUNT(
+            CASE
+                WHEN status='SCHEDULED'
+                THEN 1
+            END
+        ) AS agendados
 
-            `
 
-        );
+        FROM jogos
+
+        `
+
+    );
 
 
     return resultado.rows[0];
 
 }
 
-// ==================================================
-// LISTAR JOGOS (COMPATIBILIDADE ROTAS)
-// ==================================================
-
-export async function listarJogos(){
-
-    const resultado =
-        await query(
-
-            `
-            SELECT *
-
-            FROM jogos
-
-            ORDER BY data_jogo DESC
-
-            `
-
-        );
-
-
-    return resultado.rows;
-
-}
 
 
 // ==================================================
-// EXPORTAÇÃO
+// EXPORTAÇÃO FINAL
 // ==================================================
 
 export default {
@@ -398,19 +416,20 @@ export default {
 
     salvarJogoAPI,
 
+    salvarListaJogos,
+
+    listarJogos,
+
     buscarPorApiId,
 
     buscarJogosDoDia,
 
     buscarProximosJogos,
 
-    listarJogos,
-
     atualizarResultado,
 
     removerJogosAntigos,
 
     estatisticasJogos
-
 
 };
