@@ -1,8 +1,9 @@
 // ==================================================
 // BETVISION AI
 // server.js
-// Versão 4.1
+// Versão 4.2
 // Servidor Principal
+// Neon PostgreSQL + Football-Data
 // ==================================================
 
 import express from "express";
@@ -19,11 +20,14 @@ import {
     fileURLToPath
 } from "url";
 
-
 import {
     WebSocketServer
 } from "ws";
 
+
+// ==================================================
+// BANCO
+// ==================================================
 
 import {
     conectarBanco,
@@ -31,39 +35,40 @@ import {
 } from "./database/database.js";
 
 
+// ==================================================
+// SINCRONIZAÇÃO
+// ==================================================
+
+import {
+    iniciarSincronizacao,
+    ativarAgendamento
+} from "./services/sincronizacaoService.js";
+
 
 // ==================================================
 // ROTAS
 // ==================================================
 
-import campeonatosRouter 
+import campeonatosRouter
 from "./routes/campeonatos.js";
 
-
-import oddsRouter 
+import oddsRouter
 from "./routes/odds.js";
 
-
-import valuebetsRouter 
+import valuebetsRouter
 from "./routes/valuebets.js";
 
-
-import jogosRouter 
+import jogosRouter
 from "./routes/jogos.js";
 
-
-import futebolRouter 
+import futebolRouter
 from "./routes/futebol.js";
 
-
-import analisesRouter 
+import analisesRouter
 from "./routes/analises.js";
 
-
-import inteligenciaRouter 
+import inteligenciaRouter
 from "./routes/inteligencia.js";
-
-
 
 
 // ==================================================
@@ -73,31 +78,24 @@ from "./routes/inteligencia.js";
 dotenv.config();
 
 
-const app =
-    express();
+const app = express();
 
 
 const servidor =
-    http.createServer(app);
-
+http.createServer(app);
 
 
 const PORT =
-    process.env.PORT || 3000;
+process.env.PORT || 3000;
 
 
 
 const __filename =
-    fileURLToPath(import.meta.url);
-
+fileURLToPath(import.meta.url);
 
 
 const __dirname =
-    path.dirname(__filename);
-
-
-
-
+path.dirname(__filename);
 // ==================================================
 // MIDDLEWARES
 // ==================================================
@@ -129,18 +127,19 @@ app.use(
 
 
 app.use(
+
     express.urlencoded({
 
         extended:true
 
     })
+
 );
 
 
 app.use(
     morgan("dev")
 );
-
 
 
 
@@ -163,11 +162,15 @@ app.use(
     )
 
 );
+
+
+
 // ==================================================
-// CONEXÃO BANCO
+// CONEXÃO BANCO + INICIALIZAÇÃO SERVIÇOS
 // ==================================================
 
 try {
+
 
     await conectarBanco();
 
@@ -177,18 +180,47 @@ try {
     );
 
 
-    // ==================================================
-    // SINCRONIZAÇÃO CAMPEONATOS API FOOTBALL-DATA
-    // ==================================================
 
-    await iniciarSincronizacao();
+    // ==============================================
+    // SINCRONIZAÇÃO CAMPEONATOS
+    // ==============================================
+
+    try {
 
 
-    ativarAgendamento();
+        await iniciarSincronizacao();
+
+
+        ativarAgendamento();
+
+
+        console.log(
+            "🟢 Sincronização de campeonatos ativa"
+        );
+
+
+    }
+
+    catch(error){
+
+
+        console.error(
+
+            "🔴 Erro sincronização:",
+
+            error.message
+
+        );
+
+
+    }
+
 
 
 }
+
 catch(erro){
+
 
     console.error(
 
@@ -198,12 +230,14 @@ catch(erro){
 
     );
 
+
 }
 
-// ==================================================
-// ROTAS DO SISTEMA
-// ==================================================
 
+
+// ==================================================
+// ROTAS API
+// ==================================================
 
 app.use(
 
@@ -275,9 +309,6 @@ app.use(
 
 
 
-
-
-
 // ==================================================
 // API PING
 // ==================================================
@@ -291,14 +322,11 @@ app.get(
 
         res.json({
 
-            status:
-                "online",
+            status:"online",
 
-            sistema:
-                "BetVision AI",
+            sistema:"BetVision AI",
 
-            horario:
-                new Date()
+            horario:new Date()
 
         });
 
@@ -306,12 +334,6 @@ app.get(
     }
 
 );
-
-
-
-
-
-
 // ==================================================
 // DASHBOARD REAL
 // ==================================================
@@ -331,10 +353,9 @@ app.get(
                 await query(
 
                     `
-                    SELECT COUNT(*) 
+                    SELECT COUNT(*)
 
                     FROM campeonatos
-
                     `
 
                 );
@@ -346,10 +367,9 @@ app.get(
                 await query(
 
                     `
-                    SELECT COUNT(*) 
+                    SELECT COUNT(*)
 
                     FROM jogos
-
                     `
 
                 );
@@ -361,10 +381,9 @@ app.get(
                 await query(
 
                     `
-                    SELECT COUNT(*) 
+                    SELECT COUNT(*)
 
                     FROM analises
-
                     `
 
                 );
@@ -381,7 +400,6 @@ app.get(
                     FROM value_bets
 
                     WHERE ativo=true
-
                     `
 
                 );
@@ -389,63 +407,81 @@ app.get(
 
 
 
-
             res.json({
 
+
                 sistema:
+
                     "BetVision AI",
 
 
 
                 status:
+
                     "operacional",
 
 
 
                 jogosHoje:
+
                     Number(
+
                         jogos.rows[0].count
+
                     ),
 
 
 
                 campeonatos:
+
                     Number(
+
                         campeonatos.rows[0].count
+
                     ),
 
 
 
                 analisesIA:
+
                     Number(
+
                         analises.rows[0].count
+
                     ),
 
 
 
                 valueBets:
+
                     Number(
+
                         valuebets.rows[0].count
+
                     ),
 
 
 
                 roi:
+
                     0,
 
 
 
                 precisao:
+
                     0,
 
 
 
                 modelo:
+
                     "Probabilidade + Estatística",
 
 
 
                 ultimaAtualizacao:
+
                     new Date()
 
 
@@ -454,6 +490,7 @@ app.get(
 
 
         }
+
         catch(erro){
 
 
@@ -468,9 +505,13 @@ app.get(
 
 
             res.status(500)
+
             .json({
 
+                sucesso:false,
+
                 erro:
+
                     erro.message
 
             });
@@ -482,9 +523,6 @@ app.get(
     }
 
 );
-
-
-
 
 
 
@@ -509,86 +547,80 @@ new Set();
 
 
 
-
 wss.on(
 
-"connection",
+    "connection",
 
-(socket)=>{
-
-
-    console.log(
-
-        "🔌 Cliente WebSocket conectado"
-
-    );
+    (socket)=>{
 
 
+        console.log(
 
-    global.websocketClients.add(
+            "🔌 Cliente WebSocket conectado"
 
-        socket
-
-    );
+        );
 
 
 
-    socket.send(
+        global.websocketClients.add(
 
-        JSON.stringify({
+            socket
 
-            tipo:
-                "status",
-
-
-            sistema:
-                "BetVision AI",
-
-
-            online:
-                true,
-
-
-            horario:
-                new Date()
-
-        })
-
-    );
+        );
 
 
 
-    socket.on(
+        socket.send(
 
-        "close",
+            JSON.stringify({
 
-        ()=>{
+                tipo:"status",
 
+                sistema:"BetVision AI",
 
-            global.websocketClients.delete(
+                online:true,
 
-                socket
+                horario:new Date()
 
-            );
+            })
 
-
-        }
-
-    );
+        );
 
 
-}
+
+        socket.on(
+
+            "close",
+
+            ()=>{
+
+
+                global.websocketClients.delete(
+
+                    socket
+
+                );
+
+
+            }
+
+        );
+
+
+    }
 
 );
+
+
+
+
 // ==================================================
-// ENVIO TEMPO REAL WEBSOCKET
+// ENVIO WEBSOCKET
 // ==================================================
 
-global.enviarAtualizacao = (
+global.enviarAtualizacao =
 
-    dados
-
-)=>{
+(dados)=>{
 
 
     const mensagem =
@@ -629,12 +661,6 @@ global.enviarAtualizacao = (
 
 
 };
-
-
-
-
-
-
 // ==================================================
 // STATUS DO SISTEMA
 // ==================================================
@@ -665,12 +691,14 @@ app.get(
 
 
             ambiente:
-                process.env.NODE_ENV || "development",
+
+                process.env.NODE_ENV ||
+                "development",
 
 
             horario:
-                new Date()
 
+                new Date()
 
         });
 
@@ -678,9 +706,6 @@ app.get(
     }
 
 );
-
-
-
 
 
 
@@ -718,10 +743,8 @@ app.get(
 
 
 
-
-
 // ==================================================
-// ERROS
+// TRATAMENTO DE ERROS
 // ==================================================
 
 app.use(
@@ -740,12 +763,13 @@ app.use(
 
 
         res.status(500)
+
         .json({
 
             sucesso:false,
 
-
             erro:
+
                 "Erro interno do servidor"
 
         });
@@ -754,8 +778,6 @@ app.use(
     }
 
 );
-
-
 
 
 
