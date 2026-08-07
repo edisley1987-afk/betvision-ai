@@ -1,33 +1,69 @@
 {
   "name": "betvision-ai",
-  "version": "4.0.0",
-  "description": "BetVision AI - Plataforma Inteligente de Análise Esportiva",
+  "version": "3.0.0",
+  "description": "Plataforma de inteligência esportiva com análise preditiva e Value Bets usando IA",
   "type": "module",
+
   "main": "server.js",
+
   "scripts": {
+
     "start": "node server.js",
+
     "dev": "node --watch server.js"
+
   },
-  "keywords": [
-    "betvision",
-    "football",
-    "api-football",
-    "ai",
-    "postgresql",
-    "websocket"
-  ],
-  "author": "BetVision AI",
-  "license": "MIT",
+
+
   "dependencies": {
-    "axios": "^1.11.0",
+
+    "axios": "^1.7.9",
+
     "compression": "^1.8.1",
+
     "cors": "^2.8.5",
-    "dotenv": "^17.2.1",
+
+    "dotenv": "^16.6.1",
+
     "express": "^4.21.2",
+
     "helmet": "^8.1.0",
+
     "morgan": "^1.10.0",
+
     "node-cron": "^4.2.1",
+
     "pg": "^8.16.3",
+
     "ws": "^8.18.3"
-  }
+
+  },
+
+
+  "engines": {
+
+    "node": ">=20"
+
+  },
+
+
+  "keywords": [
+
+    "futebol",
+
+    "inteligencia-artificial",
+
+    "apostas",
+
+    "probabilidade",
+
+    "value-bets"
+
+  ],
+
+
+  "author": "BetVision AI",
+
+  "license": "MIT"
+
 }
