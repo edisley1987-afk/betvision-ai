@@ -4,17 +4,19 @@
 // Versão Neon PostgreSQL + Football-Data.org v4
 // Sincronização de Campeonatos Reais
 // ==================================================
-
-import axios from "axios";
+import express from "express";
+import cors from "cors";
 import dotenv from "dotenv";
 
 import {
-    query
-} from "./bancoService.js";
+    conectarBanco
+} from "./services/bancoService.js";
 
 
-dotenv.config();
-
+import {
+    iniciarSincronizacao,
+    ativarAgendamento
+} from "./services/sincronizacaoService.js";
 // ==================================================
 // CONFIGURAÇÃO API
 // ==================================================
