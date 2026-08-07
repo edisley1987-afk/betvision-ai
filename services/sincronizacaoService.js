@@ -2,33 +2,27 @@
 // BetVision AI
 // services/sincronizacaoService.js
 // Versão Neon PostgreSQL + Football-Data.org v4
-// Sincronização de Campeonatos Reais
 // ==================================================
-import express from "express";
-import cors from "cors";
-import dotenv from "dotenv";
+
+import axios from "axios";
+import cron from "node-cron";
 
 import {
-    conectarBanco
-} from "./services/bancoService.js";
+    query
+} from "../database/database.js";
 
 
-import {
-    iniciarSincronizacao,
-    ativarAgendamento
-} from "./services/sincronizacaoService.js";
 // ==================================================
 // CONFIGURAÇÃO API
 // ==================================================
 
 const API_URL =
-    process.env.API_FOOTBALL_URL ||
-    "https://api.football-data.org/v4";
+process.env.API_FOOTBALL_URL ||
+"https://api.football-data.org/v4";
 
 
 const API_KEY =
-    process.env.API_FOOTBALL_KEY;
-
+process.env.API_FOOTBALL_KEY;
 
 
 // ==================================================
