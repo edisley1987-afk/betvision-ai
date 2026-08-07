@@ -3,15 +3,17 @@
 // services/oddsService.js
 // Fase 3
 // Motor de Odds Reais
+// Neon PostgreSQL
 // ==========================================
 
 
 import db from "../database/database.js";
 
+
+
 // ==========================================
 // SALVAR ODDS
 // ==========================================
-
 
 export async function salvarOdd(odd){
 
@@ -19,56 +21,60 @@ export async function salvarOdd(odd){
     try{
 
 
-        await db.query(`
+        const resultado =
+
+        await db.query(
 
 
-            INSERT INTO odds
+        `
+
+        INSERT INTO odds
+
+        (
+
+            partida_id,
+
+            mercado,
+
+            selecao,
+
+            odd,
+
+            casa_aposta,
+
+            criado_em
+
+        )
 
 
-            (
+        VALUES
 
-                jogo_id,
+        (
 
-                jogo,
+            $1,
 
-                mercado,
+            $2,
 
-                selecao,
+            $3,
 
-                odd,
+            $4,
 
-                bookmaker
+            $5,
 
+            CURRENT_TIMESTAMP
 
-            )
-
-
-            VALUES
-
-            (
-
-                $1,
-
-                $2,
-
-                $3,
-
-                $4,
-
-                $5,
-
-                $6
-
-            )
+        )
 
 
-        `,[
+        RETURNING *;
+
+        `,
 
 
-            odd.jogo_id,
+        [
 
 
-            odd.jogo,
+            odd.partida_id,
 
 
             odd.mercado,
@@ -80,18 +86,18 @@ export async function salvarOdd(odd){
             odd.odd,
 
 
-            odd.bookmaker
+            odd.casa_aposta
 
 
         ]);
 
 
 
-        return true;
+        return resultado.rows[0];
+
 
 
     }
-
 
     catch(error){
 
@@ -105,7 +111,7 @@ export async function salvarOdd(odd){
         );
 
 
-        return false;
+        return null;
 
 
     }
@@ -117,15 +123,11 @@ export async function salvarOdd(odd){
 
 
 
-
-
-
 // ==========================================
-// BUSCAR ODDS POR JOGO
+// BUSCAR ODDS POR PARTIDA
 // ==========================================
 
-
-export async function buscarOddsJogo(jogo_id){
+export async function buscarOddsJogo(partida_id){
 
 
     try{
@@ -134,31 +136,35 @@ export async function buscarOddsJogo(jogo_id){
         const resultado =
 
 
-        await db.query(`
+        await db.query(
 
 
-            SELECT *
+        `
+
+        SELECT *
+
+        FROM odds
+
+        WHERE partida_id = $1
+
+        ORDER BY odd DESC
 
 
-            FROM odds
+        `,
 
 
-            WHERE jogo_id=$1
+        [
 
 
-            ORDER BY odd DESC
+            partida_id
 
-
-
-        `,[
-
-            jogo_id
 
         ]);
 
 
 
         return resultado.rows || [];
+
 
 
     }
@@ -178,6 +184,7 @@ export async function buscarOddsJogo(jogo_id){
 
         return [];
 
+
     }
 
 
@@ -187,13 +194,9 @@ export async function buscarOddsJogo(jogo_id){
 
 
 
-
-
-
 // ==========================================
 // LISTAR TODAS ODDS
 // ==========================================
-
 
 export async function listarOdds(){
 
@@ -204,27 +207,30 @@ export async function listarOdds(){
         const resultado =
 
 
-        await db.query(`
+        await db.query(
 
 
-            SELECT *
+        `
+
+        SELECT *
+
+        FROM odds
+
+        ORDER BY criado_em DESC
+
+        LIMIT 500
 
 
-            FROM odds
-
-
-            ORDER BY atualizado_em DESC
-
-
-            LIMIT 500
+        `
 
 
 
-        `);
+        );
 
 
 
         return resultado.rows || [];
+
 
 
     }
@@ -244,6 +250,7 @@ export async function listarOdds(){
 
         return [];
 
+
     }
 
 
@@ -253,19 +260,86 @@ export async function listarOdds(){
 
 
 
+// ==========================================
+// BUSCAR MELHORES ODDS
+// ==========================================
+
+export async function melhoresOdds(){
 
 
+    try{
+
+
+        const resultado =
+
+
+        await db.query(
+
+
+        `
+
+        SELECT *
+
+        FROM odds
+
+        ORDER BY odd DESC
+
+        LIMIT 50
+
+
+        `
+
+
+
+        );
+
+
+
+        return resultado.rows || [];
+
+
+
+    }
+
+
+    catch(error){
+
+
+        console.error(
+
+            "❌ Erro melhores odds:",
+
+            error.message
+
+        );
+
+
+        return [];
+
+
+    }
+
+
+}
+
+
+
+
+
+// ==========================================
+// EXPORT DEFAULT
+// ==========================================
 
 export default {
 
 
     salvarOdd,
 
-
     buscarOddsJogo,
 
+    listarOdds,
 
-    listarOdds
+    melhoresOdds
 
 
 };
