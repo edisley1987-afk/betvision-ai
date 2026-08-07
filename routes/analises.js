@@ -1,609 +1,92 @@
-// ==========================================
-// BetVision AI
+//
+// ==================================================
+// BETVISION AI
 // routes/analises.js
-// Versão 12.0
-// API Análises IA
-// PostgreSQL
-// ==========================================
+// Rotas de Análises IA v5.2
+// PostgreSQL + Inteligência Estatística
+// ==================================================
+
 
 import express from "express";
 
-import db from "../database/database.js";
-
 import {
+
     analisarMercado,
+
     listarAnalises
+
 } from "../services/inteligenciaService.js";
 
+
+import {
+
+    gerarAnaliseIA
+
+} from "../services/inteligenciaService.js";
 
 
 const router = express.Router();
 
 
 
-
-
-// ==========================================
+// ==================================================
+// LISTAR TODAS AS ANÁLISES
 // GET /api/analises
-//
-// Retorna análises salvas
-// Não recria IA a cada chamada
-// ==========================================
-
-router.get("/", async(req,res)=>{
-
-
-    try{
-
-
-        console.log(
-
-            "🤖 Buscando análises IA..."
-
-        );
-
-
-
-
-        const resultado =
-
-            await listarAnalises();
-
-
-
-
-
-        res.json({
-
-
-            sucesso:true,
-
-
-            total:
-
-            resultado.length,
-
-
-            analises:
-
-            resultado
-
-
-
-        });
-
-
-
-
-    }
-
-    catch(error){
-
-
-        console.error(
-
-            "❌ Erro buscar análises:",
-
-            error.message
-
-        );
-
-
-
-        res.status(500).json({
-
-
-            sucesso:false,
-
-
-            erro:error.message
-
-
-        });
-
-
-    }
-
-
-});
-
-
-
-
-
-
-
-
-// ==========================================
-// GET /api/analises/gerar
-//
-// Executa IA manualmente
-// ==========================================
+// ==================================================
 
 router.get(
 
-"/gerar",
+    "/",
 
-async(req,res)=>{
+    async (req,res)=>{
 
 
-    try{
+        try{
 
 
-        console.log(
+            const resultado =
 
-            "🤖 Gerando novas análises IA..."
+                await listarAnalises();
 
-        );
 
 
+            res.json({
 
+                sucesso:true,
 
+                total:
 
-        const analises =
+                    resultado.length,
 
-            await analisarMercado();
 
+                dados:
 
+                    resultado
 
 
+            });
 
-        res.json({
 
 
-            sucesso:true,
+        }catch(erro){
 
 
-            total:
+            console.error(
 
-            analises.length,
+                "Erro listar análises:",
 
+                erro.message
 
-            analises
+            );
 
 
-
-        });
-
-
-
-    }
-
-    catch(error){
-
-
-        console.error(
-
-            "❌ Erro gerar análises:",
-
-            error.message
-
-        );
-
-
-
-        res.status(500).json({
-
-
-            sucesso:false,
-
-
-            erro:error.message
-
-
-        });
-
-
-    }
-
-
-
-});
-
-// ==========================================
-// GET /api/analises/salvas
-//
-// Histórico das análises IA
-// ==========================================
-
-router.get(
-
-"/salvas",
-
-async(req,res)=>{
-
-
-    try{
-
-
-        const resultado =
-
-        await db.query(`
-
-
-            SELECT
-
-
-                id,
-
-                jogo,
-
-
-                probabilidade_casa,
-
-                probabilidade_empate,
-
-                probabilidade_fora,
-
-
-                gols_esperados,
-
-                placar_previsto,
-
-
-                value_bet,
-
-                confianca,
-
-
-                algoritmo,
-
-
-                criado_em
-
-
-            FROM analises
-
-
-            ORDER BY id DESC
-
-
-            LIMIT 100
-
-
-
-        `);
-
-
-
-
-
-
-        const analises =
-
-        resultado.rows.map(item=>({
-
-
-            id:item.id,
-
-
-            jogo:item.jogo,
-
-
-
-            favorito:
-
-            descobrirFavorito(
-
-                item
-
-            ),
-
-
-
-            probabilidade:
-
-            maiorProbabilidade(
-
-                item
-
-            ),
-
-
-
-            probabilidadeCasa:
-
-            Number(
-
-                item.probabilidade_casa
-
-            ),
-
-
-
-            probabilidadeEmpate:
-
-            Number(
-
-                item.probabilidade_empate
-
-            ),
-
-
-
-            probabilidadeFora:
-
-            Number(
-
-                item.probabilidade_fora
-
-            ),
-
-
-
-            golsEsperados:
-
-            Number(
-
-                item.gols_esperados
-
-            ),
-
-
-
-            placar:
-
-            item.placar_previsto,
-
-
-
-            confianca:
-
-            item.confianca,
-
-
-
-            valueBet:
-
-            item.value_bet,
-
-
-
-            algoritmo:
-
-            item.algoritmo,
-
-
-
-            criadoEm:
-
-            item.criado_em
-
-
-
-        }));
-
-
-
-
-
-
-
-        res.json({
-
-
-            sucesso:true,
-
-
-            total:
-
-            analises.length,
-
-
-            analises
-
-
-
-        });
-
-
-
-
-    }
-
-    catch(error){
-
-
-
-        console.error(
-
-            "❌ Erro análises salvas:",
-
-            error.message
-
-        );
-
-
-
-        res.status(500).json({
-
-
-            sucesso:false,
-
-
-            erro:error.message
-
-
-        });
-
-
-    }
-
-
-});
-
-
-
-
-
-
-
-
-
-// ==========================================
-// FUNÇÃO FAVORITO
-// ==========================================
-
-function descobrirFavorito(item){
-
-
-
-    const casa =
-
-        Number(
-
-            item.probabilidade_casa
-
-        );
-
-
-
-    const fora =
-
-        Number(
-
-            item.probabilidade_fora
-
-        );
-
-
-
-
-
-    if(casa > fora){
-
-
-        return item.jogo
-
-            .split(" x ")[0];
-
-
-    }
-
-
-
-
-    if(fora > casa){
-
-
-        return item.jogo
-
-            .split(" x ")[1];
-
-
-    }
-
-
-
-
-    return "Empate";
-
-
-}
-
-
-
-
-
-
-
-
-// ==========================================
-// MAIOR PROBABILIDADE
-// ==========================================
-
-function maiorProbabilidade(item){
-
-
-
-    return Math.max(
-
-
-        Number(
-
-            item.probabilidade_casa
-
-        ),
-
-
-        Number(
-
-            item.probabilidade_empate
-
-        ),
-
-
-        Number(
-
-            item.probabilidade_fora
-
-        )
-
-
-
-    );
-
-
-
-}
-
-// ==========================================
-// GET /api/analises/:id
-//
-// Buscar análise específica
-// ==========================================
-
-router.get(
-
-"/:id",
-
-async(req,res)=>{
-
-
-    try{
-
-
-        const resultado =
-
-        await db.query(`
-
-
-            SELECT *
-
-            FROM analises
-
-            WHERE id=$1
-
-
-        `,
-
-        [
-
-            req.params.id
-
-        ]);
-
-
-
-
-
-        if(
-
-            resultado.rows.length === 0
-
-        ){
-
-
-            return res.status(404).json({
-
+            res.status(500).json({
 
                 sucesso:false,
 
-
                 erro:
 
-                "Análise não encontrada"
-
+                    erro.message
 
             });
 
@@ -611,261 +94,279 @@ async(req,res)=>{
         }
 
 
+    }
 
+);
 
 
 
-        const item =
 
-            resultado.rows[0];
 
+// ==================================================
+// ANALISAR JOGO
+// POST /api/analises
+// ==================================================
 
+router.post(
 
+    "/",
 
+    async(req,res)=>{
 
 
-        res.json({
+        try{
 
 
-            sucesso:true,
+            const {
 
 
-            analise:{
+                jogo,
 
+                dados = {}
 
-                id:item.id,
 
+            } = req.body;
 
-                jogo:item.jogo,
 
 
+            if(!jogo){
 
-                favorito:
 
-                descobrirFavorito(
+                return res.status(400).json({
 
-                    item
+                    sucesso:false,
 
-                ),
+                    erro:
 
+                    "Jogo obrigatório"
 
-
-                probabilidade:
-
-                maiorProbabilidade(
-
-                    item
-
-                ),
-
-
-
-                probabilidadeCasa:
-
-                Number(
-
-                    item.probabilidade_casa
-
-                ),
-
-
-
-                probabilidadeEmpate:
-
-                Number(
-
-                    item.probabilidade_empate
-
-                ),
-
-
-
-                probabilidadeFora:
-
-                Number(
-
-                    item.probabilidade_fora
-
-                ),
-
-
-
-                golsEsperados:
-
-                Number(
-
-                    item.gols_esperados
-
-                ),
-
-
-
-                placar:
-
-                item.placar_previsto,
-
-
-
-                confianca:
-
-                item.confianca,
-
-
-
-                algoritmo:
-
-                item.algoritmo
-
+                });
 
 
             }
 
 
 
-        });
+            const resultado =
 
 
+                await analisarMercado(
+
+                    jogo,
+
+                    dados
+
+                );
+
+
+
+            res.json(
+
+                resultado
+
+            );
+
+
+
+        }catch(erro){
+
+
+            console.error(
+
+                "Erro análise IA:",
+
+                erro.message
+
+            );
+
+
+            res.status(500).json({
+
+                sucesso:false,
+
+                erro:
+
+                    erro.message
+
+            });
+
+
+        }
 
 
     }
 
-    catch(error){
-
-
-
-        console.error(
-
-            "❌ Erro buscar análise:",
-
-            error.message
-
-        );
-
-
-
-        res.status(500).json({
-
-
-            sucesso:false,
-
-
-            erro:error.message
-
-
-        });
-
-
-
-    }
-
-
-});
+);
 
 
 
 
 
+// ==================================================
+// ANALISE DIRETA
+// POST /api/analises/prever
+// ==================================================
+
+router.post(
+
+    "/prever",
+
+    async(req,res)=>{
+
+
+        try{
+
+
+            const {
+
+
+                jogo,
+
+                dados={}
+
+
+            } = req.body;
 
 
 
-
-// ==========================================
-// DELETE /api/analises/limpar
-//
-// Limpa análises antigas
-// ==========================================
-
-router.delete(
-
-"/limpar",
-
-async(req,res)=>{
+            const resultado =
 
 
-    try{
+                await gerarAnaliseIA(
 
+                    jogo,
 
-        const resultado =
+                    dados
 
-        await db.query(`
-
-
-            DELETE FROM analises
-
-            WHERE criado_em <
-
-            NOW() - INTERVAL '30 days'
-
-
-            RETURNING id
+                );
 
 
 
-        `);
+            res.json({
+
+                sucesso:true,
+
+                resultado
+
+
+            });
 
 
 
+        }catch(erro){
 
 
+            res.status(500).json({
 
-        res.json({
+                sucesso:false,
 
+                erro:
 
-            sucesso:true,
+                    erro.message
 
-
-            removidas:
-
-            resultado.rows.length
-
+            });
 
 
-        });
-
+        }
 
 
     }
 
-    catch(error){
-
-
-        console.error(
-
-            "❌ Erro limpar análises:",
-
-            error.message
-
-        );
+);
 
 
 
-        res.status(500).json({
 
 
-            sucesso:false,
+// ==================================================
+// BUSCAR ANÁLISE POR ID
+// GET /api/analises/:id
+// ==================================================
+
+router.get(
+
+    "/:id",
+
+    async(req,res)=>{
 
 
-            erro:error.message
+        try{
 
 
-        });
+            const lista =
+
+                await listarAnalises();
+
+
+
+            const analise =
+
+                lista.find(
+
+                    item =>
+
+                    item.id == req.params.id
+
+                );
+
+
+
+            if(!analise){
+
+
+                return res.status(404).json({
+
+                    sucesso:false,
+
+                    erro:
+
+                    "Análise não encontrada"
+
+                });
+
+
+            }
+
+
+
+            res.json({
+
+                sucesso:true,
+
+                dados:
+
+                    analise
+
+            });
+
+
+
+        }catch(erro){
+
+
+            res.status(500).json({
+
+                sucesso:false,
+
+                erro:
+
+                    erro.message
+
+            });
+
+
+        }
 
 
     }
 
-
-});
-
+);
 
 
 
 
-
-
-
-
-// ==========================================
-// EXPORT ROUTER
-// ==========================================
+// ==================================================
+// EXPORT
+// ==================================================
 
 export default router;
