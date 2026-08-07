@@ -646,8 +646,6 @@ export async function salvarAnalise(dados) {
     }
 }
 
-
-}
 // ==========================================
 // GERAR ANÁLISES IA
 // Compatibilidade com processos automáticos
