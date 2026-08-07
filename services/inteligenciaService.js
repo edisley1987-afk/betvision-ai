@@ -599,94 +599,52 @@ export async function analisarMercado(){
 // ==========================================
 
 
-export async function salvarAnalise(dados){
+export async function salvarAnalise(dados) {
 
+    try {
 
-    try{
-
-
-       await db.query(
-
-`
-INSERT INTO analises
-(
-
-    jogo_id,
-
-    jogo,
-
-    probabilidade_casa,
-
-    probabilidade_empate,
-
-    probabilidade_fora,
-
-    gols_esperados,
-
-    placar_previsto,
-
-    value_bet,
-
-    confianca,
-
-    algoritmo
-
-)
-
-VALUES
-(
-
-    $1,$2,$3,$4,$5,$6,$7,$8,$9,$10
-
-)
-`,
-[
-
-    dados.jogo_id,
-
-    dados.jogo,
-
-    dados.probabilidade_casa,
-
-    dados.probabilidade_empate,
-
-    dados.probabilidade_fora,
-
-    dados.gols_esperados,
-
-    dados.placar_previsto,
-
-    dados.value_bet,
-
-    dados.confianca,
-
-    dados.algoritmo
-
-]);
-
+        await db.query(
+            `
+            INSERT INTO analises_ia
+            (
+                partida_id,
+                probabilidade_casa,
+                probabilidade_empate,
+                probabilidade_fora,
+                recomendacao,
+                valor_esperado,
+                confianca,
+                modelo
+            )
+            VALUES
+            (
+                $1,$2,$3,$4,$5,$6,$7,$8
+            )
+            `,
+            [
+                dados.jogo_id,
+                dados.probabilidade_casa,
+                dados.probabilidade_empate,
+                dados.probabilidade_fora,
+                dados.placar_previsto,
+                dados.value_bet ? 1 : 0,
+                dados.confianca,
+                dados.algoritmo
+            ]
+        );
 
         return true;
 
-
-    }
-
-
-    catch(error){
-
+    } catch (error) {
 
         console.error(
-
             "❌ Erro salvar análise:",
-
             error.message
-
         );
 
-
         return false;
-
-
     }
+}
 
 
 }
