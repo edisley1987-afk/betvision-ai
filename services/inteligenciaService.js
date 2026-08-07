@@ -2,7 +2,7 @@
 // ==================================================
 // BETVISION AI
 // services/inteligenciaService.js
-// Motor Inteligência Estatística v5.1
+// Motor Inteligência Estatística v5.2
 // Compatibilidade Rotas Antigas + Novas
 // ==================================================
 
@@ -19,7 +19,7 @@ import {
 
 
 // ==================================================
-// LIMITAR VALORES
+// LIMITADOR
 // ==================================================
 
 function limitar(
@@ -52,7 +52,7 @@ function limitar(
 
 
 // ==================================================
-// CALCULAR PROBABILIDADES
+// PROBABILIDADES
 // ==================================================
 
 export function calcularProbabilidades(
@@ -88,7 +88,6 @@ export function calcularProbabilidades(
 
     const forcaCasa =
 
-
         (ataqueCasa * 0.30)
 
         +
@@ -106,7 +105,6 @@ export function calcularProbabilidades(
 
 
     const forcaFora =
-
 
         (ataqueFora * 0.30)
 
@@ -126,33 +124,27 @@ export function calcularProbabilidades(
 
     const total =
 
-        forcaCasa +
-
-        forcaFora;
+        forcaCasa + forcaFora;
 
 
 
-    let casa =
+    const casa =
 
         (forcaCasa / total) * 70;
 
 
 
-    let fora =
+    const fora =
 
         (forcaFora / total) * 70;
 
 
 
-    let empate =
+    const empate =
 
         30 -
 
-        Math.abs(
-
-            casa - fora
-
-        ) / 2;
+        Math.abs(casa - fora) / 2;
 
 
 
@@ -170,6 +162,7 @@ export function calcularProbabilidades(
             ),
 
 
+
         empate:
 
             Number(
@@ -179,6 +172,7 @@ export function calcularProbabilidades(
                 .toFixed(2)
 
             ),
+
 
 
         fora:
@@ -210,19 +204,6 @@ export function calcularPlacar(
 
 ){
 
-
-    const {
-
-
-        mediaGolsCasa = 1.2,
-
-        mediaGolsFora = 1
-
-
-    } = dados;
-
-
-
     return {
 
 
@@ -234,11 +215,12 @@ export function calcularPlacar(
 
                 Math.round(
 
-                    mediaGolsCasa
+                    dados.mediaGolsCasa || 1
 
                 )
 
             ),
+
 
 
         fora:
@@ -249,7 +231,7 @@ export function calcularPlacar(
 
                 Math.round(
 
-                    mediaGolsFora
+                    dados.mediaGolsFora || 1
 
                 )
 
@@ -258,14 +240,13 @@ export function calcularPlacar(
 
     };
 
-
 }
 
 
 
 
 // ==================================================
-// CONFIANÇA IA
+// CONFIANÇA
 // ==================================================
 
 export function calcularConfianca(
@@ -274,16 +255,13 @@ export function calcularConfianca(
 
 ){
 
-
     const maior = Math.max(
-
 
         probabilidades.casa,
 
         probabilidades.empate,
 
         probabilidades.fora
-
 
     );
 
@@ -302,7 +280,6 @@ export function calcularConfianca(
 
 
     return "BAIXA";
-
 
 }
 
@@ -324,7 +301,6 @@ export async function gerarAnaliseIA(
 
     const probabilidades =
 
-
         calcularProbabilidades(
 
             dados
@@ -335,24 +311,11 @@ export async function gerarAnaliseIA(
 
     const placar =
 
-
         calcularPlacar(
 
             dados
 
         );
-
-
-
-    const confianca =
-
-
-        calcularConfianca(
-
-            probabilidades
-
-        );
-
 
 
 
@@ -364,8 +327,8 @@ export async function gerarAnaliseIA(
             jogo.id,
 
 
-        jogo:
 
+        jogo:
 
             `${jogo.time_casa} x ${jogo.time_fora}`,
 
@@ -395,11 +358,11 @@ export async function gerarAnaliseIA(
 
                 (
 
-                    dados.mediaGolsCasa || 1
+                    (dados.mediaGolsCasa || 1)
 
                     +
 
-                    dados.mediaGolsFora || 1
+                    (dados.mediaGolsFora || 1)
 
                 )
 
@@ -411,7 +374,6 @@ export async function gerarAnaliseIA(
 
         placar_previsto:
 
-
             `${placar.casa}x${placar.fora}`,
 
 
@@ -420,12 +382,17 @@ export async function gerarAnaliseIA(
 
 
 
-        confianca,
+        confianca:
+
+            calcularConfianca(
+
+                probabilidades
+
+            ),
 
 
 
         algoritmo:
-
 
             "Probabilidade + Estatística"
 
@@ -448,7 +415,7 @@ export async function gerarAnaliseIA(
 
 // ==================================================
 // ANALISAR MERCADO
-// COMPATIBILIDADE ROTAS ANTIGAS
+// COMPATIBILIDADE
 // ==================================================
 
 export async function analisarMercado(
@@ -459,9 +426,7 @@ export async function analisarMercado(
 
 ){
 
-
     const resultado =
-
 
         await gerarAnaliseIA(
 
@@ -478,7 +443,6 @@ export async function analisarMercado(
 
         sucesso:true,
 
-
         analise:resultado
 
 
@@ -491,7 +455,31 @@ export async function analisarMercado(
 
 
 // ==================================================
-// CALCULAR VALUE BET
+// LISTAR ANÁLISES
+// COMPATIBILIDADE ROTAS ANTIGAS
+// ==================================================
+
+export async function listarAnalises(){
+
+    const modulo =
+
+        await import(
+
+            "./bancoService.js"
+
+        );
+
+
+
+    return await modulo.listarAnalises();
+
+}
+
+
+
+
+// ==================================================
+// VALUE BET
 // ==================================================
 
 export function calcularValueBet(
@@ -504,7 +492,6 @@ export function calcularValueBet(
 
 
     const valorEsperado =
-
 
         (
 
@@ -529,7 +516,6 @@ export function calcularValueBet(
 
         valor:
 
-
             Number(
 
                 valorEsperado
@@ -541,7 +527,6 @@ export function calcularValueBet(
 
 
         possui:
-
 
             valorEsperado > 0.05
 
@@ -573,7 +558,6 @@ export async function gerarValueBet(
 
     const resultado =
 
-
         calcularValueBet(
 
             odd,
@@ -592,26 +576,19 @@ export async function gerarValueBet(
 
     return await salvarValueBet({
 
-
         jogo_id:jogo.id,
-
 
         mercado,
 
-
         odd_mercado:odd,
 
-
         probabilidade_real:probabilidade,
-
 
         valor_esperado:
 
             resultado.valor,
 
-
         confianca:"ALTA"
-
 
     });
 
@@ -630,21 +607,17 @@ export default {
 
     calcularProbabilidades,
 
-
     calcularPlacar,
-
 
     calcularConfianca,
 
-
     gerarAnaliseIA,
-
 
     analisarMercado,
 
+    listarAnalises,
 
     calcularValueBet,
-
 
     gerarValueBet
 
