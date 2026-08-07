@@ -363,6 +363,30 @@ export async function estatisticasJogos(){
 
 }
 
+// ==================================================
+// LISTAR JOGOS (COMPATIBILIDADE ROTAS)
+// ==================================================
+
+export async function listarJogos(){
+
+    const resultado =
+        await query(
+
+            `
+            SELECT *
+
+            FROM jogos
+
+            ORDER BY data_jogo DESC
+
+            `
+
+        );
+
+
+    return resultado.rows;
+
+}
 
 
 // ==================================================
