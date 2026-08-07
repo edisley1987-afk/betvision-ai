@@ -407,8 +407,7 @@ export function ativarAgendamento(){
 // EXPORTS
 // ==================================================
 
-export default {
-
+export {
 
     buscarCampeonatosAPI,
 
@@ -417,6 +416,5 @@ export default {
     iniciarSincronizacao,
 
     ativarAgendamento
-
 
 };
