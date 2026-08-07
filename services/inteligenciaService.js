@@ -2,50 +2,68 @@
 // ==================================================
 // BETVISION AI
 // services/inteligenciaService.js
-// Motor de Inteligência Estatística v5.0
+// Motor Inteligência Estatística v5.1
+// Compatibilidade Rotas Antigas + Novas
 // ==================================================
 
 
 import {
+
     salvarAnalise,
+
     salvarValueBet
+
 } from "./bancoService.js";
 
 
 
-// ==================================================
-// NORMALIZAR VALORES
-// ==================================================
 
+// ==================================================
+// LIMITAR VALORES
+// ==================================================
 
 function limitar(
+
     valor,
+
     minimo = 0,
+
     maximo = 100
+
 ){
 
     return Math.max(
+
         minimo,
+
         Math.min(
+
             maximo,
-            Number(valor)
+
+            Number(valor) || 0
+
         )
+
     );
 
 }
 
 
 
-// ==================================================
-// CÁLCULO DE PROBABILIDADE
-// ==================================================
 
+// ==================================================
+// CALCULAR PROBABILIDADES
+// ==================================================
 
 export function calcularProbabilidades(
+
     dados = {}
+
 ){
 
+
     const {
+
 
         ataqueCasa = 50,
 
@@ -63,11 +81,13 @@ export function calcularProbabilidades(
 
         mediaGolsFora = 1
 
+
     } = dados;
 
 
 
-    let forcaCasa =
+    const forcaCasa =
+
 
         (ataqueCasa * 0.30)
 
@@ -85,7 +105,8 @@ export function calcularProbabilidades(
 
 
 
-    let forcaFora =
+    const forcaFora =
+
 
         (ataqueFora * 0.30)
 
@@ -103,11 +124,9 @@ export function calcularProbabilidades(
 
 
 
-    let total =
+    const total =
 
-        forcaCasa
-
-        +
+        forcaCasa +
 
         forcaFora;
 
@@ -127,7 +146,13 @@ export function calcularProbabilidades(
 
     let empate =
 
-        30 - Math.abs(casa - fora) / 2;
+        30 -
+
+        Math.abs(
+
+            casa - fora
+
+        ) / 2;
 
 
 
@@ -137,30 +162,41 @@ export function calcularProbabilidades(
         casa:
 
             Number(
+
                 limitar(casa)
+
                 .toFixed(2)
+
             ),
 
 
         empate:
 
             Number(
+
                 limitar(empate)
+
                 .toFixed(2)
+
             ),
 
 
         fora:
 
             Number(
+
                 limitar(fora)
+
                 .toFixed(2)
+
             )
 
 
     };
 
+
 }
+
 
 
 
@@ -168,16 +204,20 @@ export function calcularProbabilidades(
 // PLACAR PREVISTO
 // ==================================================
 
-
 export function calcularPlacar(
+
     dados = {}
+
 ){
 
+
     const {
+
 
         mediaGolsCasa = 1.2,
 
         mediaGolsFora = 1
+
 
     } = dados;
 
@@ -189,36 +229,54 @@ export function calcularPlacar(
         casa:
 
             Math.max(
+
                 0,
-                Math.round(mediaGolsCasa)
+
+                Math.round(
+
+                    mediaGolsCasa
+
+                )
+
             ),
 
 
         fora:
 
             Math.max(
+
                 0,
-                Math.round(mediaGolsFora)
+
+                Math.round(
+
+                    mediaGolsFora
+
+                )
+
             )
 
 
     };
 
+
 }
 
 
 
-// ==================================================
-// NÍVEL DE CONFIANÇA
-// ==================================================
 
+// ==================================================
+// CONFIANÇA IA
+// ==================================================
 
 export function calcularConfianca(
+
     probabilidades
+
 ){
 
 
     const maior = Math.max(
+
 
         probabilidades.casa,
 
@@ -226,21 +284,21 @@ export function calcularConfianca(
 
         probabilidades.fora
 
+
     );
 
 
-    if(maior >= 65){
+
+    if(maior >= 65)
 
         return "ALTA";
 
-    }
 
 
-    if(maior >= 50){
+    if(maior >= 50)
 
         return "MEDIA";
 
-    }
 
 
     return "BAIXA";
@@ -250,38 +308,51 @@ export function calcularConfianca(
 
 
 
+
 // ==================================================
 // GERAR ANÁLISE IA
 // ==================================================
 
-
 export async function gerarAnaliseIA(
+
     jogo,
+
     dados = {}
+
 ){
 
 
     const probabilidades =
 
+
         calcularProbabilidades(
+
             dados
+
         );
 
 
 
     const placar =
 
+
         calcularPlacar(
+
             dados
+
         );
 
 
 
     const confianca =
 
+
         calcularConfianca(
+
             probabilidades
+
         );
+
 
 
 
@@ -289,12 +360,15 @@ export async function gerarAnaliseIA(
 
 
         jogo_id:
+
             jogo.id,
 
 
         jogo:
 
+
             `${jogo.time_casa} x ${jogo.time_fora}`,
+
 
 
         probabilidade_casa:
@@ -302,9 +376,11 @@ export async function gerarAnaliseIA(
             probabilidades.casa,
 
 
+
         probabilidade_empate:
 
             probabilidades.empate,
+
 
 
         probabilidade_fora:
@@ -312,72 +388,138 @@ export async function gerarAnaliseIA(
             probabilidades.fora,
 
 
+
         gols_esperados:
 
             Number(
+
                 (
-                    dados.mediaGolsCasa
+
+                    dados.mediaGolsCasa || 1
+
                     +
-                    dados.mediaGolsFora
+
+                    dados.mediaGolsFora || 1
+
                 )
+
                 .toFixed(2)
+
             ),
+
 
 
         placar_previsto:
 
+
             `${placar.casa}x${placar.fora}`,
+
 
 
         value_bet:false,
 
 
+
         confianca,
+
 
 
         algoritmo:
 
-            "Probabilidade + Estatística"
 
+            "Probabilidade + Estatística"
 
 
     };
 
 
 
-    const salva =
+    return await salvarAnalise(
 
-        await salvarAnalise(
-            analise
-        );
+        analise
 
+    );
 
-    return salva;
 
 }
 
 
 
+
 // ==================================================
-// CÁLCULO VALUE BET
+// ANALISAR MERCADO
+// COMPATIBILIDADE ROTAS ANTIGAS
 // ==================================================
 
+export async function analisarMercado(
+
+    jogo,
+
+    dados = {}
+
+){
+
+
+    const resultado =
+
+
+        await gerarAnaliseIA(
+
+            jogo,
+
+            dados
+
+        );
+
+
+
+    return {
+
+
+        sucesso:true,
+
+
+        analise:resultado
+
+
+    };
+
+
+}
+
+
+
+
+// ==================================================
+// CALCULAR VALUE BET
+// ==================================================
 
 export function calcularValueBet(
+
     odd,
+
     probabilidade
+
 ){
+
 
     const valorEsperado =
 
+
         (
-            odd
-            *
+
+            odd *
+
             (
+
                 probabilidade / 100
+
             )
+
         )
+
         -
+
         1;
 
 
@@ -387,13 +529,19 @@ export function calcularValueBet(
 
         valor:
 
+
             Number(
+
                 valorEsperado
+
                 .toFixed(3)
+
             ),
 
 
+
         possui:
+
 
             valorEsperado > 0.05
 
@@ -405,51 +553,65 @@ export function calcularValueBet(
 
 
 
+
 // ==================================================
 // GERAR VALUE BET
 // ==================================================
 
-
 export async function gerarValueBet(
+
     jogo,
+
     mercado,
+
     odd,
+
     probabilidade
+
 ){
 
 
     const resultado =
 
+
         calcularValueBet(
+
             odd,
+
             probabilidade
+
         );
 
 
 
-    if(!resultado.possui){
+    if(!resultado.possui)
 
         return null;
-
-    }
 
 
 
     return await salvarValueBet({
 
+
         jogo_id:jogo.id,
+
 
         mercado,
 
+
         odd_mercado:odd,
+
 
         probabilidade_real:probabilidade,
 
+
         valor_esperado:
+
             resultado.valor,
 
-        confianca:
-            "ALTA"
+
+        confianca:"ALTA"
+
 
     });
 
@@ -458,8 +620,9 @@ export async function gerarValueBet(
 
 
 
+
 // ==================================================
-// EXPORTAÇÃO
+// EXPORT FINAL
 // ==================================================
 
 export default {
@@ -467,13 +630,21 @@ export default {
 
     calcularProbabilidades,
 
+
     calcularPlacar,
+
 
     calcularConfianca,
 
+
     gerarAnaliseIA,
 
+
+    analisarMercado,
+
+
     calcularValueBet,
+
 
     gerarValueBet
 
