@@ -169,7 +169,6 @@ app.use(
 
 try {
 
-
     await conectarBanco();
 
 
@@ -178,9 +177,18 @@ try {
     );
 
 
+    // ==================================================
+    // SINCRONIZAÇÃO CAMPEONATOS API FOOTBALL-DATA
+    // ==================================================
+
+    await iniciarSincronizacao();
+
+
+    ativarAgendamento();
+
+
 }
 catch(erro){
-
 
     console.error(
 
@@ -190,13 +198,7 @@ catch(erro){
 
     );
 
-
 }
-
-
-
-
-
 
 // ==================================================
 // ROTAS DO SISTEMA
