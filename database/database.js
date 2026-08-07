@@ -1,69 +1,57 @@
 // ==================================================
 // BETVISION AI
 // database/database.js
-// PostgreSQL Connection v5.0
+// PostgreSQL NeonDB
+// Versão 3.0
 // ==================================================
 
 import pg from "pg";
 import dotenv from "dotenv";
 
+
 dotenv.config();
+
+
 
 const { Pool } = pg;
 
 
+
 // ==================================================
-// CONFIGURAÇÃO POSTGRESQL
+// CONFIGURAÇÃO POOL POSTGRESQL
 // ==================================================
 
 const pool = new Pool({
 
-    connectionString: process.env.DATABASE_URL,
+    connectionString:
+        process.env.DATABASE_URL,
+
 
     ssl:
+
         process.env.NODE_ENV === "production"
+
             ? {
-                rejectUnauthorized: false
+
+                rejectUnauthorized:false
+
             }
+
             : false,
 
 
-    max: 10,
+    max:10,
 
-    idleTimeoutMillis: 30000,
 
-    connectionTimeoutMillis: 15000
+    idleTimeoutMillis:30000,
+
+
+    connectionTimeoutMillis:10000
+
 
 });
 
 
-// ==================================================
-// EVENTOS DO BANCO
-// ==================================================
-
-pool.on(
-    "connect",
-    () => {
-
-        console.log(
-            "🟢 PostgreSQL conectado"
-        );
-
-    }
-);
-
-
-pool.on(
-    "error",
-    (erro) => {
-
-        console.error(
-            "🔴 Erro inesperado PostgreSQL:",
-            erro.message
-        );
-
-    }
-);
 
 
 
@@ -73,104 +61,6 @@ pool.on(
 
 export async function conectarBanco(){
 
-    try{
-
-
-        const resultado = await pool.query(
-            "SELECT NOW() AS data"
-        );
-
-
-        console.log(
-            "✅ Banco operacional:",
-            resultado.rows[0].data
-        );
-
-
-        return true;
-
-
-    }catch(erro){
-
-
-        console.error(
-            "❌ Falha conexão banco:",
-            erro.message
-        );
-
-
-        throw erro;
-
-    }
-
-}
-
-
-
-// ==================================================
-// EXECUTAR QUERY PADRÃO
-// ==================================================
-
-export async function query(
-    texto,
-    parametros = []
-){
-
-    const inicio = Date.now();
-
-
-    try{
-
-
-        const resultado =
-            await pool.query(
-                texto,
-                parametros
-            );
-
-
-        const tempo =
-            Date.now() - inicio;
-
-
-        if(
-            process.env.NODE_ENV !== "production"
-        ){
-
-            console.log(
-                `SQL executado ${tempo}ms`
-            );
-
-        }
-
-
-        return resultado;
-
-
-    }catch(erro){
-
-
-        console.error(
-            "Erro SQL:",
-            erro.message
-        );
-
-
-        throw erro;
-
-    }
-
-}
-
-
-
-// ==================================================
-// TRANSAÇÃO
-// ==================================================
-
-export async function executarTransacao(
-    callback
-){
 
     const cliente =
         await pool.connect();
@@ -179,63 +69,70 @@ export async function executarTransacao(
     try{
 
 
-        await cliente.query(
-            "BEGIN"
-        );
-
-
         const resultado =
-            await callback(cliente);
+            await cliente.query(
+
+                "SELECT NOW()"
+
+            );
 
 
-        await cliente.query(
-            "COMMIT"
+        console.log(
+
+            "🟢 PostgreSQL OK:",
+
+            resultado.rows[0].now
+
         );
 
 
-        return resultado;
 
-
-    }catch(erro){
-
-
-        await cliente.query(
-            "ROLLBACK"
-        );
-
-
-        throw erro;
-
-
-    }finally{
+    }
+    finally{
 
 
         cliente.release();
 
+
     }
 
+
 }
 
 
 
+
+
 // ==================================================
-// ENCERRAMENTO SEGURO
+// QUERY PADRÃO
 // ==================================================
 
-export async function fecharBanco(){
+export async function query(
 
-    await pool.end();
+    texto,
 
-    console.log(
-        "Banco PostgreSQL encerrado"
+    parametros=[]
+
+){
+
+
+    return await pool.query(
+
+        texto,
+
+        parametros
+
     );
 
+
 }
 
 
 
+
+
 // ==================================================
-// EXPORT PADRÃO
+// EXPORTAR POOL
 // ==================================================
 
 export default pool;
