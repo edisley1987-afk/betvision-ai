@@ -404,6 +404,8 @@ export default {
 
     buscarProximosJogos,
 
+    listarJogos,
+
     atualizarResultado,
 
     removerJogosAntigos,
