@@ -1,532 +1,427 @@
-// ==========================================
+// ==================================================
 // BetVision AI
 // services/sincronizacaoService.js
-// Versão 12.0
-// Sincronização Football-Data
-// Campeonatos + Times
-// ==========================================
+// Versão Neon PostgreSQL + Football-Data.org v4
+// Sincronização de Campeonatos Reais
+// ==================================================
 
-
-import {
-
-    buscarCompeticoes,
-
-    buscarTimesCompeticao,
-
-    normalizarTime
-
-}
-from "./apiFootballService.js";
-
-
+import axios from "axios";
+import dotenv from "dotenv";
 
 import {
+    query
+} from "./bancoService.js";
 
-    inserirCampeonato,
 
-    inserirTime
+dotenv.config();
+
+
+// ==================================================
+// CONFIGURAÇÃO API
+// ==================================================
+
+const API_URL =
+    process.env.API_FOOTBALL_URL ||
+    "https://api.football-data.org/v4";
+
+
+const API_KEY =
+    process.env.API_FOOTBALL_KEY;
+
+
+
+// ==================================================
+// BUSCAR CAMPEONATOS NA API
+// ==================================================
+
+export async function buscarCampeonatosAPI(){
+
+    try {
+
+
+        if(!API_KEY){
+
+            console.log(
+                "⚠️ API_FOOTBALL_KEY não configurada"
+            );
+
+            return [];
+
+
+        }
+
+
+        const resposta =
+            await axios.get(
+                `${API_URL}/competitions`,
+                {
+
+                    headers:{
+                        "X-Auth-Token": API_KEY
+                    },
+
+                    timeout:15000
+
+                }
+            );
+
+
+        return resposta.data.competitions || [];
+
+
+    } catch(error){
+
+
+        console.error(
+            "Erro API Football-Data:",
+            error.message
+        );
+
+
+        return [];
+
+    }
 
 }
-from "./bancoService.js";
+
+
+
+// ==================================================
+// NORMALIZAR CAMPEONATO
+// ==================================================
+
+function normalizarCampeonato(campeonato){
+
+
+    return {
+
+
+        api_id:
+            campeonato.id || null,
+
+
+        nome:
+            campeonato.name || "Desconhecido",
+
+
+        pais:
+            campeonato.area?.name || "Internacional",
+
+
+        continente:
+            campeonato.area?.code || null,
+
+
+        temporada:
+            campeonato.currentSeason?.startDate
+                ?.substring(0,4)
+                || null,
+
+
+        logo:
+            campeonato.emblem || null,
+
+
+        ativo:true
+
+
+    };
+
+
+}
+// ==================================================
+// INSERIR / ATUALIZAR CAMPEONATO NO POSTGRESQL
+// ==================================================
+
+async function salvarCampeonato(campeonato){
+
+
+    const sql = `
+
+        INSERT INTO campeonatos
+        (
+            api_id,
+            nome,
+            pais,
+            continente,
+            temporada,
+            logo,
+            ativo
+        )
+
+        VALUES
+        (
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6,
+            $7
+        )
+
+
+        ON CONFLICT (api_id)
+
+        DO UPDATE SET
+
+
+            nome = EXCLUDED.nome,
+
+            pais = EXCLUDED.pais,
+
+            continente = EXCLUDED.continente,
+
+            temporada = EXCLUDED.temporada,
+
+            logo = EXCLUDED.logo,
+
+            ativo = EXCLUDED.ativo
+
+
+        RETURNING *;
+
+    `;
+
+
+
+    try{
+
+
+        const resultado =
+            await query(
+                sql,
+                [
+
+                    campeonato.api_id,
+
+                    campeonato.nome,
+
+                    campeonato.pais,
+
+                    campeonato.continente,
+
+                    campeonato.temporada,
+
+                    campeonato.logo,
+
+                    campeonato.ativo
+
+                ]
+            );
+
+
+
+        return resultado.rows[0];
+
+
+
+    }catch(error){
+
+
+        console.error(
+            "Erro ao salvar campeonato:",
+            error.message
+        );
+
+
+        return null;
+
+
+    }
+
+
+}
 
 
 
 
+// ==================================================
+// SINCRONIZAR TODOS OS CAMPEONATOS
+// ==================================================
 
-// ==========================================
-// DELAY
-// ==========================================
+export async function sincronizarCampeonatos(){
 
 
-function esperar(ms){
-
-    return new Promise(resolve=>
-
-        setTimeout(resolve,ms)
-
+    console.log(
+        "🌍 Iniciando sincronização de campeonatos..."
     );
 
-}
 
 
+    const lista =
+        await buscarCampeonatosAPI();
 
 
 
-// ==========================================
-// SINCRONIZAÇÃO
-// ==========================================
+    if(!lista.length){
 
 
-export async function sincronizarSistema(){
+        console.log(
+            "⚠️ Nenhum campeonato recebido da API"
+        );
 
 
+        return {
 
-console.log("================================");
-console.log("🌎 INICIANDO SINCRONIZAÇÃO");
-console.log("================================");
+            sucesso:false,
 
+            total:0
 
+        };
 
-let totalCampeonatos = 0;
 
-let totalTimes = 0;
+    }
 
-let erros = 0;
 
 
+    let salvos = 0;
 
 
 
-try{
+    for(const item of lista){
 
 
+        const campeonato =
+            normalizarCampeonato(item);
 
-const campeonatosAPI =
 
-await buscarCompeticoes();
 
+        const resultado =
+            await salvarCampeonato(
+                campeonato
+            );
 
 
 
-if(!Array.isArray(campeonatosAPI)){
+        if(resultado){
 
+            salvos++;
 
-throw new Error(
-"API não retornou campeonatos"
-);
+        }
 
 
-}
+    }
 
 
 
 
+    console.log(
+        `🏆 ${salvos} campeonatos sincronizados`
+    );
 
-console.log(
 
-`🏆 Campeonatos encontrados: ${campeonatosAPI.length}`
 
-);
+    return {
 
 
+        sucesso:true,
 
 
+        total:salvos
 
-for(const campeonatoAPI of campeonatosAPI){
 
-
-
-try{
-
-
-
-const campeonato = {
-
-
-id:
-
-Number(campeonatoAPI.id),
-
-
-
-nome:
-
-campeonatoAPI.name ||
-
-"Sem nome",
-
-
-
-pais:
-
-campeonatoAPI.area?.name ||
-
-"",
-
-
-
-codigo:
-
-campeonatoAPI.code || ""
-
-
-
-};
-
-
-
-
-
-
-console.log(
-
-`🏆 ${campeonato.nome}`
-
-);
-
-
-
-
-
-
-await inserirCampeonato(
-
-campeonato
-
-);
-
-
-
-totalCampeonatos++;
-
-
-
-
-
-
-
-await esperar(1500);
-
-
-
-
-
-
-
-let timesAPI=[];
-
-
-
-try{
-
-
-
-timesAPI =
-
-await buscarTimesCompeticao(
-
-campeonato.id
-
-);
-
+    };
 
 
 }
+// ==================================================
+// SINCRONIZAÇÃO AUTOMÁTICA
+// ==================================================
 
-catch(error){
-
-
-
-console.log(
-
-"⚠️ Erro buscando times:",
-
-error.message
-
-);
+import cron from "node-cron";
 
 
+// ==================================================
+// EXECUTAR AO INICIAR O SISTEMA
+// ==================================================
 
-await esperar(5000);
+export async function iniciarSincronizacao(){
+
+
+    console.log(
+        "🚀 Iniciando serviço de sincronização..."
+    );
+
+
+    try{
+
+
+        const resultado =
+            await sincronizarCampeonatos();
 
 
 
-continue;
+        console.log(
+            "📊 Resultado sincronização:",
+            resultado
+        );
+
+
+    }catch(error){
+
+
+        console.error(
+            "Erro inicial sincronização:",
+            error.message
+        );
+
+
+    }
 
 
 }
 
 
 
+// ==================================================
+// CRON
+// Atualiza a cada 24 horas
+// ==================================================
+
+export function ativarAgendamento(){
 
 
-
-if(!Array.isArray(timesAPI)){
-
-
-continue;
+    cron.schedule(
+        "0 3 * * *",
+        async()=>{
 
 
-}
+            console.log(
+                "🔄 Atualização automática campeonatos"
+            );
 
 
+            await sincronizarCampeonatos();
 
 
+        }
+    );
 
 
-console.log(
-
-`⚽ ${timesAPI.length} times encontrados`
-
-);
-
-
-
-
-
-
-
-
-for(const item of timesAPI){
-
-
-
-try{
-
-
-
-const time =
-
-normalizarTime(item);
-
-
-
-
-
-
-if(!time || !time.id){
-
-
-continue;
+    console.log(
+        "⏰ Agendamento de campeonatos ativo"
+    );
 
 
 }
 
 
 
-
-
-
-await inserirTime({
-
-
-
-id:
-
-Number(time.id),
-
-
-
-campeonato_id:
-
-Number(campeonato.id),
-
-
-
-nome:
-
-time.nome || "Sem nome",
-
-
-
-pais:
-
-time.pais || ""
-
-
-
-});
-
-
-
-
-
-
-totalTimes++;
-
-
-
-
-
-}
-
-catch(error){
-
-
-
-erros++;
-
-
-console.log(
-
-"❌ Erro salvar time:",
-
-error.message
-
-);
-
-
-
-}
-
-
-
-
-
-await esperar(300);
-
-
-
-}
-
-
-
-
-
-
-
-}
-
-catch(error){
-
-
-
-erros++;
-
-
-console.log(
-
-"❌ Erro campeonato:",
-
-campeonatoAPI.name,
-
-error.message
-
-);
-
-
-
-}
-
-
-
-
-
-
-
-// pausa entre campeonatos
-
-await esperar(3000);
-
-
-
-}
-
-
-
-
-
-
-
-
-console.log("================================");
-console.log("✅ SINCRONIZAÇÃO CONCLUÍDA");
-
-console.log(
-
-`🏆 Campeonatos: ${totalCampeonatos}`
-
-);
-
-
-console.log(
-
-`⚽ Times cadastrados: ${totalTimes}`
-
-);
-
-
-console.log(
-
-`⚠️ Erros: ${erros}`
-
-);
-
-console.log("================================");
-
-
-
-
-
-
-
-return {
-
-
-sucesso:true,
-
-
-campeonatos:
-
-totalCampeonatos,
-
-
-times:
-
-totalTimes,
-
-
-erros
-
-
-
-};
-
-
-
-
-
-
-}
-catch(error){
-
-
-
-console.error(
-
-"❌ Falha sincronização:",
-
-error.message
-
-);
-
-
-
-
-
-return {
-
-
-sucesso:false,
-
-
-campeonatos:0,
-
-
-times:0,
-
-
-erros:1
-
-
-};
-
-
-
-}
-
-
-
-}
-
-
-
-
+// ==================================================
+// EXPORTS
+// ==================================================
 
 export default {
 
 
-sincronizarSistema
+    buscarCampeonatosAPI,
+
+    sincronizarCampeonatos,
+
+    iniciarSincronizacao,
+
+    ativarAgendamento
 
 
 };
