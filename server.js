@@ -1,8 +1,8 @@
 // ==================================================
 // BETVISION AI
 // server.js
-// Versão 3.0
-// Servidor principal
+// Versão 3.1
+// Servidor Principal
 // ==================================================
 
 import express from "express";
@@ -13,11 +13,14 @@ import morgan from "morgan";
 import dotenv from "dotenv";
 import http from "http";
 import path from "path";
+
 import { fileURLToPath } from "url";
 
 import { WebSocketServer } from "ws";
 
 import { conectarBanco } from "./database/database.js";
+
+import campeonatosRouter from "./routes/campeonatos.js";
 
 
 // ==================================================
@@ -64,9 +67,11 @@ app.use(
 );
 
 
+
 app.use(
     compression()
 );
+
 
 
 app.use(
@@ -74,9 +79,11 @@ app.use(
 );
 
 
+
 app.use(
     express.json()
 );
+
 
 
 app.use(
@@ -88,6 +95,7 @@ app.use(
 );
 
 
+
 app.use(
     morgan("dev")
 );
@@ -95,7 +103,7 @@ app.use(
 
 
 // ==================================================
-// ARQUIVOS FRONTEND
+// FRONTEND
 // ==================================================
 
 app.use(
@@ -113,8 +121,9 @@ app.use(
 
 
 
+
 // ==================================================
-// BANCO DE DADOS
+// BANCO POSTGRESQL
 // ==================================================
 
 try{
@@ -134,7 +143,7 @@ catch(erro){
 
     console.error(
 
-        "🔴 Erro PostgreSQL:",
+        "🔴 Falha PostgreSQL:",
 
         erro.message
 
@@ -142,6 +151,118 @@ catch(erro){
 
 
 }
+
+
+
+
+// ==================================================
+// ROTAS API
+// ==================================================
+
+
+// Dashboard
+
+app.get(
+
+    "/api/dashboard",
+
+    async(req,res)=>{
+
+
+        res.json({
+
+            sistema:
+                "BetVision AI",
+
+
+            status:
+                "operacional",
+
+
+            jogosHoje:
+                0,
+
+
+            campeonatos:
+                0,
+
+
+            analisesIA:
+                0,
+
+
+            valueBets:
+                0,
+
+
+            roi:
+                0,
+
+
+            precisao:
+                0,
+
+
+            modelo:
+                "Probabilidade + Estatística",
+
+
+            ultimaAtualizacao:
+                new Date()
+
+
+        });
+
+
+    }
+
+);
+
+
+
+
+// Ping
+
+app.get(
+
+    "/api/ping",
+
+    (req,res)=>{
+
+
+        res.json({
+
+            status:
+                "online",
+
+
+            sistema:
+                "BetVision AI",
+
+
+            horario:
+                new Date()
+
+
+        });
+
+
+    }
+
+);
+
+
+
+
+// Campeonatos
+
+app.use(
+
+    "/api/campeonatos",
+
+    campeonatosRouter
+
+);
 
 
 
@@ -164,14 +285,18 @@ global.websocketClients =
 
 
 
+
 wss.on(
+
     "connection",
+
     (socket)=>{
 
 
         console.log(
             "🔌 Cliente WebSocket conectado"
         );
+
 
 
         global.websocketClients.add(
@@ -184,11 +309,16 @@ wss.on(
 
             JSON.stringify({
 
-                tipo:"status",
+                tipo:
+                    "status",
 
-                online:true,
 
-                sistema:"BetVision AI"
+                online:
+                    true,
+
+
+                sistema:
+                    "BetVision AI"
 
             })
 
@@ -197,7 +327,9 @@ wss.on(
 
 
         socket.on(
+
             "close",
+
             ()=>{
 
 
@@ -207,22 +339,27 @@ wss.on(
 
 
             }
+
         );
 
 
     }
+
 );
 
 
 
 
+
 // ==================================================
-// FUNÇÃO BROADCAST
+// ENVIO TEMPO REAL
 // ==================================================
 
-global.enviarAtualizacao = function(
+global.enviarAtualizacao = (
+
     dados
-){
+
+)=>{
 
 
     const mensagem =
@@ -232,19 +369,22 @@ global.enviarAtualizacao = function(
 
 
 
-    global.websocketClients
-    .forEach(
+    global.websocketClients.forEach(
 
         cliente=>{
 
 
             if(
+
                 cliente.readyState === 1
+
             ){
+
 
                 cliente.send(
                     mensagem
                 );
+
 
             }
 
@@ -261,11 +401,13 @@ global.enviarAtualizacao = function(
 
 
 // ==================================================
-// ROTAS BÁSICAS
+// PÁGINA PRINCIPAL
 // ==================================================
 
 app.get(
+
     "/",
+
     (req,res)=>{
 
 
@@ -285,97 +427,7 @@ app.get(
 
 
     }
-);
 
-
-
-
-
-app.get(
-    "/api/ping",
-    (req,res)=>{
-
-
-        res.json({
-
-            status:"online",
-
-            sistema:"BetVision AI",
-
-            horario:
-                new Date()
-
-        });
-
-
-    }
-);
-
-
-
-
-
-app.get(
-    "/api/dashboard",
-    async(req,res)=>{
-
-
-        try{
-
-
-            res.json({
-
-                sistema:
-                    "BetVision AI",
-
-                status:
-                    "operacional",
-
-                jogosHoje:
-                    0,
-
-                campeonatos:
-                    0,
-
-                analisesIA:
-                    0,
-
-                valueBets:
-                    0,
-
-                roi:
-                    0,
-
-                precisao:
-                    0,
-
-                modelo:
-                    "Probabilidade + Estatística",
-
-                ultimaAtualizacao:
-                    new Date()
-
-
-            });
-
-
-        }
-        catch(erro){
-
-
-            res.status(500)
-            .json({
-
-                erro:
-                erro.message
-
-            });
-
-
-        }
-
-
-    }
 );
 
 
@@ -383,16 +435,16 @@ app.get(
 
 
 // ==================================================
-// TRATAMENTO DE ERRO
+// ERROS
 // ==================================================
 
 app.use(
 
-    (err,req,res,next)=>{
+    (erro,req,res,next)=>{
 
 
         console.error(
-            err
+            erro
         );
 
 
@@ -400,7 +452,7 @@ app.use(
         .json({
 
             erro:
-            "Erro interno"
+                "Erro interno do servidor"
 
         });
 
@@ -408,7 +460,6 @@ app.use(
     }
 
 );
-
 
 
 
@@ -424,8 +475,8 @@ servidor.listen(
     ()=>{
 
 
-        console.log(
-            `
+        console.log(`
+
 🤖 BetVision AI iniciado
 
 🚀 Porta: ${PORT}
@@ -433,8 +484,7 @@ servidor.listen(
 🌐 Ambiente:
 ${process.env.NODE_ENV || "development"}
 
-            `
-        );
+        `);
 
 
     }
