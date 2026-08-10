@@ -3,7 +3,7 @@
 // services/historicoService.js
 //
 // Histórico de Jogos + Estatísticas
-// Versão 9.0
+// Versão 10.0
 //
 // Compatível com:
 // - schema.sql atual
@@ -23,11 +23,12 @@
 // status
 // criado_em
 //
-// IMPORTANTE:
 // NÃO utiliza:
 // - time_casa_id
 // - time_fora_id
 // - campeonato_id
+// - gols_casa
+// - gols_fora
 // ==========================================
 
 import { query } from "../database/database.js";
@@ -37,41 +38,46 @@ import { query } from "../database/database.js";
 // ==========================================
 
 function normalizarTime(time) {
+
     if (
         time === undefined ||
         time === null
     ) {
+
         return "";
+
     }
 
     return String(time).trim();
+
 }
 
 // ==========================================
-// CONVERTER NÚMERO COM SEGURANÇA
+// NORMALIZAR VALOR
 // ==========================================
 
 function numeroSeguro(
     valor,
     padrao = 0
 ) {
+
     const numero = Number(valor);
 
     return Number.isFinite(numero)
         ? numero
         : padrao;
+
 }
 
 // ==========================================
 // BUSCAR HISTÓRICO DE UM TIME
 //
-// Usa diretamente:
+// Pesquisa diretamente pelos nomes:
+//
 // jogos.time_casa
 // jogos.time_fora
 //
-// NÃO usa:
-// time_casa_id
-// time_fora_id
+// NÃO utiliza IDs de times.
 // ==========================================
 
 export async function buscarHistoricoTime(
@@ -95,7 +101,6 @@ export async function buscarHistoricoTime(
 
         const resultado =
             await query(
-
                 `
                 SELECT
 
@@ -125,28 +130,26 @@ export async function buscarHistoricoTime(
                         LOWER(TRIM(j.time_casa))
                         =
                         LOWER(TRIM($1))
-                    )
 
-                    OR
+                        OR
 
-                    (
                         LOWER(TRIM(j.time_fora))
                         =
                         LOWER(TRIM($1))
                     )
 
-                AND j.data_jogo IS NOT NULL
+                    AND
+
+                    j.data_jogo IS NOT NULL
 
                 ORDER BY
                     j.data_jogo DESC
 
                 LIMIT 20
                 `,
-
                 [
                     nomeTime
                 ]
-
             );
 
         return Array.isArray(
@@ -174,9 +177,15 @@ export async function buscarHistoricoTime(
 // BUSCAR HISTÓRICO DO CONFRONTO
 //
 // Retorna:
-// - histórico da casa
-// - histórico do visitante
-// - confrontos diretos
+//
+// historicoCasa
+// historicoFora
+// h2h
+//
+// Também retorna contadores básicos.
+//
+// Como o schema atual não possui gols,
+// não inventamos resultados.
 // ==========================================
 
 export async function buscarHistoricoJogo(
@@ -207,7 +216,15 @@ export async function buscarHistoricoJogo(
 
                 historicoFora: [],
 
-                h2h: []
+                h2h: [],
+
+                confrontos: 0,
+
+                vitoriasCasa: 0,
+
+                empates: 0,
+
+                vitoriasFora: 0
 
             };
 
@@ -218,7 +235,7 @@ export async function buscarHistoricoJogo(
         );
 
         // ======================================
-        // HISTÓRICO INDIVIDUAL
+        // HISTÓRICO DA CASA
         // ======================================
 
         const historicoCasa =
@@ -226,22 +243,21 @@ export async function buscarHistoricoJogo(
                 casa
             );
 
+        // ======================================
+        // HISTÓRICO DO FORA
+        // ======================================
+
         const historicoFora =
             await buscarHistoricoTime(
                 fora
             );
 
         // ======================================
-        // CONFRONTOS DIRETOS
-        //
-        // Casa x Fora
-        // ou
-        // Fora x Casa
+        // H2H
         // ======================================
 
         const resultadoH2H =
             await query(
-
                 `
                 SELECT
 
@@ -268,6 +284,7 @@ export async function buscarHistoricoJogo(
                 WHERE
 
                     (
+
                         LOWER(TRIM(j.time_casa))
                         =
                         LOWER(TRIM($1))
@@ -277,11 +294,13 @@ export async function buscarHistoricoJogo(
                         LOWER(TRIM(j.time_fora))
                         =
                         LOWER(TRIM($2))
+
                     )
 
                     OR
 
                     (
+
                         LOWER(TRIM(j.time_casa))
                         =
                         LOWER(TRIM($2))
@@ -291,19 +310,22 @@ export async function buscarHistoricoJogo(
                         LOWER(TRIM(j.time_fora))
                         =
                         LOWER(TRIM($1))
+
                     )
+
+                AND
+
+                    j.data_jogo IS NOT NULL
 
                 ORDER BY
                     j.data_jogo DESC
 
                 LIMIT 20
                 `,
-
                 [
                     casa,
                     fora
                 ]
-
             );
 
         const h2h =
@@ -315,81 +337,24 @@ export async function buscarHistoricoJogo(
 
         // ======================================
         // ESTATÍSTICAS H2H
+        //
+        // O schema atual não possui:
+        //
+        // gols_casa
+        // gols_fora
+        //
+        // Portanto não é possível determinar
+        // vitória/empate/derrota pelo placar.
+        //
+        // Mantemos os contadores em zero para
+        // não fabricar informações.
         // ======================================
 
-        let vitoriasCasa = 0;
+        const vitoriasCasa = 0;
 
-        let empates = 0;
+        const empates = 0;
 
-        let vitoriasFora = 0;
-
-        for (
-            const jogo of h2h
-        ) {
-
-            const nomeCasa =
-                normalizarTime(
-                    jogo.time_casa
-                );
-
-            const nomeFora =
-                normalizarTime(
-                    jogo.time_fora
-                );
-
-            // ==================================
-            // IMPORTANTE
-            //
-            // A tabela atual não possui
-            // gols_casa / gols_fora.
-            //
-            // Portanto não tentamos calcular
-            // resultado através de gols.
-            // ==================================
-
-            if (
-                nomeCasa.toLowerCase()
-                ===
-                casa.toLowerCase()
-            ) {
-
-                if (
-                    String(
-                        jogo.status || ""
-                    ).toUpperCase()
-                    ===
-                    "FINISHED"
-                ) {
-
-                    // Resultado não disponível
-                    // sem campos de gols.
-                    continue;
-
-                }
-
-            }
-
-            if (
-                nomeFora.toLowerCase()
-                ===
-                casa.toLowerCase()
-            ) {
-
-                if (
-                    String(
-                        jogo.status || ""
-                    ).toUpperCase()
-                    ===
-                    "FINISHED"
-                ) {
-
-                    continue;
-
-                }
-
-            }
-
-        }
+        const vitoriasFora = 0;
 
         console.log(
             `⚔️ H2H: ${h2h.length} confrontos | Casa ${vitoriasCasa} vitórias | Empates ${empates} | Fora ${vitoriasFora}`
@@ -448,9 +413,7 @@ export async function buscarHistoricoJogo(
 // ==========================================
 // SALVAR HISTÓRICO DE JOGO
 //
-// ATENÇÃO:
-//
-// A tabela jogos atual possui:
+// Utiliza somente as colunas existentes:
 //
 // id
 // api_id
@@ -460,12 +423,8 @@ export async function buscarHistoricoJogo(
 // data_jogo
 // estadio
 // status
-// criado_em
 //
-// Portanto salvamos somente essas colunas.
-//
-// Não usamos gols_casa/gols_fora porque elas
-// NÃO existem na estrutura atual confirmada.
+// NÃO utiliza gols.
 // ==========================================
 
 export async function salvarHistoricoJogo(
@@ -530,7 +489,7 @@ export async function salvarHistoricoJogo(
         }
 
         // ======================================
-        // SE POSSUI API_ID
+        // ATUALIZAR PELO API_ID
         // ======================================
 
         if (
@@ -540,9 +499,9 @@ export async function salvarHistoricoJogo(
 
             const existente =
                 await query(
-
                     `
-                    SELECT id
+                    SELECT
+                        id
 
                     FROM jogos
 
@@ -550,11 +509,9 @@ export async function salvarHistoricoJogo(
 
                     LIMIT 1
                     `,
-
                     [
                         apiId
                     ]
-
                 );
 
             if (
@@ -563,7 +520,6 @@ export async function salvarHistoricoJogo(
 
                 const resultado =
                     await query(
-
                         `
                         UPDATE jogos
 
@@ -585,7 +541,6 @@ export async function salvarHistoricoJogo(
 
                         RETURNING *
                         `,
-
                         [
 
                             campeonato,
@@ -603,7 +558,6 @@ export async function salvarHistoricoJogo(
                             apiId
 
                         ]
-
                     );
 
                 return (
@@ -618,14 +572,17 @@ export async function salvarHistoricoJogo(
 
         // ======================================
         // INSERIR NOVO JOGO
+        //
+        // A tabela atual não possui DEFAULT
+        // confirmado para id.
+        //
+        // Por isso mantemos a geração manual.
         // ======================================
 
         const resultado =
             await query(
-
                 `
                 INSERT INTO jogos
-
                 (
                     id,
                     api_id,
@@ -638,7 +595,6 @@ export async function salvarHistoricoJogo(
                 )
 
                 VALUES
-
                 (
                     COALESCE(
                         $1,
@@ -648,7 +604,6 @@ export async function salvarHistoricoJogo(
                                     MAX(id),
                                     0
                                 ) + 1
-
                             FROM jogos
                         )
                     ),
@@ -670,7 +625,6 @@ export async function salvarHistoricoJogo(
 
                 RETURNING *
                 `,
-
                 [
 
                     id,
@@ -690,7 +644,6 @@ export async function salvarHistoricoJogo(
                     status
 
                 ]
-
             );
 
         return (
@@ -717,14 +670,8 @@ export async function salvarHistoricoJogo(
 // ==========================================
 // ÚLTIMOS RESULTADOS
 //
-// Retorna os últimos jogos cadastrados
-// para determinado time.
-//
-// Como a tabela atual NÃO possui:
-// gols_casa
-// gols_fora
-//
-// não inventamos placares.
+// Como o schema atual não possui gols,
+// não retornamos placares inventados.
 // ==========================================
 
 export async function ultimosResultados(
@@ -739,7 +686,7 @@ export async function ultimosResultados(
             );
 
         return jogos.map(
-            jogo => ({
+            (jogo) => ({
 
                 id:
                     jogo.id,
@@ -786,9 +733,17 @@ export async function ultimosResultados(
 // ==========================================
 // ESTATÍSTICAS BÁSICAS DO TIME
 //
-// Sem gols disponíveis no schema atual,
-// retornamos somente informações que podem
-// ser calculadas com segurança.
+// O schema atual não possui placares.
+//
+// Portanto:
+// - jogos = calculado
+// - jogosCasa = calculado
+// - jogosFora = calculado
+// - forma = 50 como neutro
+// - mediaGols = 1 como neutro
+//
+// Esses valores neutros serão substituídos
+// quando o banco possuir dados de resultado.
 // ==========================================
 
 export async function estatisticasTime(
@@ -797,15 +752,15 @@ export async function estatisticasTime(
 
     try {
 
-        const jogos =
-            await buscarHistoricoTime(
-                time
-            );
-
         const nomeTime =
             normalizarTime(
                 time
-            ).toLowerCase();
+            );
+
+        const jogos =
+            await buscarHistoricoTime(
+                nomeTime
+            );
 
         let jogosCasa = 0;
 
@@ -820,14 +775,23 @@ export async function estatisticasTime(
                     jogo.time_casa
                 ).toLowerCase();
 
+            const fora =
+                normalizarTime(
+                    jogo.time_fora
+                ).toLowerCase();
+
             if (
-                casa === nomeTime
+                casa ===
+                nomeTime.toLowerCase()
             ) {
 
                 jogosCasa++;
 
             }
-            else {
+            else if (
+                fora ===
+                nomeTime.toLowerCase()
+            ) {
 
                 jogosFora++;
 
@@ -840,17 +804,29 @@ export async function estatisticasTime(
 
         return {
 
-            time,
+            time:
+                nomeTime,
 
-            jogos: total,
+            jogos:
+                numeroSeguro(
+                    total
+                ),
 
-            jogosCasa,
+            jogosCasa:
+                numeroSeguro(
+                    jogosCasa
+                ),
 
-            jogosFora,
+            jogosFora:
+                numeroSeguro(
+                    jogosFora
+                ),
 
-            forma: 50,
+            forma:
+                50,
 
-            mediaGols: 1
+            mediaGols:
+                1
 
         };
 
@@ -900,3 +876,4 @@ export default {
     estatisticasTime
 
 };
+
