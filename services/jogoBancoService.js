@@ -1,11 +1,11 @@
+```javascript
 //
 // ==================================================
 // BETVISION AI
 // services/jogoBancoService.js
-// Controle de Jogos PostgreSQL v5.1
-// Compatibilidade Rotas Antigas + Novas
+// Controle de Jogos PostgreSQL v5.2
+// Compatível com estrutura atual do Neon
 // ==================================================
-
 
 import {
     query
@@ -17,7 +17,12 @@ import {
 // SALVAR JOGO INDIVIDUAL DA API
 // ==================================================
 
-export async function salvarJogoAPI(jogo){
+export async function salvarJogoAPI(jogo) {
+
+    if (!jogo) {
+        throw new Error("Dados do jogo não informados");
+    }
+
 
     const {
 
@@ -27,41 +32,42 @@ export async function salvarJogoAPI(jogo){
         time_fora,
         data_jogo,
         status,
-        gols_casa,
-        gols_fora,
-        rodada,
         estadio
 
     } = jogo;
 
+
+    if (!api_id) {
+        throw new Error("api_id do jogo é obrigatório");
+    }
 
 
     const resultado = await query(
 
         `
         INSERT INTO jogos
-
         (
             api_id,
             campeonato,
             time_casa,
             time_fora,
             data_jogo,
-            status,
-            gols_casa,
-            gols_fora,
-            rodada,
-            estadio
+            estadio,
+            status
         )
 
         VALUES
-
         (
-            $1,$2,$3,$4,$5,
-            $6,$7,$8,$9,$10
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6,
+            $7
         )
 
-        ON CONFLICT(api_id)
+        ON CONFLICT (api_id)
 
         DO UPDATE SET
 
@@ -73,34 +79,22 @@ export async function salvarJogoAPI(jogo){
 
             data_jogo = EXCLUDED.data_jogo,
 
-            status = EXCLUDED.status,
+            estadio = EXCLUDED.estadio,
 
-            gols_casa = EXCLUDED.gols_casa,
-
-            gols_fora = EXCLUDED.gols_fora,
-
-            rodada = EXCLUDED.rodada,
-
-            estadio = EXCLUDED.estadio
-
+            status = EXCLUDED.status
 
         RETURNING *
-
         `,
-
 
         [
 
             api_id,
-            campeonato,
-            time_casa,
-            time_fora,
-            data_jogo,
-            status,
-            gols_casa,
-            gols_fora,
-            rodada,
-            estadio
+            campeonato || null,
+            time_casa || null,
+            time_fora || null,
+            data_jogo || null,
+            estadio || null,
+            status || "SCHEDULED"
 
         ]
 
@@ -115,29 +109,33 @@ export async function salvarJogoAPI(jogo){
 
 // ==================================================
 // SALVAR LISTA DE JOGOS
-// COMPATIBILIDADE ROTAS ANTIGAS
+// COMPATIBILIDADE COM ROTAS ANTIGAS
 // ==================================================
 
-export async function salvarListaJogos(
-    jogos = []
-){
+export async function salvarListaJogos(jogos = []) {
 
     const lista = [];
 
 
-    for(const jogo of jogos){
+    for (const jogo of jogos) {
 
+        try {
 
-        const salvo =
-            await salvarJogoAPI(
-                jogo
+            const salvo =
+                await salvarJogoAPI(jogo);
+
+            lista.push(salvo);
+
+        }
+
+        catch (erro) {
+
+            console.error(
+                "Erro ao salvar jogo:",
+                erro.message
             );
 
-
-        lista.push(
-            salvo
-        );
-
+        }
 
     }
 
@@ -149,12 +147,10 @@ export async function salvarListaJogos(
 
 
 // ==================================================
-// BUSCAR JOGO PELO ID API
+// BUSCAR JOGO PELO API_ID
 // ==================================================
 
-export async function buscarPorApiId(
-    api_id
-){
+export async function buscarPorApiId(api_id) {
 
     const resultado = await query(
 
@@ -163,8 +159,9 @@ export async function buscarPorApiId(
 
         FROM jogos
 
-        WHERE api_id=$1
+        WHERE api_id = $1
 
+        LIMIT 1
         `,
 
         [
@@ -174,7 +171,7 @@ export async function buscarPorApiId(
     );
 
 
-    return resultado.rows[0];
+    return resultado.rows[0] || null;
 
 }
 
@@ -182,20 +179,28 @@ export async function buscarPorApiId(
 
 // ==================================================
 // LISTAR TODOS OS JOGOS
-// COMPATIBILIDADE ROTAS
 // ==================================================
 
-export async function listarJogos(){
+export async function listarJogos() {
 
     const resultado = await query(
 
         `
-        SELECT *
+        SELECT
+
+            id,
+            api_id,
+            campeonato,
+            time_casa,
+            time_fora,
+            data_jogo,
+            estadio,
+            status,
+            criado_em
 
         FROM jogos
 
         ORDER BY data_jogo DESC
-
         `
 
     );
@@ -211,21 +216,28 @@ export async function listarJogos(){
 // BUSCAR JOGOS DO DIA
 // ==================================================
 
-export async function buscarJogosDoDia(){
+export async function buscarJogosDoDia() {
 
     const resultado = await query(
 
         `
-        SELECT *
+        SELECT
+
+            id,
+            api_id,
+            campeonato,
+            time_casa,
+            time_fora,
+            data_jogo,
+            estadio,
+            status,
+            criado_em
 
         FROM jogos
 
-        WHERE DATE(data_jogo)
-        =
-        CURRENT_DATE
+        WHERE DATE(data_jogo) = CURRENT_DATE
 
-        ORDER BY data_jogo
-
+        ORDER BY data_jogo ASC
         `
 
     );
@@ -243,12 +255,22 @@ export async function buscarJogosDoDia(){
 
 export async function buscarProximosJogos(
     limite = 20
-){
+) {
 
     const resultado = await query(
 
         `
-        SELECT *
+        SELECT
+
+            id,
+            api_id,
+            campeonato,
+            time_casa,
+            time_fora,
+            data_jogo,
+            estadio,
+            status,
+            criado_em
 
         FROM jogos
 
@@ -257,7 +279,6 @@ export async function buscarProximosJogos(
         ORDER BY data_jogo ASC
 
         LIMIT $1
-
         `,
 
         [
@@ -274,20 +295,16 @@ export async function buscarProximosJogos(
 
 
 // ==================================================
-// ATUALIZAR RESULTADO
+// ATUALIZAR STATUS DO JOGO
 // ==================================================
 
-export async function atualizarResultado(
+export async function atualizarStatusJogo(
 
     api_id,
 
-    gols_casa,
-
-    gols_fora,
-
     status
 
-){
+) {
 
     const resultado = await query(
 
@@ -296,28 +313,16 @@ export async function atualizarResultado(
 
         SET
 
-            gols_casa=$2,
+            status = $2
 
-            gols_fora=$3,
-
-            status=$4
-
-
-        WHERE api_id=$1
-
+        WHERE api_id = $1
 
         RETURNING *
-
         `,
 
         [
 
             api_id,
-
-            gols_casa,
-
-            gols_fora,
-
             status
 
         ]
@@ -325,7 +330,76 @@ export async function atualizarResultado(
     );
 
 
-    return resultado.rows[0];
+    return resultado.rows[0] || null;
+
+}
+
+
+
+// ==================================================
+// ATUALIZAR DADOS DO JOGO
+// ==================================================
+
+export async function atualizarJogo(
+
+    api_id,
+
+    dados = {}
+
+) {
+
+    const {
+
+        campeonato,
+        time_casa,
+        time_fora,
+        data_jogo,
+        estadio,
+        status
+
+    } = dados;
+
+
+    const resultado = await query(
+
+        `
+        UPDATE jogos
+
+        SET
+
+            campeonato = COALESCE($2, campeonato),
+
+            time_casa = COALESCE($3, time_casa),
+
+            time_fora = COALESCE($4, time_fora),
+
+            data_jogo = COALESCE($5, data_jogo),
+
+            estadio = COALESCE($6, estadio),
+
+            status = COALESCE($7, status)
+
+        WHERE api_id = $1
+
+        RETURNING *
+        `,
+
+        [
+
+            api_id,
+            campeonato || null,
+            time_casa || null,
+            time_fora || null,
+            data_jogo || null,
+            estadio || null,
+            status || null
+
+        ]
+
+    );
+
+
+    return resultado.rows[0] || null;
 
 }
 
@@ -337,7 +411,22 @@ export async function atualizarResultado(
 
 export async function removerJogosAntigos(
     dias = 90
-){
+) {
+
+    const diasNumerico = Number(dias);
+
+
+    if (
+        !Number.isInteger(diasNumerico) ||
+        diasNumerico <= 0
+    ) {
+
+        throw new Error(
+            "Quantidade de dias inválida"
+        );
+
+    }
+
 
     const resultado = await query(
 
@@ -345,13 +434,14 @@ export async function removerJogosAntigos(
         DELETE FROM jogos
 
         WHERE data_jogo <
-        
-        NOW() - INTERVAL '${dias} days'
-
+              NOW() - ($1 * INTERVAL '1 day')
 
         RETURNING id
+        `,
 
-        `
+        [
+            diasNumerico
+        ]
 
     );
 
@@ -366,35 +456,33 @@ export async function removerJogosAntigos(
 // ESTATÍSTICAS DOS JOGOS
 // ==================================================
 
-export async function estatisticasJogos(){
+export async function estatisticasJogos() {
 
     const resultado = await query(
 
         `
         SELECT
 
+            COUNT(*) AS total,
 
-        COUNT(*) AS total,
+            COUNT(
+                CASE
+                    WHEN status = 'FINISHED'
+                    THEN 1
+                END
+            ) AS finalizados,
 
-
-        COUNT(
-            CASE
-                WHEN status='FINISHED'
-                THEN 1
-            END
-        ) AS finalizados,
-
-
-        COUNT(
-            CASE
-                WHEN status='SCHEDULED'
-                THEN 1
-            END
-        ) AS agendados
-
+            COUNT(
+                CASE
+                    WHEN status IN (
+                        'SCHEDULED',
+                        'TIMED'
+                    )
+                    THEN 1
+                END
+            ) AS agendados
 
         FROM jogos
-
         `
 
     );
@@ -407,11 +495,10 @@ export async function estatisticasJogos(){
 
 
 // ==================================================
-// EXPORTAÇÃO FINAL
+// EXPORTAÇÃO DEFAULT
 // ==================================================
 
 export default {
-
 
     salvarJogoAPI,
 
@@ -425,10 +512,13 @@ export default {
 
     buscarProximosJogos,
 
-    atualizarResultado,
+    atualizarStatusJogo,
+
+    atualizarJogo,
 
     removerJogosAntigos,
 
     estatisticasJogos
 
 };
+```
