@@ -17,7 +17,6 @@ import { gerarAnaliseIA } from "../services/inteligenciaService.js";
 
 const router = express.Router();
 
-
 // ==========================================
 // GET /api/jogos
 // ==========================================
