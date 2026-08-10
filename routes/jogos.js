@@ -2,9 +2,9 @@
 // ==========================================
 // BetVision AI
 // routes/jogos.js
-// Versão 12.1
+// Versao 12.2
 // API Jogos + IA
-// Compatível PostgreSQL / Neon
+// PostgreSQL / Neon
 // ==========================================
 
 import express from "express";
@@ -32,8 +32,7 @@ router.get("/", async (req, res) => {
 
     try {
 
-        console.log("⚽ API JOGOS DO DIA");
-
+        console.log("API JOGOS DO DIA");
 
         let jogos = [];
 
@@ -46,14 +45,23 @@ router.get("/", async (req, res) => {
 
             jogos = await buscarJogosDia();
 
-        }
-
-        catch (error) {
+        } catch (error) {
 
             console.log(
-                "⚠️ API futebol indisponível:",
+                "API futebol indisponivel:",
                 error.message
             );
+
+        }
+
+
+        // ==========================================
+        // GARANTIR ARRAY
+        // ==========================================
+
+        if (!Array.isArray(jogos)) {
+
+            jogos = [];
 
         }
 
@@ -62,10 +70,7 @@ router.get("/", async (req, res) => {
         // SALVAR JOGOS NO POSTGRESQL
         // ==========================================
 
-        if (
-            Array.isArray(jogos) &&
-            jogos.length > 0
-        ) {
+        if (jogos.length > 0) {
 
             try {
 
@@ -73,17 +78,15 @@ router.get("/", async (req, res) => {
                     jogos
                 );
 
-
                 console.log(
-                    `💾 ${jogos.length} jogos processados no PostgreSQL`
+                    "Jogos processados no PostgreSQL: " +
+                    jogos.length
                 );
 
-            }
-
-            catch (error) {
+            } catch (error) {
 
                 console.log(
-                    "⚠️ Erro salvar jogos:",
+                    "Erro salvar jogos:",
                     error.message
                 );
 
@@ -91,24 +94,21 @@ router.get("/", async (req, res) => {
 
 
             // ==========================================
-            // GERAR ANÁLISES IA
+            // GERAR ANALISES IA
             // ==========================================
 
             try {
 
                 await gerarAnaliseIA(jogos);
 
-
                 console.log(
-                    "🤖 Análises IA geradas"
+                    "Analises IA geradas"
                 );
 
-            }
-
-            catch (error) {
+            } catch (error) {
 
                 console.log(
-                    "⚠️ Erro gerar análises IA:",
+                    "Erro gerar analises IA:",
                     error.message
                 );
 
@@ -163,15 +163,12 @@ router.get("/", async (req, res) => {
 
         });
 
-    }
-
-    catch (error) {
+    } catch (error) {
 
         console.error(
-            "❌ Erro jogos:",
+            "Erro jogos:",
             error
         );
-
 
         res.status(500).json({
 
@@ -205,19 +202,16 @@ router.get("/banco", async (req, res) => {
 
             total: jogos.length,
 
-            jogos
+            jogos: jogos
 
         });
 
-    }
-
-    catch (error) {
+    } catch (error) {
 
         console.error(
-            "❌ Erro buscar jogos do banco:",
+            "Erro buscar jogos do banco:",
             error.message
         );
-
 
         res.status(500).json({
 
@@ -234,7 +228,7 @@ router.get("/banco", async (req, res) => {
 
 // ==========================================
 // GET /api/jogos/hoje
-// Jogos registrados hoje no PostgreSQL
+// Jogos registrados hoje
 // ==========================================
 
 router.get("/hoje", async (req, res) => {
@@ -251,19 +245,16 @@ router.get("/hoje", async (req, res) => {
 
             total: jogos.length,
 
-            jogos
+            jogos: jogos
 
         });
 
-    }
-
-    catch (error) {
+    } catch (error) {
 
         console.error(
-            "❌ Erro jogos de hoje:",
+            "Erro jogos de hoje:",
             error.message
         );
-
 
         res.status(500).json({
 
@@ -280,7 +271,7 @@ router.get("/hoje", async (req, res) => {
 
 // ==========================================
 // GET /api/jogos/proximos
-// Próximos jogos
+// Proximos jogos
 // ==========================================
 
 router.get("/proximos", async (req, res) => {
@@ -303,19 +294,16 @@ router.get("/proximos", async (req, res) => {
 
             total: jogos.length,
 
-            jogos
+            jogos: jogos
 
         });
 
-    }
-
-    catch (error) {
+    } catch (error) {
 
         console.error(
-            "❌ Erro próximos jogos:",
+            "Erro proximos jogos:",
             error.message
         );
-
 
         res.status(500).json({
 
@@ -331,7 +319,7 @@ router.get("/proximos", async (req, res) => {
 
 
 // ==========================================
-// EXPORTAÇÃO
+// EXPORTACAO
 // ==========================================
 
 export default router;
