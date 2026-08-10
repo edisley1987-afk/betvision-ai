@@ -1,4 +1,4 @@
-```javascript
+
 // ==========================================
 // BetVision AI
 // routes/jogos.js
