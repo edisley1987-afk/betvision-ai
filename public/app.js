@@ -1,27 +1,36 @@
 // ==================================================
-// BetVision AI
+// BETVISION AI
 // public/app.js
-// Fase 1 - Parte 1
+// Versão 5.0
 // Frontend Dashboard Inteligente
+// Compatível com PostgreSQL NeonDB
 // ==================================================
 
 "use strict";
 
 
 // ==================================================
-// CONFIGURAÇÃO DA API
+// CONFIGURAÇÃO
 // ==================================================
 
 const CONFIG = {
 
-    API_URL: window.location.origin,
+    API_URL:
+        window.location.origin,
 
     WS_URL:
         window.location.protocol === "https:"
             ? `wss://${window.location.host}`
             : `ws://${window.location.host}`,
 
-    INTERVALO_ATUALIZACAO: 15000
+    INTERVALO_ATUALIZACAO:
+        15000,
+
+    INTERVALO_PING:
+        30000,
+
+    INTERVALO_WEBSOCKET:
+        5000
 
 };
 
@@ -35,6 +44,8 @@ const estado = {
     websocket: null,
 
     conectado: false,
+
+    websocketReconectando: false,
 
     ultimaAtualizacao: null,
 
@@ -65,14 +76,11 @@ document.addEventListener(
     "DOMContentLoaded",
     () => {
 
-
         console.log(
             "🤖 BetVision AI iniciado"
         );
 
-
         iniciarSistema();
-
 
     }
 );
@@ -82,71 +90,64 @@ document.addEventListener(
 // INICIAR SISTEMA
 // ==================================================
 
-function iniciarSistema(){
-
+function iniciarSistema() {
 
     carregarDashboard();
 
+    carregarJogos();
 
     carregarCampeonatos();
 
-
     carregarValueBets();
 
+    carregarAnalisesIA();
 
     conectarWebSocket();
 
-
     iniciarAtualizacaoAutomatica();
 
-
 }
-
 
 
 // ==================================================
 // ATUALIZAÇÃO AUTOMÁTICA
 // ==================================================
 
-function iniciarAtualizacaoAutomatica(){
-
+function iniciarAtualizacaoAutomatica() {
 
     setInterval(
         () => {
 
-
             carregarDashboard();
-
 
         },
         CONFIG.INTERVALO_ATUALIZACAO
     );
 
-
 }
-
 
 
 // ==================================================
 // BUSCAR DASHBOARD
 // ==================================================
 
-async function carregarDashboard(){
+async function carregarDashboard() {
 
-
-    try{
-
+    try {
 
         const resposta =
             await fetch(
-                `${CONFIG.API_URL}/api/dashboard`
+                `${CONFIG.API_URL}/api/dashboard`,
+                {
+                    cache: "no-store"
+                }
             );
 
 
-        if(!resposta.ok){
+        if (!resposta.ok) {
 
             throw new Error(
-                "Falha ao buscar dashboard"
+                `Falha dashboard HTTP ${resposta.status}`
             );
 
         }
@@ -156,34 +157,26 @@ async function carregarDashboard(){
             await resposta.json();
 
 
-
         atualizarDashboard(
             dados
         );
 
-
-
     }
-    catch(erro){
 
+    catch (erro) {
 
         console.error(
             "Erro dashboard:",
             erro
         );
 
-
         atualizarStatus(
             false
         );
 
-
     }
 
-
 }
-
-
 
 
 // ==================================================
@@ -192,40 +185,64 @@ async function carregarDashboard(){
 
 function atualizarDashboard(
     dados
-){
+) {
+
+    if (
+        !dados ||
+        typeof dados !== "object"
+    ) {
+
+        return;
+
+    }
 
 
-    estado.dados =
-        dados;
+    estado.dados = {
 
+        ...estado.dados,
+
+        ...dados
+
+    };
 
 
     estado.ultimaAtualizacao =
-        new Date();
-
+        dados.ultimaAtualizacao
+            ? new Date(
+                dados.ultimaAtualizacao
+            )
+            : new Date();
 
 
     atualizarElemento(
         "jogosHoje",
-        dados.jogosHoje ?? 0
+        formatarNumero(
+            dados.jogosHoje ?? 0
+        )
     );
 
 
     atualizarElemento(
         "campeonatos",
-        dados.campeonatos ?? 0
+        formatarNumero(
+            dados.campeonatos ?? 0
+        )
     );
 
 
     atualizarElemento(
         "analisesIA",
-        dados.analisesIA ?? 0
+        formatarNumero(
+            dados.analisesIA ?? 0
+        )
     );
 
 
     atualizarElemento(
         "valueBets",
-        dados.valueBets ?? 0
+        formatarNumero(
+            dados.valueBets ?? 0
+        )
     );
 
 
@@ -241,53 +258,50 @@ function atualizarDashboard(
     );
 
 
+    atualizarElemento(
+        "precisao",
+        `${dados.precisao ?? 0}%`
+    );
+
 
     atualizarUltimaAtualizacao();
 
-
-
-    atualizarStatus(
-        true
-    );
-
+    atualizarStatus(true);
 
 }
 
 
-
 // ==================================================
-// ATUALIZAR ELEMENTOS HTML
+// ATUALIZAR ELEMENTO HTML
 // ==================================================
 
 function atualizarElemento(
     id,
     valor
-){
-
+) {
 
     const elemento =
         document.getElementById(id);
 
 
+    if (!elemento) {
 
-    if(elemento){
-
-        elemento.innerHTML =
-            valor;
+        return;
 
     }
 
 
-}
+    elemento.textContent =
+        valor ?? "";
 
+}
 
 
 // ==================================================
 // ÚLTIMA ATUALIZAÇÃO
 // ==================================================
 
-function atualizarUltimaAtualizacao(){
-
+function atualizarUltimaAtualizacao() {
 
     const elemento =
         document.getElementById(
@@ -295,34 +309,31 @@ function atualizarUltimaAtualizacao(){
         );
 
 
-    if(
-        elemento &&
-        estado.ultimaAtualizacao
-    ){
+    if (
+        !elemento ||
+        !estado.ultimaAtualizacao
+    ) {
 
-
-        elemento.innerHTML =
-            estado.ultimaAtualizacao
-            .toLocaleString(
-                "pt-BR"
-            );
-
+        return;
 
     }
 
 
+    elemento.textContent =
+        formatarData(
+            estado.ultimaAtualizacao
+        );
+
 }
 
 
-
 // ==================================================
-// STATUS SISTEMA
+// STATUS DO SISTEMA
 // ==================================================
 
 function atualizarStatus(
     online
-){
-
+) {
 
     const elemento =
         document.getElementById(
@@ -330,47 +341,59 @@ function atualizarStatus(
         );
 
 
-    if(!elemento)
+    if (!elemento) {
+
         return;
 
+    }
 
 
-    if(online){
+    if (online) {
 
-
-        elemento.innerHTML =
+        elemento.textContent =
             "🟢 Sistema Online";
-
 
         elemento.className =
             "online";
 
-
     }
-    else{
 
+    else {
 
-        elemento.innerHTML =
+        elemento.textContent =
             "🔴 Sem conexão";
-
 
         elemento.className =
             "offline";
 
+    }
+
+}
+
+
+// ==================================================
+// WEBSOCKET
+// ==================================================
+
+function conectarWebSocket() {
+
+    if (
+        estado.websocket &&
+        (
+            estado.websocket.readyState ===
+                WebSocket.OPEN ||
+
+            estado.websocket.readyState ===
+                WebSocket.CONNECTING
+        )
+    ) {
+
+        return;
 
     }
 
 
-}
-// ==================================================
-// WEBSOCKET TEMPO REAL
-// ==================================================
-
-function conectarWebSocket(){
-
-
-    try{
-
+    try {
 
         console.log(
             "🔌 Conectando WebSocket..."
@@ -383,10 +406,8 @@ function conectarWebSocket(){
             );
 
 
-
         estado.websocket.onopen =
             () => {
-
 
                 console.log(
                     "🟢 WebSocket conectado"
@@ -396,24 +417,21 @@ function conectarWebSocket(){
                 estado.conectado =
                     true;
 
+                estado.websocketReconectando =
+                    false;
+
 
                 atualizarStatus(
                     true
                 );
 
-
             };
-
-
-
 
 
         estado.websocket.onmessage =
             (evento) => {
 
-
-                try{
-
+                try {
 
                     const mensagem =
                         JSON.parse(
@@ -421,55 +439,40 @@ function conectarWebSocket(){
                         );
 
 
-
                     processarMensagemWebSocket(
                         mensagem
                     );
 
-
-
                 }
-                catch(erro){
 
+                catch (erro) {
 
                     console.error(
                         "Erro mensagem WS:",
                         erro
                     );
 
-
                 }
-
 
             };
 
 
-
-
-
         estado.websocket.onerror =
             (erro) => {
-
 
                 console.error(
                     "Erro WebSocket:",
                     erro
                 );
 
-
                 estado.conectado =
                     false;
-
 
             };
 
 
-
-
-
         estado.websocket.onclose =
             () => {
-
 
                 console.warn(
                     "🔴 WebSocket desconectado"
@@ -480,32 +483,22 @@ function conectarWebSocket(){
                     false;
 
 
+                estado.websocket =
+                    null;
+
+
                 atualizarStatus(
                     false
                 );
 
 
-
-                setTimeout(
-                    () => {
-
-
-                        conectarWebSocket();
-
-
-
-                    },
-                    5000
-                );
-
+                agendarReconexaoWebSocket();
 
             };
 
-
-
     }
-    catch(erro){
 
+    catch (erro) {
 
         console.error(
             "Falha WebSocket:",
@@ -513,17 +506,49 @@ function conectarWebSocket(){
         );
 
 
-        setTimeout(
-            conectarWebSocket,
-            5000
-        );
+        estado.conectado =
+            false;
 
+
+        agendarReconexaoWebSocket();
+
+    }
+
+}
+
+
+// ==================================================
+// RECONEXÃO WEBSOCKET
+// ==================================================
+
+function agendarReconexaoWebSocket() {
+
+    if (
+        estado.websocketReconectando
+    ) {
+
+        return;
 
     }
 
 
-}
+    estado.websocketReconectando =
+        true;
 
+
+    setTimeout(
+        () => {
+
+            estado.websocketReconectando =
+                false;
+
+            conectarWebSocket();
+
+        },
+        CONFIG.INTERVALO_WEBSOCKET
+    );
+
+}
 
 
 // ==================================================
@@ -532,8 +557,7 @@ function conectarWebSocket(){
 
 function processarMensagemWebSocket(
     mensagem
-){
-
+) {
 
     console.log(
         "📡 Evento recebido:",
@@ -541,84 +565,106 @@ function processarMensagemWebSocket(
     );
 
 
+    if (
+        !mensagem ||
+        typeof mensagem !== "object"
+    ) {
 
-    if(
-        mensagem.tipo === "dashboard"
-    ){
+        return;
 
+    }
+
+
+    if (
+        mensagem.tipo ===
+        "dashboard"
+    ) {
 
         atualizarDashboard(
-            mensagem.dados
+            mensagem.dados ??
+            mensagem
         );
-
 
     }
 
 
-
-
-
-    if(
-        mensagem.tipo === "status"
-    ){
-
+    if (
+        mensagem.tipo ===
+        "status"
+    ) {
 
         atualizarStatus(
-            mensagem.online
+            mensagem.online === true
         );
-
 
     }
 
 
-
-
-
-    if(
-        mensagem.tipo === "valueBet"
-    ){
-
+    if (
+        mensagem.tipo ===
+        "valueBet"
+    ) {
 
         adicionarValueBet(
-            mensagem.dados
+            mensagem.dados ??
+            mensagem.valuebet ??
+            mensagem
         );
-
-
-    }
-
-
-
-
-
-    if(
-        mensagem.tipo === "jogoAtualizado"
-    ){
 
 
         carregarDashboard();
 
+    }
+
+
+    if (
+        mensagem.tipo ===
+        "valuebets"
+    ) {
+
+        const lista =
+            extrairListaValueBets(
+                mensagem
+            );
+
+
+        renderizarValueBets(
+            lista
+        );
+
+
+        carregarDashboard();
 
     }
 
 
+    if (
+        mensagem.tipo ===
+        "jogoAtualizado"
+    ) {
+
+        carregarDashboard();
+
+        carregarJogos();
+
+    }
+
 }
 
 
-
 // ==================================================
-// ENVIO DE MENSAGEM WEBSOCKET
+// ENVIAR WEBSOCKET
 // ==================================================
 
 function enviarWebSocket(
     dados
-){
+) {
 
-
-    if(
+    if (
         estado.websocket &&
-        estado.websocket.readyState === WebSocket.OPEN
-    ){
-
+        estado.websocket.readyState ===
+            WebSocket.OPEN
+    ) {
 
         estado.websocket.send(
             JSON.stringify(
@@ -626,64 +672,73 @@ function enviarWebSocket(
             )
         );
 
+        return true;
 
     }
 
 
-}
+    return false;
 
+}
 
 
 // ==================================================
 // CARREGAR CAMPEONATOS
 // ==================================================
 
-async function carregarCampeonatos(){
+async function carregarCampeonatos() {
 
-
-    try{
-
+    try {
 
         const resposta =
             await fetch(
-                `${CONFIG.API_URL}/api/campeonatos`
+                `${CONFIG.API_URL}/api/campeonatos`,
+                {
+                    cache: "no-store"
+                }
             );
 
 
+        if (!resposta.ok) {
 
-        if(!resposta.ok)
             throw new Error(
-                "Erro campeonatos"
+                `Erro campeonatos HTTP ${resposta.status}`
             );
 
+        }
 
 
         const dados =
             await resposta.json();
 
 
+        const lista =
+            extrairLista(
+                dados,
+                [
+                    "campeonatos",
+                    "data",
+                    "resultados"
+                ]
+            );
+
 
         renderizarCampeonatos(
-            dados
+            lista
         );
 
-
-
     }
-    catch(erro){
 
+    catch (erro) {
 
         console.error(
             "Erro campeonatos:",
             erro
         );
 
-
     }
 
-
 }
-
 
 
 // ==================================================
@@ -692,8 +747,7 @@ async function carregarCampeonatos(){
 
 function renderizarCampeonatos(
     campeonatos
-){
-
+) {
 
     const area =
         document.getElementById(
@@ -701,40 +755,35 @@ function renderizarCampeonatos(
         );
 
 
+    if (!area) {
 
-    if(!area)
         return;
 
+    }
 
 
     area.innerHTML = "";
 
 
-
-    if(
-        !campeonatos ||
+    if (
+        !Array.isArray(campeonatos) ||
         campeonatos.length === 0
-    ){
-
+    ) {
 
         area.innerHTML =
             `
-            <p>
-            Nenhum campeonato disponível
-            </p>
+            <div class="empty">
+                🏆 Nenhum campeonato disponível
+            </div>
             `;
 
-
         return;
-
 
     }
 
 
-
     campeonatos.forEach(
         campeonato => {
-
 
             const div =
                 document.createElement(
@@ -746,71 +795,107 @@ function renderizarCampeonatos(
                 "campeonato-card";
 
 
+            const nome =
+                campeonato.nome ??
+                campeonato.name ??
+                "Campeonato";
+
+
+            const pais =
+                campeonato.pais ??
+                campeonato.country ??
+                "";
+
 
             div.innerHTML =
                 `
                 <strong>
-                ${campeonato.nome}
+                    ${escaparHTML(nome)}
                 </strong>
 
                 <span>
-                ${campeonato.pais ?? ""}
+                    ${escaparHTML(pais)}
                 </span>
                 `;
-
 
 
             area.appendChild(
                 div
             );
 
-
         }
     );
 
-
 }
+
+
 // ==================================================
 // CARREGAR VALUE BETS
 // ==================================================
 
-async function carregarValueBets(){
+async function carregarValueBets() {
 
+    try {
 
-    try{
+        console.log(
+            "💎 Buscando Value Bets..."
+        );
 
 
         const resposta =
             await fetch(
-                `${CONFIG.API_URL}/api/valuebets`
+                `${CONFIG.API_URL}/api/valuebets`,
+                {
+                    cache: "no-store"
+                }
             );
 
 
-
-        if(!resposta.ok){
+        if (!resposta.ok) {
 
             throw new Error(
-                "Erro ao buscar Value Bets"
+                `Erro Value Bets HTTP ${resposta.status}`
             );
 
         }
-
 
 
         const dados =
             await resposta.json();
 
 
+        // ==================================================
+        // CORREÇÃO PRINCIPAL
+        //
+        // O endpoint retorna:
+        //
+        // {
+        //     sucesso: true,
+        //     total: 0,
+        //     valuebets: []
+        // }
+        //
+        // Portanto precisamos extrair dados.valuebets.
+        // ==================================================
 
-        renderizarValueBets(
-            dados
+        const valuebets =
+            extrairListaValueBets(
+                dados
+            );
+
+
+        console.log(
+            `💎 ${valuebets.length} Value Bets encontradas`
         );
 
 
+        renderizarValueBets(
+            valuebets
+        );
 
     }
-    catch(erro){
 
+    catch (erro) {
 
         console.error(
             "Erro Value Bets:",
@@ -818,18 +903,83 @@ async function carregarValueBets(){
         );
 
 
-        mostrarMensagem(
-            "listaValueBets",
-            "Nenhuma oportunidade disponível"
+        renderizarValueBets(
+            []
         );
 
-
     }
-
 
 }
 
 
+// ==================================================
+// EXTRAIR VALUE BETS
+// ==================================================
+
+function extrairListaValueBets(
+    dados
+) {
+
+    if (
+        Array.isArray(dados)
+    ) {
+
+        return dados;
+
+    }
+
+
+    if (
+        dados &&
+        Array.isArray(
+            dados.valuebets
+        )
+    ) {
+
+        return dados.valuebets;
+
+    }
+
+
+    if (
+        dados &&
+        Array.isArray(
+            dados.data
+        )
+    ) {
+
+        return dados.data;
+
+    }
+
+
+    if (
+        dados &&
+        Array.isArray(
+            dados.resultados
+        )
+    ) {
+
+        return dados.resultados;
+
+    }
+
+
+    if (
+        dados &&
+        dados.valuebet
+    ) {
+
+        return [
+            dados.valuebet
+        ];
+
+    }
+
+
+    return [];
+
+}
 
 
 // ==================================================
@@ -838,8 +988,7 @@ async function carregarValueBets(){
 
 function renderizarValueBets(
     valuebets
-){
-
+) {
 
     const area =
         document.getElementById(
@@ -847,44 +996,37 @@ function renderizarValueBets(
         );
 
 
+    if (!area) {
 
-    if(!area)
         return;
 
+    }
 
 
     area.innerHTML = "";
 
 
-
-    if(
-        !valuebets ||
+    if (
+        !Array.isArray(valuebets) ||
         valuebets.length === 0
-    ){
-
+    ) {
 
         area.innerHTML =
-        `
-        <div class="empty">
+            `
+            <div class="empty">
 
-            💎 Nenhuma Value Bet encontrada
+                💎 Nenhuma Value Bet encontrada
 
-        </div>
-        `;
-
+            </div>
+            `;
 
         return;
-
 
     }
 
 
-
-
-
     valuebets.forEach(
         aposta => {
-
 
             const card =
                 document.createElement(
@@ -892,82 +1034,242 @@ function renderizarValueBets(
                 );
 
 
-
             card.className =
                 "valuebet-card";
 
 
+            const timeCasa =
+                aposta.timeCasa ??
+                aposta.time_casa ??
+                extrairTimeCasa(
+                    aposta.jogo
+                ) ??
+                "Casa";
+
+
+            const timeFora =
+                aposta.timeFora ??
+                aposta.time_fora ??
+                extrairTimeFora(
+                    aposta.jogo
+                ) ??
+                "Fora";
+
+
+            const mercado =
+                aposta.mercado ??
+                "Não informado";
+
+
+            const selecao =
+                aposta.selecao ??
+                "";
+
+
+            const odd =
+                aposta.odd ??
+                aposta.oddMercado ??
+                aposta.odd_mercado ??
+                0;
+
+
+            const probabilidade =
+                aposta.probabilidade ??
+                0;
+
+
+            const edge =
+                aposta.edge ??
+                0;
+
+
+            const roi =
+                aposta.roi ??
+                0;
+
+
+            const kelly =
+                aposta.kelly ??
+                0;
+
+
+            const classificacao =
+                aposta.classificacao ??
+                "Value Bet";
+
+
+            const bookmaker =
+                aposta.bookmaker ??
+                aposta.casa_aposta ??
+                "Não informado";
+
+
+            const dataJogo =
+                aposta.data_jogo ??
+                aposta.dataJogo ??
+                "";
+
 
             card.innerHTML =
-            `
+                `
 
-            <div class="titulo">
+                <div class="titulo">
 
-                ${aposta.timeCasa ?? ""}
-                x
-                ${aposta.timeFora ?? ""}
+                    ${escaparHTML(
+                        timeCasa
+                    )}
 
-            </div>
+                    x
 
+                    ${escaparHTML(
+                        timeFora
+                    )}
 
-            <div>
-
-                Mercado:
-                <strong>
-                ${aposta.mercado ?? ""}
-                </strong>
-
-            </div>
+                </div>
 
 
-            <div>
+                <div>
 
-                Odd:
-                <strong>
-                ${aposta.odd ?? 0}
+                    Mercado:
 
-                </strong>
+                    <strong>
+                        ${escaparHTML(
+                            mercado
+                        )}
+                    </strong>
 
-            </div>
-
-
-            <div>
-
-                Probabilidade:
-
-                <strong>
-
-                ${aposta.probabilidade ?? 0}%
-
-                </strong>
-
-            </div>
+                </div>
 
 
-            <div class="valor">
+                ${
+                    selecao
+                        ? `
+                        <div>
+                            Seleção:
+                            <strong>
+                                ${escaparHTML(
+                                    selecao
+                                )}
+                            </strong>
+                        </div>
+                        `
+                        : ""
+                }
 
-                Valor esperado:
-                ${aposta.valor ?? 0}
 
-            </div>
+                <div>
+
+                    Odd:
+
+                    <strong>
+                        ${formatarOdd(
+                            odd
+                        )}
+                    </strong>
+
+                </div>
 
 
-            `;
+                <div>
 
+                    Probabilidade:
+
+                    <strong>
+                        ${formatarPercentual(
+                            probabilidade
+                        )}
+                    </strong>
+
+                </div>
+
+
+                <div>
+
+                    Edge:
+
+                    <strong>
+                        ${formatarPercentual(
+                            edge
+                        )}
+                    </strong>
+
+                </div>
+
+
+                <div>
+
+                    ROI:
+
+                    <strong>
+                        ${formatarPercentual(
+                            roi
+                        )}
+                    </strong>
+
+                </div>
+
+
+                <div>
+
+                    Kelly:
+
+                    <strong>
+                        ${formatarPercentual(
+                            kelly
+                        )}
+                    </strong>
+
+                </div>
+
+
+                <div>
+
+                    Casa de aposta:
+
+                    <strong>
+                        ${escaparHTML(
+                            bookmaker
+                        )}
+                    </strong>
+
+                </div>
+
+
+                <div class="valor">
+
+                    ${escaparHTML(
+                        classificacao
+                    )}
+
+                </div>
+
+
+                ${
+                    dataJogo
+                        ? `
+                        <div>
+                            📅
+                            ${escaparHTML(
+                                formatarData(
+                                    dataJogo
+                                )
+                            )}
+                        </div>
+                        `
+                        : ""
+                }
+
+                `;
 
 
             area.appendChild(
                 card
             );
 
-
-
         }
     );
 
-
 }
-
 
 
 // ==================================================
@@ -976,7 +1278,16 @@ function renderizarValueBets(
 
 function adicionarValueBet(
     aposta
-){
+) {
+
+    if (
+        !aposta ||
+        typeof aposta !== "object"
+    ) {
+
+        return;
+
+    }
 
 
     const area =
@@ -985,10 +1296,24 @@ function adicionarValueBet(
         );
 
 
+    if (!area) {
 
-    if(!area)
         return;
 
+    }
+
+
+    const vazio =
+        area.querySelector(
+            ".empty"
+        );
+
+
+    if (vazio) {
+
+        area.innerHTML = "";
+
+    }
 
 
     const card =
@@ -997,93 +1322,138 @@ function adicionarValueBet(
         );
 
 
-
     card.className =
         "valuebet-card novo";
 
 
+    const timeCasa =
+        aposta.timeCasa ??
+        aposta.time_casa ??
+        extrairTimeCasa(
+            aposta.jogo
+        ) ??
+        "Casa";
+
+
+    const timeFora =
+        aposta.timeFora ??
+        aposta.time_fora ??
+        extrairTimeFora(
+            aposta.jogo
+        ) ??
+        "Fora";
+
+
+    const odd =
+        aposta.odd ??
+        aposta.oddMercado ??
+        aposta.odd_mercado ??
+        0;
+
 
     card.innerHTML =
-    `
+        `
 
-    <strong>
-    🆕 Nova Value Bet
-    </strong>
+        <strong>
+            🆕 Nova Value Bet
+        </strong>
 
-    <br>
+        <br>
 
-    ${aposta.timeCasa}
-    x
-    ${aposta.timeFora}
+        ${escaparHTML(
+            timeCasa
+        )}
 
-    <br>
+        x
 
-    Odd:
-    ${aposta.odd}
+        ${escaparHTML(
+            timeFora
+        )}
 
-    `;
+        <br>
 
+        Mercado:
+
+        ${escaparHTML(
+            aposta.mercado ??
+            ""
+        )}
+
+        <br>
+
+        Odd:
+
+        ${formatarOdd(
+            odd
+        )}
+
+        `;
 
 
     area.prepend(
         card
     );
 
-
 }
 
 
-
 // ==================================================
-// CARREGAR JOGOS DO DIA
+// CARREGAR JOGOS
 // ==================================================
 
-async function carregarJogos(){
+async function carregarJogos() {
 
-
-    try{
-
+    try {
 
         const resposta =
             await fetch(
-                `${CONFIG.API_URL}/api/jogos`
+                `${CONFIG.API_URL}/api/jogos`,
+                {
+                    cache: "no-store"
+                }
             );
 
 
+        if (!resposta.ok) {
 
-        if(!resposta.ok)
             throw new Error(
-                "Erro jogos"
+                `Erro jogos HTTP ${resposta.status}`
             );
 
+        }
+
+
+        const dados =
+            await resposta.json();
 
 
         const jogos =
-            await resposta.json();
-
+            extrairLista(
+                dados,
+                [
+                    "jogos",
+                    "data",
+                    "resultados"
+                ]
+            );
 
 
         renderizarJogos(
             jogos
         );
 
-
     }
-    catch(erro){
 
+    catch (erro) {
 
         console.error(
             "Erro jogos:",
             erro
         );
 
-
     }
 
-
 }
-
-
 
 
 // ==================================================
@@ -1092,8 +1462,7 @@ async function carregarJogos(){
 
 function renderizarJogos(
     jogos
-){
-
+) {
 
     const area =
         document.getElementById(
@@ -1101,45 +1470,37 @@ function renderizarJogos(
         );
 
 
-
-    if(!area)
-        return;
-
-
-
-    area.innerHTML = "";
-
-
-
-    if(
-        !jogos ||
-        jogos.length === 0
-    ){
-
-
-        area.innerHTML =
-        `
-
-        <div class="empty">
-
-        ⚽ Nenhum jogo encontrado
-
-        </div>
-
-        `;
-
+    if (!area) {
 
         return;
 
     }
 
 
+    area.innerHTML = "";
 
+
+    if (
+        !Array.isArray(jogos) ||
+        jogos.length === 0
+    ) {
+
+        area.innerHTML =
+            `
+            <div class="empty">
+
+                ⚽ Nenhum jogo encontrado
+
+            </div>
+            `;
+
+        return;
+
+    }
 
 
     jogos.forEach(
         jogo => {
-
 
             const div =
                 document.createElement(
@@ -1147,147 +1508,150 @@ function renderizarJogos(
                 );
 
 
-
             div.className =
                 "jogo-card";
 
 
+            const casa =
+                jogo.casa ??
+                jogo.time_casa ??
+                jogo.timeCasa ??
+                "Casa";
+
+
+            const fora =
+                jogo.fora ??
+                jogo.time_fora ??
+                jogo.timeFora ??
+                "Fora";
+
+
+            const campeonato =
+                jogo.campeonato ??
+                jogo.nome_campeonato ??
+                "";
+
+
+            const data =
+                jogo.data ??
+                jogo.data_jogo ??
+                jogo.dataJogo ??
+                "";
+
 
             div.innerHTML =
-            `
+                `
 
-            <h3>
+                <h3>
 
-            ${jogo.casa ?? ""}
-            x
-            ${jogo.fora ?? ""}
+                    ${escaparHTML(
+                        casa
+                    )}
 
-            </h3>
+                    x
 
+                    ${escaparHTML(
+                        fora
+                    )}
 
-            <p>
-
-            🏆
-            ${jogo.campeonato ?? ""}
-
-            </p>
+                </h3>
 
 
-            <p>
+                <p>
 
-            📅
-            ${jogo.data ?? ""}
+                    🏆
+                    ${escaparHTML(
+                        campeonato
+                    )}
 
-            </p>
+                </p>
 
 
-            `;
+                <p>
 
+                    📅
+                    ${
+                        data
+                            ? escaparHTML(
+                                formatarData(
+                                    data
+                                )
+                            )
+                            : "-"
+                    }
+
+                </p>
+
+                `;
 
 
             area.appendChild(
                 div
             );
 
-
         }
     );
 
-
 }
 
 
-
-// ==================================================
-// MOSTRAR ERROS / AVISOS
-// ==================================================
-
-function mostrarMensagem(
-    id,
-    mensagem
-){
-
-
-    const elemento =
-        document.getElementById(
-            id
-        );
-
-
-
-    if(elemento){
-
-
-        elemento.innerHTML =
-        `
-
-        <div class="alerta">
-
-        ${mensagem}
-
-        </div>
-
-        `;
-
-
-    }
-
-
-}
 // ==================================================
 // CARREGAR ANÁLISES IA
 // ==================================================
 
-async function carregarAnalisesIA(){
+async function carregarAnalisesIA() {
 
-
-    try{
-
+    try {
 
         const resposta =
             await fetch(
-                `${CONFIG.API_URL}/api/analises`
+                `${CONFIG.API_URL}/api/analises`,
+                {
+                    cache: "no-store"
+                }
             );
 
 
-
-        if(!resposta.ok){
+        if (!resposta.ok) {
 
             throw new Error(
-                "Erro análises IA"
+                `Erro análises IA HTTP ${resposta.status}`
             );
 
         }
-
 
 
         const dados =
             await resposta.json();
 
 
+        const analises =
+            extrairLista(
+                dados,
+                [
+                    "analises",
+                    "data",
+                    "resultados"
+                ]
+            );
+
 
         renderizarAnalisesIA(
-            dados
+            analises
         );
 
-
-
     }
-    catch(erro){
 
+    catch (erro) {
 
         console.error(
             "Erro análise IA:",
             erro
         );
 
-
     }
 
-
 }
-
-
 
 
 // ==================================================
@@ -1296,8 +1660,7 @@ async function carregarAnalisesIA(){
 
 function renderizarAnalisesIA(
     analises
-){
-
+) {
 
     const area =
         document.getElementById(
@@ -1305,45 +1668,37 @@ function renderizarAnalisesIA(
         );
 
 
-
-    if(!area)
-        return;
-
-
-
-    area.innerHTML = "";
-
-
-
-    if(
-        !analises ||
-        analises.length === 0
-    ){
-
-
-        area.innerHTML =
-        `
-
-        <div class="empty">
-
-        🤖 Nenhuma análise disponível
-
-        </div>
-
-        `;
-
+    if (!area) {
 
         return;
 
     }
 
 
+    area.innerHTML = "";
 
+
+    if (
+        !Array.isArray(analises) ||
+        analises.length === 0
+    ) {
+
+        area.innerHTML =
+            `
+            <div class="empty">
+
+                🤖 Nenhuma análise disponível
+
+            </div>
+            `;
+
+        return;
+
+    }
 
 
     analises.forEach(
         analise => {
-
 
             const card =
                 document.createElement(
@@ -1351,70 +1706,205 @@ function renderizarAnalisesIA(
                 );
 
 
-
             card.className =
                 "analise-card";
 
 
+            const jogo =
+                analise.jogo ??
+                `${analise.time_casa ?? ""} x ${analise.time_fora ?? ""}`;
+
+
+            const probabilidade =
+                analise.probabilidade ??
+                0;
+
+
+            const previsao =
+                analise.previsao ??
+                "Não disponível";
+
+
+            const confianca =
+                analise.confianca ??
+                analise.confianca_ia ??
+                0;
+
 
             card.innerHTML =
-            `
+                `
 
-            <h3>
+                <h3>
 
-            ${analise.jogo ?? ""}
+                    ${escaparHTML(
+                        jogo
+                    )}
 
-            </h3>
-
-
-            <p>
-
-            Probabilidade:
-
-            <strong>
-
-            ${analise.probabilidade ?? 0}%
-
-            </strong>
-
-            </p>
+                </h3>
 
 
-            <p>
+                <p>
 
-            Previsão:
+                    Probabilidade:
 
-            ${analise.previsao ?? ""}
+                    <strong>
 
-            </p>
+                        ${formatarPercentual(
+                            probabilidade
+                        )}
 
+                    </strong>
 
-            <p>
-
-            Confiança IA:
-
-            ${analise.confianca ?? 0}%
-
-            </p>
+                </p>
 
 
-            `;
+                <p>
 
+                    Previsão:
+
+                    ${escaparHTML(
+                        previsao
+                    )}
+
+                </p>
+
+
+                <p>
+
+                    Confiança IA:
+
+                    <strong>
+
+                        ${formatarPercentual(
+                            confianca
+                        )}
+
+                    </strong>
+
+                </p>
+
+                `;
 
 
             area.appendChild(
                 card
             );
 
-
         }
     );
-
 
 }
 
 
+// ==================================================
+// EXTRAIR LISTA GENÉRICA
+// ==================================================
 
+function extrairLista(
+    dados,
+    propriedades = []
+) {
+
+    if (
+        Array.isArray(dados)
+    ) {
+
+        return dados;
+
+    }
+
+
+    if (
+        dados &&
+        typeof dados === "object"
+    ) {
+
+        for (
+            const propriedade of propriedades
+        ) {
+
+            if (
+                Array.isArray(
+                    dados[
+                        propriedade
+                    ]
+                )
+            ) {
+
+                return dados[
+                    propriedade
+                ];
+
+            }
+
+        }
+
+    }
+
+
+    return [];
+
+}
+
+
+// ==================================================
+// EXTRAIR TIME CASA
+// ==================================================
+
+function extrairTimeCasa(
+    jogo
+) {
+
+    if (
+        !jogo ||
+        typeof jogo !== "string"
+    ) {
+
+        return null;
+
+    }
+
+
+    const partes =
+        jogo.split(
+            " x "
+        );
+
+
+    return partes[0] ??
+        null;
+
+}
+
+
+// ==================================================
+// EXTRAIR TIME FORA
+// ==================================================
+
+function extrairTimeFora(
+    jogo
+) {
+
+    if (
+        !jogo ||
+        typeof jogo !== "string"
+    ) {
+
+        return null;
+
+    }
+
+
+    const partes =
+        jogo.split(
+            " x "
+        );
+
+
+    return partes[1] ??
+        null;
+
+}
 
 
 // ==================================================
@@ -1423,149 +1913,304 @@ function renderizarAnalisesIA(
 
 function formatarNumero(
     numero
-){
+) {
 
-
-    if(
+    if (
         numero === undefined ||
-        numero === null
-    ){
+        numero === null ||
+        numero === ""
+    ) {
 
-        return 0;
+        return "0";
 
     }
 
 
-
-    return Number(numero)
-        .toLocaleString(
-            "pt-BR"
+    const valor =
+        Number(
+            numero
         );
 
+
+    if (
+        !Number.isFinite(
+            valor
+        )
+    ) {
+
+        return "0";
+
+    }
+
+
+    return valor.toLocaleString(
+        "pt-BR"
+    );
 
 }
 
 
+// ==================================================
+// FORMATAR ODD
+// ==================================================
 
+function formatarOdd(
+    valor
+) {
+
+    const numero =
+        Number(
+            valor
+        );
+
+
+    if (
+        !Number.isFinite(
+            numero
+        )
+    ) {
+
+        return "0.00";
+
+    }
+
+
+    return numero.toFixed(
+        2
+    );
+
+}
 
 
 // ==================================================
-// DATA E HORA
+// FORMATAR PERCENTUAL
+// ==================================================
+
+function formatarPercentual(
+    valor
+) {
+
+    const numero =
+        Number(
+            valor
+        );
+
+
+    if (
+        !Number.isFinite(
+            numero
+        )
+    ) {
+
+        return "0%";
+
+    }
+
+
+    return `${numero.toFixed(2)}%`;
+
+}
+
+
+// ==================================================
+// FORMATAR DATA
 // ==================================================
 
 function formatarData(
     data
-){
+) {
+
+    try {
+
+        if (!data) {
+
+            return "-";
+
+        }
 
 
-    try{
+        const dataObj =
+            data instanceof Date
+                ? data
+                : new Date(data);
 
 
-        return new Date(data)
-        .toLocaleString(
+        if (
+            Number.isNaN(
+                dataObj.getTime()
+            )
+        ) {
+
+            return "-";
+
+        }
+
+
+        return dataObj.toLocaleString(
             "pt-BR"
         );
 
-
     }
-    catch{
 
+    catch {
 
         return "-";
 
-
     }
-
 
 }
 
 
+// ==================================================
+// ESCAPAR HTML
+// ==================================================
 
+function escaparHTML(
+    valor
+) {
+
+    if (
+        valor === undefined ||
+        valor === null
+    ) {
+
+        return "";
+
+    }
+
+
+    return String(
+        valor
+    )
+    .replace(
+        /&/g,
+        "&amp;"
+    )
+    .replace(
+        /</g,
+        "&lt;"
+    )
+    .replace(
+        />/g,
+        "&gt;"
+    )
+    .replace(
+        /"/g,
+        "&quot;"
+    )
+    .replace(
+        /'/g,
+        "&#039;"
+    );
+
+}
+
+
+// ==================================================
+// MOSTRAR MENSAGEM
+// ==================================================
+
+function mostrarMensagem(
+    id,
+    mensagem
+) {
+
+    const elemento =
+        document.getElementById(
+            id
+        );
+
+
+    if (!elemento) {
+
+        return;
+
+    }
+
+
+    elemento.innerHTML =
+        `
+        <div class="alerta">
+
+            ${escaparHTML(
+                mensagem
+            )}
+
+        </div>
+        `;
+
+}
 
 
 // ==================================================
 // VERIFICAR STATUS API
 // ==================================================
 
-async function verificarServidor(){
+async function verificarServidor() {
 
-
-    try{
-
+    try {
 
         const resposta =
             await fetch(
-                `${CONFIG.API_URL}/api/ping`
+                `${CONFIG.API_URL}/api/ping`,
+                {
+                    cache: "no-store"
+                }
             );
 
 
-
-        if(
+        if (
             resposta.ok
-        ){
+        ) {
 
             atualizarStatus(
                 true
             );
 
-
         }
-        else{
 
+        else {
 
             atualizarStatus(
                 false
             );
 
-
         }
 
-
     }
-    catch{
 
+    catch {
 
         atualizarStatus(
             false
         );
 
-
     }
-
 
 }
 
 
-
-
-
 // ==================================================
-// MONITORAMENTO AUTOMÁTICO
+// MONITORAMENTO API
 // ==================================================
 
 setInterval(
     () => {
 
-
         verificarServidor();
 
-
     },
-    30000
+    CONFIG.INTERVALO_PING
 );
 
 
-
-
-
 // ==================================================
-// ATUALIZAÇÃO COMPLETA MANUAL
+// ATUALIZAÇÃO COMPLETA
 // ==================================================
 
-async function atualizarTudo(){
+async function atualizarTudo() {
 
-
-    await Promise.all([
+    await Promise.allSettled([
 
         carregarDashboard(),
 
@@ -1579,10 +2224,7 @@ async function atualizarTudo(){
 
     ]);
 
-
-
 }
-
 
 
 // ==================================================
@@ -1591,30 +2233,39 @@ async function atualizarTudo(){
 
 window.BetVisionAI = {
 
-
     atualizarTudo,
 
     carregarDashboard,
 
     carregarJogos,
 
+    carregarCampeonatos,
+
     carregarValueBets,
 
     carregarAnalisesIA,
 
+    renderizarValueBets,
+
+    renderizarJogos,
+
+    renderizarCampeonatos,
+
+    renderizarAnalisesIA,
+
     conectarWebSocket,
 
-    estado
+    enviarWebSocket,
 
+    verificarServidor,
+
+    estado
 
 };
 
 
-
-
-
 // ==================================================
-// FIM APP.JS
+// FIM
 // ==================================================
 
 console.log(
