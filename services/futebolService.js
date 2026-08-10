@@ -1,7 +1,7 @@
 // ==========================================
 // BetVision AI
 // services/futebolService.js
-// Versão 13.0
+// Versão 14.0
 // Serviço Futebol Integrado
 // Football-Data.org v4
 // Neon PostgreSQL
@@ -24,6 +24,13 @@ const API_KEY =
 const API_URL =
     process.env.API_FOOTBALL_URL ||
     "https://api.football-data.org/v4";
+
+
+// ==========================================
+// TIMEOUT DA API
+// ==========================================
+
+const API_TIMEOUT = 15000;
 
 
 // ==========================================
@@ -71,30 +78,59 @@ export async function buscarJogosDia() {
 
 
         // ==========================================
+        // ABORT CONTROLLER
+        // ==========================================
+
+        const controller =
+            new AbortController();
+
+        const timeout =
+            setTimeout(
+                () => controller.abort(),
+                API_TIMEOUT
+            );
+
+
+        // ==========================================
         // CONSULTAR FOOTBALL-DATA
         // ==========================================
 
-        const resposta = await fetch(
+        let resposta;
 
-            `${API_URL}/matches`,
+        try {
 
-            {
+            resposta = await fetch(
 
-                method: "GET",
+                `${API_URL}/matches`,
 
-                headers: {
+                {
 
-                    "X-Auth-Token":
-                        API_KEY,
+                    method: "GET",
 
-                    "Accept":
-                        "application/json"
+                    headers: {
+
+                        "X-Auth-Token":
+                            API_KEY,
+
+                        "Accept":
+                            "application/json"
+
+                    },
+
+                    signal:
+                        controller.signal
 
                 }
 
-            }
+            );
 
-        );
+        }
+
+        finally {
+
+            clearTimeout(timeout);
+
+        }
 
 
         // ==========================================
@@ -126,6 +162,33 @@ export async function buscarJogosDia() {
             );
 
 
+            if (resposta.status === 401) {
+
+                console.error(
+                    "🔑 API KEY inválida ou não autorizada"
+                );
+
+            }
+
+
+            if (resposta.status === 403) {
+
+                console.error(
+                    "🚫 Acesso negado pela Football-Data.org"
+                );
+
+            }
+
+
+            if (resposta.status === 429) {
+
+                console.error(
+                    "⏳ Limite da API atingido"
+                );
+
+            }
+
+
             return [];
 
         }
@@ -145,6 +208,11 @@ export async function buscarJogosDia() {
             )
                 ? dados.matches
                 : [];
+
+
+        console.log(
+            `⚽ ${partidas.length} jogos recebidos da API`
+        );
 
 
         // ==========================================
@@ -168,13 +236,21 @@ export async function buscarJogosDia() {
 
         const jogos = partidas
 
-            .map(partida => {
+            .map((partida) => {
+
+                // ==================================
+                // API ID
+                // ==================================
 
                 const apiId =
                     Number(
                         partida?.id
                     );
 
+
+                // ==================================
+                // TIMES
+                // ==================================
 
                 const timeCasa =
                     partida?.homeTeam?.name ||
@@ -186,15 +262,27 @@ export async function buscarJogosDia() {
                     null;
 
 
+                // ==================================
+                // CAMPEONATO
+                // ==================================
+
                 const campeonato =
                     partida?.competition?.name ||
                     "Futebol";
 
 
+                // ==================================
+                // DATA
+                // ==================================
+
                 const horario =
                     partida?.utcDate ||
                     null;
 
+
+                // ==================================
+                // STATUS
+                // ==================================
 
                 const status =
                     partida?.status ||
@@ -202,7 +290,16 @@ export async function buscarJogosDia() {
 
 
                 // ==================================
-                // VALIDAR JOGO
+                // ESTÁDIO
+                // ==================================
+
+                const estadio =
+                    partida?.venue ||
+                    null;
+
+
+                // ==================================
+                // VALIDAR API ID
                 // ==================================
 
                 if (
@@ -219,6 +316,10 @@ export async function buscarJogosDia() {
                 }
 
 
+                // ==================================
+                // VALIDAR TIMES
+                // ==================================
+
                 if (
                     !timeCasa ||
                     !timeFora
@@ -233,64 +334,78 @@ export async function buscarJogosDia() {
                 }
 
 
+                // ==================================
+                // VALIDAR DATA
+                // ==================================
+
+                if (!horario) {
+
+                    console.warn(
+                        `⚠️ Jogo ${apiId} ignorado: data inválida`
+                    );
+
+                    return null;
+
+                }
+
+
+                // ==================================
+                // OBJETO PADRONIZADO
+                // ==================================
+
                 return {
 
-                    // ID da API
+                    // ID da Football-Data
                     api_id:
                         apiId,
 
 
-                    // Mantido para compatibilidade
+                    // Compatibilidade
                     id:
                         apiId,
 
 
+                    // Campeonato
                     campeonato:
-
-
                         campeonato,
 
 
+                    // Time mandante
                     time_casa:
-
-
                         timeCasa,
 
 
+                    // Time visitante
                     time_fora:
-
-
                         timeFora,
 
 
-                    // Compatibilidade com predictionService
+                    // Compatibilidade com IA
                     casa:
-
-
                         timeCasa,
 
 
                     fora:
-
-
                         timeFora,
 
 
+                    // Data oficial UTC
                     data_jogo:
-
-
                         horario,
 
 
+                    // Compatibilidade
                     horario:
-
-
                         horario,
 
 
+                    // Estádio
+                    estadio:
+                        estadio,
+
+
+                    // Status Football-Data
                     status:
-
-
                         status
 
                 };
@@ -318,6 +433,22 @@ export async function buscarJogosDia() {
         }
 
 
+        // ==========================================
+        // MOSTRAR PRIMEIRO JOGO NO LOG
+        // ==========================================
+
+        if (jogos.length > 0) {
+
+            const primeiro =
+                jogos[0];
+
+            console.log(
+                `⚽ Exemplo: ${primeiro.time_casa} x ${primeiro.time_fora}`
+            );
+
+        }
+
+
         return jogos;
 
 
@@ -325,10 +456,26 @@ export async function buscarJogosDia() {
 
     catch (error) {
 
-        console.error(
-            "❌ Erro futebolService:",
-            error.message
-        );
+        if (
+            error?.name ===
+            "AbortError"
+        ) {
+
+            console.error(
+                "⏱️ Timeout Football-Data:",
+                `${API_TIMEOUT}ms`
+            );
+
+        }
+
+        else {
+
+            console.error(
+                "❌ Erro futebolService:",
+                error.message
+            );
+
+        }
 
 
         return [];
