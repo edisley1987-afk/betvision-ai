@@ -1,23 +1,17 @@
-```javascript
+```javascript id="r7f2km"
 // ==========================================
 // BetVision AI
 // routes/jogos.js
-// Versao 12.2
-// API Jogos + IA
-// PostgreSQL / Neon
+// Versao 12.3
 // ==========================================
 
 import express from "express";
 
 import jogoBancoService from "../services/jogoBancoService.js";
 
-import {
-    buscarJogosDia
-} from "../services/futebolService.js";
+import { buscarJogosDia } from "../services/futebolService.js";
 
-import {
-    gerarAnaliseIA
-} from "../services/inteligenciaService.js";
+import { gerarAnaliseIA } from "../services/inteligenciaService.js";
 
 
 const router = express.Router();
@@ -25,21 +19,15 @@ const router = express.Router();
 
 // ==========================================
 // GET /api/jogos
-// Jogos do dia
 // ==========================================
 
 router.get("/", async (req, res) => {
 
     try {
 
-        console.log("API JOGOS DO DIA");
+        console.log("API JOGOS");
 
         let jogos = [];
-
-
-        // ==========================================
-        // BUSCAR JOGOS NA API DE FUTEBOL
-        // ==========================================
 
         try {
 
@@ -48,16 +36,14 @@ router.get("/", async (req, res) => {
         } catch (error) {
 
             console.log(
-                "API futebol indisponivel:",
+                "Erro API futebol:",
                 error.message
             );
 
+            jogos = [];
+
         }
 
-
-        // ==========================================
-        // GARANTIR ARRAY
-        // ==========================================
 
         if (!Array.isArray(jogos)) {
 
@@ -65,10 +51,6 @@ router.get("/", async (req, res) => {
 
         }
 
-
-        // ==========================================
-        // SALVAR JOGOS NO POSTGRESQL
-        // ==========================================
 
         if (jogos.length > 0) {
 
@@ -79,7 +61,7 @@ router.get("/", async (req, res) => {
                 );
 
                 console.log(
-                    "Jogos processados no PostgreSQL: " +
+                    "Jogos salvos:",
                     jogos.length
                 );
 
@@ -93,10 +75,6 @@ router.get("/", async (req, res) => {
             }
 
 
-            // ==========================================
-            // GERAR ANALISES IA
-            // ==========================================
-
             try {
 
                 await gerarAnaliseIA(jogos);
@@ -108,7 +86,7 @@ router.get("/", async (req, res) => {
             } catch (error) {
 
                 console.log(
-                    "Erro gerar analises IA:",
+                    "Erro analise IA:",
                     error.message
                 );
 
@@ -117,17 +95,9 @@ router.get("/", async (req, res) => {
         }
 
 
-        // ==========================================
-        // BUSCAR BANCO ATUALIZADO
-        // ==========================================
-
         const banco =
             await jogoBancoService.listarJogos();
 
-
-        // ==========================================
-        // RESPOSTA
-        // ==========================================
 
         res.json({
 
@@ -167,7 +137,7 @@ router.get("/", async (req, res) => {
 
         console.error(
             "Erro jogos:",
-            error
+            error.message
         );
 
         res.status(500).json({
@@ -185,7 +155,6 @@ router.get("/", async (req, res) => {
 
 // ==========================================
 // GET /api/jogos/banco
-// Somente PostgreSQL
 // ==========================================
 
 router.get("/banco", async (req, res) => {
@@ -194,7 +163,6 @@ router.get("/banco", async (req, res) => {
 
         const jogos =
             await jogoBancoService.listarJogos();
-
 
         res.json({
 
@@ -207,11 +175,6 @@ router.get("/banco", async (req, res) => {
         });
 
     } catch (error) {
-
-        console.error(
-            "Erro buscar jogos do banco:",
-            error.message
-        );
 
         res.status(500).json({
 
@@ -228,7 +191,6 @@ router.get("/banco", async (req, res) => {
 
 // ==========================================
 // GET /api/jogos/hoje
-// Jogos registrados hoje
 // ==========================================
 
 router.get("/hoje", async (req, res) => {
@@ -237,7 +199,6 @@ router.get("/hoje", async (req, res) => {
 
         const jogos =
             await jogoBancoService.buscarJogosDoDia();
-
 
         res.json({
 
@@ -250,11 +211,6 @@ router.get("/hoje", async (req, res) => {
         });
 
     } catch (error) {
-
-        console.error(
-            "Erro jogos de hoje:",
-            error.message
-        );
 
         res.status(500).json({
 
@@ -271,7 +227,6 @@ router.get("/hoje", async (req, res) => {
 
 // ==========================================
 // GET /api/jogos/proximos
-// Proximos jogos
 // ==========================================
 
 router.get("/proximos", async (req, res) => {
@@ -281,12 +236,10 @@ router.get("/proximos", async (req, res) => {
         const limite =
             Number(req.query.limite) || 20;
 
-
         const jogos =
             await jogoBancoService.buscarProximosJogos(
                 limite
             );
-
 
         res.json({
 
@@ -299,11 +252,6 @@ router.get("/proximos", async (req, res) => {
         });
 
     } catch (error) {
-
-        console.error(
-            "Erro proximos jogos:",
-            error.message
-        );
 
         res.status(500).json({
 
@@ -319,7 +267,7 @@ router.get("/proximos", async (req, res) => {
 
 
 // ==========================================
-// EXPORTACAO
+// EXPORT DEFAULT
 // ==========================================
 
 export default router;
