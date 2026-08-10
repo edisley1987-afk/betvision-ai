@@ -3,8 +3,7 @@
 // ==================================================
 // BETVISION AI
 // services/jogoBancoService.js
-// Controle de Jogos PostgreSQL v5.2
-// Compatível com estrutura atual do Neon
+// Controle de Jogos PostgreSQL v5.3
 // ==================================================
 
 import { query } from "../database/database.js";
@@ -35,37 +34,17 @@ export async function salvarJogoAPI(jogo) {
     }
 
     const resultado = await query(
-        `
-        INSERT INTO jogos
-        (
-            api_id,
-            campeonato,
-            time_casa,
-            time_fora,
-            data_jogo,
-            estadio,
-            status
-        )
-        VALUES
-        (
-            $1,
-            $2,
-            $3,
-            $4,
-            $5,
-            $6,
-            $7
-        )
-        ON CONFLICT (api_id)
-        DO UPDATE SET
-            campeonato = EXCLUDED.campeonato,
-            time_casa = EXCLUDED.time_casa,
-            time_fora = EXCLUDED.time_fora,
-            data_jogo = EXCLUDED.data_jogo,
-            estadio = EXCLUDED.estadio,
-            status = EXCLUDED.status
-        RETURNING *
-        `,
+        "INSERT INTO jogos " +
+        "(api_id, campeonato, time_casa, time_fora, data_jogo, estadio, status) " +
+        "VALUES ($1, $2, $3, $4, $5, $6, $7) " +
+        "ON CONFLICT (api_id) DO UPDATE SET " +
+        "campeonato = EXCLUDED.campeonato, " +
+        "time_casa = EXCLUDED.time_casa, " +
+        "time_fora = EXCLUDED.time_fora, " +
+        "data_jogo = EXCLUDED.data_jogo, " +
+        "estadio = EXCLUDED.estadio, " +
+        "status = EXCLUDED.status " +
+        "RETURNING *",
         [
             api_id,
             campeonato || null,
@@ -118,12 +97,7 @@ export async function salvarListaJogos(jogos = []) {
 export async function buscarPorApiId(api_id) {
 
     const resultado = await query(
-        `
-        SELECT *
-        FROM jogos
-        WHERE api_id = $1
-        LIMIT 1
-        `,
+        "SELECT * FROM jogos WHERE api_id = $1 LIMIT 1",
         [api_id]
     );
 
@@ -138,20 +112,9 @@ export async function buscarPorApiId(api_id) {
 export async function listarJogos() {
 
     const resultado = await query(
-        `
-        SELECT
-            id,
-            api_id,
-            campeonato,
-            time_casa,
-            time_fora,
-            data_jogo,
-            estadio,
-            status,
-            criado_em
-        FROM jogos
-        ORDER BY data_jogo DESC
-        `
+        "SELECT id, api_id, campeonato, time_casa, time_fora, " +
+        "data_jogo, estadio, status, criado_em " +
+        "FROM jogos ORDER BY data_jogo DESC"
     );
 
     return resultado.rows;
@@ -165,21 +128,11 @@ export async function listarJogos() {
 export async function buscarJogosDoDia() {
 
     const resultado = await query(
-        `
-        SELECT
-            id,
-            api_id,
-            campeonato,
-            time_casa,
-            time_fora,
-            data_jogo,
-            estadio,
-            status,
-            criado_em
-        FROM jogos
-        WHERE DATE(data_jogo) = CURRENT_DATE
-        ORDER BY data_jogo ASC
-        `
+        "SELECT id, api_id, campeonato, time_casa, time_fora, " +
+        "data_jogo, estadio, status, criado_em " +
+        "FROM jogos " +
+        "WHERE DATE(data_jogo) = CURRENT_DATE " +
+        "ORDER BY data_jogo ASC"
     );
 
     return resultado.rows;
@@ -193,22 +146,12 @@ export async function buscarJogosDoDia() {
 export async function buscarProximosJogos(limite = 20) {
 
     const resultado = await query(
-        `
-        SELECT
-            id,
-            api_id,
-            campeonato,
-            time_casa,
-            time_fora,
-            data_jogo,
-            estadio,
-            status,
-            criado_em
-        FROM jogos
-        WHERE data_jogo >= NOW()
-        ORDER BY data_jogo ASC
-        LIMIT $1
-        `,
+        "SELECT id, api_id, campeonato, time_casa, time_fora, " +
+        "data_jogo, estadio, status, criado_em " +
+        "FROM jogos " +
+        "WHERE data_jogo >= NOW() " +
+        "ORDER BY data_jogo ASC " +
+        "LIMIT $1",
         [limite]
     );
 
@@ -226,12 +169,10 @@ export async function atualizarStatusJogo(
 ) {
 
     const resultado = await query(
-        `
-        UPDATE jogos
-        SET status = $2
-        WHERE api_id = $1
-        RETURNING *
-        `,
+        "UPDATE jogos " +
+        "SET status = $2 " +
+        "WHERE api_id = $1 " +
+        "RETURNING *",
         [
             api_id,
             status
@@ -261,18 +202,15 @@ export async function atualizarJogo(
     } = dados;
 
     const resultado = await query(
-        `
-        UPDATE jogos
-        SET
-            campeonato = COALESCE($2, campeonato),
-            time_casa = COALESCE($3, time_casa),
-            time_fora = COALESCE($4, time_fora),
-            data_jogo = COALESCE($5, data_jogo),
-            estadio = COALESCE($6, estadio),
-            status = COALESCE($7, status)
-        WHERE api_id = $1
-        RETURNING *
-        `,
+        "UPDATE jogos SET " +
+        "campeonato = COALESCE($2, campeonato), " +
+        "time_casa = COALESCE($3, time_casa), " +
+        "time_fora = COALESCE($4, time_fora), " +
+        "data_jogo = COALESCE($5, data_jogo), " +
+        "estadio = COALESCE($6, estadio), " +
+        "status = COALESCE($7, status) " +
+        "WHERE api_id = $1 " +
+        "RETURNING *",
         [
             api_id,
             campeonato || null,
@@ -300,18 +238,13 @@ export async function removerJogosAntigos(dias = 90) {
         !Number.isInteger(diasNumerico) ||
         diasNumerico <= 0
     ) {
-        throw new Error(
-            "Quantidade de dias inválida"
-        );
+        throw new Error("Quantidade de dias inválida");
     }
 
     const resultado = await query(
-        `
-        DELETE FROM jogos
-        WHERE data_jogo <
-              NOW() - ($1 * INTERVAL '1 day')
-        RETURNING id
-        `,
+        "DELETE FROM jogos " +
+        "WHERE data_jogo < NOW() - ($1 * INTERVAL '1 day') " +
+        "RETURNING id",
         [diasNumerico]
     );
 
@@ -326,26 +259,11 @@ export async function removerJogosAntigos(dias = 90) {
 export async function estatisticasJogos() {
 
     const resultado = await query(
-        `
-        SELECT
-            COUNT(*) AS total,
-
-            COUNT(
-                CASE
-                    WHEN status = 'FINISHED'
-                    THEN 1
-                END
-            ) AS finalizados,
-
-            COUNT(
-                CASE
-                    WHEN status IN ('SCHEDULED', 'TIMED')
-                    THEN 1
-                END
-            ) AS agendados
-
-        FROM jogos
-        `
+        "SELECT " +
+        "COUNT(*) AS total, " +
+        "COUNT(CASE WHEN status = 'FINISHED' THEN 1 END) AS finalizados, " +
+        "COUNT(CASE WHEN status IN ('SCHEDULED', 'TIMED') THEN 1 END) AS agendados " +
+        "FROM jogos"
     );
 
     return resultado.rows[0];
@@ -359,23 +277,14 @@ export async function estatisticasJogos() {
 export default {
 
     salvarJogoAPI,
-
     salvarListaJogos,
-
     listarJogos,
-
     buscarPorApiId,
-
     buscarJogosDoDia,
-
     buscarProximosJogos,
-
     atualizarStatusJogo,
-
     atualizarJogo,
-
     removerJogosAntigos,
-
     estatisticasJogos
 
 };
