@@ -7,10 +7,7 @@
 // Compatível com estrutura atual do Neon
 // ==================================================
 
-import {
-    query
-} from "../database/database.js";
-
+import { query } from "../database/database.js";
 
 
 // ==================================================
@@ -23,9 +20,7 @@ export async function salvarJogoAPI(jogo) {
         throw new Error("Dados do jogo não informados");
     }
 
-
     const {
-
         api_id,
         campeonato,
         time_casa,
@@ -33,17 +28,13 @@ export async function salvarJogoAPI(jogo) {
         data_jogo,
         status,
         estadio
-
     } = jogo;
-
 
     if (!api_id) {
         throw new Error("api_id do jogo é obrigatório");
     }
 
-
     const resultado = await query(
-
         `
         INSERT INTO jogos
         (
@@ -55,7 +46,6 @@ export async function salvarJogoAPI(jogo) {
             estadio,
             status
         )
-
         VALUES
         (
             $1,
@@ -66,28 +56,17 @@ export async function salvarJogoAPI(jogo) {
             $6,
             $7
         )
-
         ON CONFLICT (api_id)
-
         DO UPDATE SET
-
             campeonato = EXCLUDED.campeonato,
-
             time_casa = EXCLUDED.time_casa,
-
             time_fora = EXCLUDED.time_fora,
-
             data_jogo = EXCLUDED.data_jogo,
-
             estadio = EXCLUDED.estadio,
-
             status = EXCLUDED.status
-
         RETURNING *
         `,
-
         [
-
             api_id,
             campeonato || null,
             time_casa || null,
@@ -95,40 +74,30 @@ export async function salvarJogoAPI(jogo) {
             data_jogo || null,
             estadio || null,
             status || "SCHEDULED"
-
         ]
-
     );
 
-
     return resultado.rows[0];
-
 }
-
 
 
 // ==================================================
 // SALVAR LISTA DE JOGOS
-// COMPATIBILIDADE COM ROTAS ANTIGAS
 // ==================================================
 
 export async function salvarListaJogos(jogos = []) {
 
     const lista = [];
 
-
     for (const jogo of jogos) {
 
         try {
 
-            const salvo =
-                await salvarJogoAPI(jogo);
+            const salvo = await salvarJogoAPI(jogo);
 
             lista.push(salvo);
 
-        }
-
-        catch (erro) {
+        } catch (erro) {
 
             console.error(
                 "Erro ao salvar jogo:",
@@ -136,14 +105,10 @@ export async function salvarListaJogos(jogos = []) {
             );
 
         }
-
     }
 
-
     return lista;
-
 }
-
 
 
 // ==================================================
@@ -153,28 +118,17 @@ export async function salvarListaJogos(jogos = []) {
 export async function buscarPorApiId(api_id) {
 
     const resultado = await query(
-
         `
         SELECT *
-
         FROM jogos
-
         WHERE api_id = $1
-
         LIMIT 1
         `,
-
-        [
-            api_id
-        ]
-
+        [api_id]
     );
 
-
     return resultado.rows[0] || null;
-
 }
-
 
 
 // ==================================================
@@ -184,10 +138,8 @@ export async function buscarPorApiId(api_id) {
 export async function listarJogos() {
 
     const resultado = await query(
-
         `
         SELECT
-
             id,
             api_id,
             campeonato,
@@ -197,19 +149,13 @@ export async function listarJogos() {
             estadio,
             status,
             criado_em
-
         FROM jogos
-
         ORDER BY data_jogo DESC
         `
-
     );
 
-
     return resultado.rows;
-
 }
-
 
 
 // ==================================================
@@ -219,10 +165,8 @@ export async function listarJogos() {
 export async function buscarJogosDoDia() {
 
     const resultado = await query(
-
         `
         SELECT
-
             id,
             api_id,
             campeonato,
@@ -232,36 +176,25 @@ export async function buscarJogosDoDia() {
             estadio,
             status,
             criado_em
-
         FROM jogos
-
         WHERE DATE(data_jogo) = CURRENT_DATE
-
         ORDER BY data_jogo ASC
         `
-
     );
 
-
     return resultado.rows;
-
 }
-
 
 
 // ==================================================
 // BUSCAR PRÓXIMOS JOGOS
 // ==================================================
 
-export async function buscarProximosJogos(
-    limite = 20
-) {
+export async function buscarProximosJogos(limite = 20) {
 
     const resultado = await query(
-
         `
         SELECT
-
             id,
             api_id,
             campeonato,
@@ -271,27 +204,16 @@ export async function buscarProximosJogos(
             estadio,
             status,
             criado_em
-
         FROM jogos
-
         WHERE data_jogo >= NOW()
-
         ORDER BY data_jogo ASC
-
         LIMIT $1
         `,
-
-        [
-            limite
-        ]
-
+        [limite]
     );
 
-
     return resultado.rows;
-
 }
-
 
 
 // ==================================================
@@ -299,41 +221,25 @@ export async function buscarProximosJogos(
 // ==================================================
 
 export async function atualizarStatusJogo(
-
     api_id,
-
     status
-
 ) {
 
     const resultado = await query(
-
         `
         UPDATE jogos
-
-        SET
-
-            status = $2
-
+        SET status = $2
         WHERE api_id = $1
-
         RETURNING *
         `,
-
         [
-
             api_id,
             status
-
         ]
-
     );
 
-
     return resultado.rows[0] || null;
-
 }
-
 
 
 // ==================================================
@@ -341,51 +247,33 @@ export async function atualizarStatusJogo(
 // ==================================================
 
 export async function atualizarJogo(
-
     api_id,
-
     dados = {}
-
 ) {
 
     const {
-
         campeonato,
         time_casa,
         time_fora,
         data_jogo,
         estadio,
         status
-
     } = dados;
 
-
     const resultado = await query(
-
         `
         UPDATE jogos
-
         SET
-
             campeonato = COALESCE($2, campeonato),
-
             time_casa = COALESCE($3, time_casa),
-
             time_fora = COALESCE($4, time_fora),
-
             data_jogo = COALESCE($5, data_jogo),
-
             estadio = COALESCE($6, estadio),
-
             status = COALESCE($7, status)
-
         WHERE api_id = $1
-
         RETURNING *
         `,
-
         [
-
             api_id,
             campeonato || null,
             time_casa || null,
@@ -393,63 +281,42 @@ export async function atualizarJogo(
             data_jogo || null,
             estadio || null,
             status || null
-
         ]
-
     );
 
-
     return resultado.rows[0] || null;
-
 }
-
 
 
 // ==================================================
 // REMOVER JOGOS ANTIGOS
 // ==================================================
 
-export async function removerJogosAntigos(
-    dias = 90
-) {
+export async function removerJogosAntigos(dias = 90) {
 
     const diasNumerico = Number(dias);
-
 
     if (
         !Number.isInteger(diasNumerico) ||
         diasNumerico <= 0
     ) {
-
         throw new Error(
             "Quantidade de dias inválida"
         );
-
     }
 
-
     const resultado = await query(
-
         `
         DELETE FROM jogos
-
         WHERE data_jogo <
               NOW() - ($1 * INTERVAL '1 day')
-
         RETURNING id
         `,
-
-        [
-            diasNumerico
-        ]
-
+        [diasNumerico]
     );
 
-
     return resultado.rowCount;
-
 }
-
 
 
 // ==================================================
@@ -459,10 +326,8 @@ export async function removerJogosAntigos(
 export async function estatisticasJogos() {
 
     const resultado = await query(
-
         `
         SELECT
-
             COUNT(*) AS total,
 
             COUNT(
@@ -474,24 +339,17 @@ export async function estatisticasJogos() {
 
             COUNT(
                 CASE
-                    WHEN status IN (
-                        'SCHEDULED',
-                        'TIMED'
-                    )
+                    WHEN status IN ('SCHEDULED', 'TIMED')
                     THEN 1
                 END
             ) AS agendados
 
         FROM jogos
         `
-
     );
 
-
     return resultado.rows[0];
-
 }
-
 
 
 // ==================================================
