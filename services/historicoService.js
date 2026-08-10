@@ -5,72 +5,73 @@
 // Histórico de Jogos + Estatísticas
 // Versão 9.0
 //
-// PostgreSQL / NeonDB
-//
 // Compatível com:
 // - schema.sql atual
+// - tabela jogos do NeonDB
 // - jogoBancoService.js
 // - inteligenciaService.js
 //
-// IMPORTANTE:
+// Estrutura REAL da tabela jogos:
 //
-// A tabela jogos NÃO possui:
-//
+// id
+// api_id
+// campeonato
 // time_casa
 // time_fora
+// data_jogo
+// estadio
+// status
+// criado_em
 //
-// Ela possui:
-//
-// time_casa_id
-// time_fora_id
-//
-// Os nomes dos times estão na tabela:
-//
-// times
-//
-// Portanto este serviço utiliza JOIN.
+// IMPORTANTE:
+// NÃO utiliza:
+// - time_casa_id
+// - time_fora_id
+// - campeonato_id
 // ==========================================
 
 import { query } from "../database/database.js";
-
 
 // ==========================================
 // NORMALIZAR NOME DO TIME
 // ==========================================
 
-function normalizarNomeTime(time) {
-
+function normalizarTime(time) {
     if (
         time === undefined ||
         time === null
     ) {
-
         return "";
-
     }
 
-    return String(time)
-        .trim();
-
+    return String(time).trim();
 }
 
+// ==========================================
+// CONVERTER NÚMERO COM SEGURANÇA
+// ==========================================
+
+function numeroSeguro(
+    valor,
+    padrao = 0
+) {
+    const numero = Number(valor);
+
+    return Number.isFinite(numero)
+        ? numero
+        : padrao;
+}
 
 // ==========================================
 // BUSCAR HISTÓRICO DE UM TIME
 //
-// Recebe o nome do time.
+// Usa diretamente:
+// jogos.time_casa
+// jogos.time_fora
 //
-// Exemplo:
-//
-// buscarHistoricoTime("CD Santa Clara")
-//
-// Busca jogos onde o time aparece:
-//
+// NÃO usa:
 // time_casa_id
-// OU
 // time_fora_id
-//
-// JOIN com tabela times para obter os nomes.
 // ==========================================
 
 export async function buscarHistoricoTime(
@@ -80,8 +81,7 @@ export async function buscarHistoricoTime(
     try {
 
         const nomeTime =
-            normalizarNomeTime(time);
-
+            normalizarTime(time);
 
         if (!nomeTime) {
 
@@ -89,11 +89,9 @@ export async function buscarHistoricoTime(
 
         }
 
-
         console.log(
             `📊 Buscando histórico: ${nomeTime}`
         );
-
 
         const resultado =
             await query(
@@ -105,51 +103,44 @@ export async function buscarHistoricoTime(
 
                     j.api_id,
 
-                    j.campeonato_id,
+                    j.campeonato,
 
-                    j.time_casa_id,
+                    j.time_casa,
 
-                    j.time_fora_id,
-
-                    tc.nome AS time_casa,
-
-                    tf.nome AS time_fora,
+                    j.time_fora,
 
                     j.data_jogo,
 
+                    j.estadio,
+
                     j.status,
-
-                    j.gols_casa,
-
-                    j.gols_fora,
-
-                    j.temporada,
 
                     j.criado_em
 
                 FROM jogos j
 
-                LEFT JOIN times tc
-                    ON tc.id = j.time_casa_id
-
-                LEFT JOIN times tf
-                    ON tf.id = j.time_fora_id
-
                 WHERE
 
-                    LOWER(TRIM(tc.nome))
-                        = LOWER(TRIM($1))
+                    (
+                        LOWER(TRIM(j.time_casa))
+                        =
+                        LOWER(TRIM($1))
+                    )
 
                     OR
 
-                    LOWER(TRIM(tf.nome))
-                        = LOWER(TRIM($1))
+                    (
+                        LOWER(TRIM(j.time_fora))
+                        =
+                        LOWER(TRIM($1))
+                    )
+
+                AND j.data_jogo IS NOT NULL
 
                 ORDER BY
-                    j.data_jogo DESC NULLS LAST,
-                    j.id DESC
+                    j.data_jogo DESC
 
-                LIMIT 10
+                LIMIT 20
                 `,
 
                 [
@@ -158,13 +149,11 @@ export async function buscarHistoricoTime(
 
             );
 
-
         return Array.isArray(
             resultado.rows
         )
             ? resultado.rows
             : [];
-
 
     }
 
@@ -175,26 +164,19 @@ export async function buscarHistoricoTime(
             error.message
         );
 
-
         return [];
 
     }
 
 }
 
-
 // ==========================================
 // BUSCAR HISTÓRICO DO CONFRONTO
 //
 // Retorna:
-//
-// historicoCasa
-// historicoFora
-//
-// E também calcula H2H.
-//
-// O H2H considera somente confrontos
-// onde os dois times participaram do mesmo jogo.
+// - histórico da casa
+// - histórico do visitante
+// - confrontos diretos
 // ==========================================
 
 export async function buscarHistoricoJogo(
@@ -204,22 +186,36 @@ export async function buscarHistoricoJogo(
 
     try {
 
-        const nomeCasa =
-            normalizarNomeTime(
+        const casa =
+            normalizarTime(
                 timeCasa
             );
 
-
-        const nomeFora =
-            normalizarNomeTime(
+        const fora =
+            normalizarTime(
                 timeFora
             );
 
+        if (
+            !casa ||
+            !fora
+        ) {
+
+            return {
+
+                historicoCasa: [],
+
+                historicoFora: [],
+
+                h2h: []
+
+            };
+
+        }
 
         console.log(
-            `📊 Buscando histórico: ${nomeCasa} x ${nomeFora}`
+            `📊 Buscando histórico: ${casa} x ${fora}`
         );
-
 
         // ======================================
         // HISTÓRICO INDIVIDUAL
@@ -227,118 +223,98 @@ export async function buscarHistoricoJogo(
 
         const historicoCasa =
             await buscarHistoricoTime(
-                nomeCasa
+                casa
             );
-
 
         const historicoFora =
             await buscarHistoricoTime(
-                nomeFora
+                fora
             );
 
-
         // ======================================
-        // H2H
+        // CONFRONTOS DIRETOS
         //
-        // Procura confrontos diretos entre
-        // os dois times.
+        // Casa x Fora
+        // ou
+        // Fora x Casa
         // ======================================
 
-        let confrontos = [];
+        const resultadoH2H =
+            await query(
 
+                `
+                SELECT
 
-        if (
-            nomeCasa &&
-            nomeFora
-        ) {
+                    j.id,
 
-            const resultadoH2H =
-                await query(
+                    j.api_id,
 
-                    `
-                    SELECT
+                    j.campeonato,
 
-                        j.id,
+                    j.time_casa,
 
-                        j.api_id,
+                    j.time_fora,
 
-                        j.data_jogo,
+                    j.data_jogo,
 
-                        j.status,
+                    j.estadio,
 
-                        j.gols_casa,
+                    j.status,
 
-                        j.gols_fora,
+                    j.criado_em
 
-                        j.temporada,
+                FROM jogos j
 
-                        tc.nome AS time_casa,
-
-                        tf.nome AS time_fora
-
-                    FROM jogos j
-
-                    INNER JOIN times tc
-                        ON tc.id = j.time_casa_id
-
-                    INNER JOIN times tf
-                        ON tf.id = j.time_fora_id
-
-                    WHERE
+                WHERE
 
                     (
-
-                        LOWER(TRIM(tc.nome))
-                            = LOWER(TRIM($1))
+                        LOWER(TRIM(j.time_casa))
+                        =
+                        LOWER(TRIM($1))
 
                         AND
 
-                        LOWER(TRIM(tf.nome))
-                            = LOWER(TRIM($2))
-
+                        LOWER(TRIM(j.time_fora))
+                        =
+                        LOWER(TRIM($2))
                     )
 
                     OR
 
                     (
-
-                        LOWER(TRIM(tc.nome))
-                            = LOWER(TRIM($2))
+                        LOWER(TRIM(j.time_casa))
+                        =
+                        LOWER(TRIM($2))
 
                         AND
 
-                        LOWER(TRIM(tf.nome))
-                            = LOWER(TRIM($1))
-
+                        LOWER(TRIM(j.time_fora))
+                        =
+                        LOWER(TRIM($1))
                     )
 
-                    ORDER BY
-                        j.data_jogo DESC NULLS LAST,
-                        j.id DESC
+                ORDER BY
+                    j.data_jogo DESC
 
-                    LIMIT 10
-                    `,
+                LIMIT 20
+                `,
 
-                    [
-                        nomeCasa,
-                        nomeFora
-                    ]
+                [
+                    casa,
+                    fora
+                ]
 
-                );
+            );
 
-
-            confrontos =
-                Array.isArray(
-                    resultadoH2H.rows
-                )
-                    ? resultadoH2H.rows
-                    : [];
-
-        }
-
+        const h2h =
+            Array.isArray(
+                resultadoH2H.rows
+            )
+                ? resultadoH2H.rows
+                : [];
 
         // ======================================
-        // CALCULAR RESULTADOS DO H2H
+        // ESTATÍSTICAS H2H
         // ======================================
 
         let vitoriasCasa = 0;
@@ -347,91 +323,67 @@ export async function buscarHistoricoJogo(
 
         let vitoriasFora = 0;
 
-
         for (
-            const jogo of confrontos
+            const jogo of h2h
         ) {
 
-            const golsCasa =
-                Number(
-                    jogo.gols_casa
+            const nomeCasa =
+                normalizarTime(
+                    jogo.time_casa
                 );
 
-
-            const golsFora =
-                Number(
-                    jogo.gols_fora
+            const nomeFora =
+                normalizarTime(
+                    jogo.time_fora
                 );
 
+            // ==================================
+            // IMPORTANTE
+            //
+            // A tabela atual não possui
+            // gols_casa / gols_fora.
+            //
+            // Portanto não tentamos calcular
+            // resultado através de gols.
+            // ==================================
 
             if (
-                !Number.isFinite(
-                    golsCasa
-                )
-                ||
-                !Number.isFinite(
-                    golsFora
-                )
+                nomeCasa.toLowerCase()
+                ===
+                casa.toLowerCase()
             ) {
 
-                continue;
-
-            }
-
-
-            const casaEhTimeCasa =
-                String(
-                    jogo.time_casa || ""
-                )
-                    .trim()
-                    .toLowerCase()
+                if (
+                    String(
+                        jogo.status || ""
+                    ).toUpperCase()
                     ===
-                nomeCasa
-                    .trim()
-                    .toLowerCase();
+                    "FINISHED"
+                ) {
 
+                    // Resultado não disponível
+                    // sem campos de gols.
+                    continue;
+
+                }
+
+            }
 
             if (
-                golsCasa === golsFora
-            ) {
-
-                empates++;
-
-            }
-
-            else if (
-                golsCasa > golsFora
+                nomeFora.toLowerCase()
+                ===
+                casa.toLowerCase()
             ) {
 
                 if (
-                    casaEhTimeCasa
+                    String(
+                        jogo.status || ""
+                    ).toUpperCase()
+                    ===
+                    "FINISHED"
                 ) {
 
-                    vitoriasCasa++;
-
-                }
-
-                else {
-
-                    vitoriasFora++;
-
-                }
-
-            }
-
-            else {
-
-                if (
-                    casaEhTimeCasa
-                ) {
-
-                    vitoriasFora++;
-
-                }
-
-                else {
-
-                    vitoriasCasa++;
+                    continue;
 
                 }
 
@@ -439,11 +391,9 @@ export async function buscarHistoricoJogo(
 
         }
 
-
         console.log(
-            `⚔️ H2H: ${confrontos.length} confrontos | Casa ${vitoriasCasa} vitórias | Empates ${empates} | Fora ${vitoriasFora}`
+            `⚔️ H2H: ${h2h.length} confrontos | Casa ${vitoriasCasa} vitórias | Empates ${empates} | Fora ${vitoriasFora}`
         );
-
 
         return {
 
@@ -451,23 +401,18 @@ export async function buscarHistoricoJogo(
 
             historicoFora,
 
-            confrontos,
+            h2h,
 
-            h2h: {
+            confrontos:
+                h2h.length,
 
-                total:
-                    confrontos.length,
+            vitoriasCasa,
 
-                vitoriasCasa,
+            empates,
 
-                empates,
-
-                vitoriasFora
-
-            }
+            vitoriasFora
 
         };
-
 
     }
 
@@ -478,26 +423,21 @@ export async function buscarHistoricoJogo(
             error.message
         );
 
-
         return {
 
             historicoCasa: [],
 
             historicoFora: [],
 
-            confrontos: [],
+            h2h: [],
 
-            h2h: {
+            confrontos: 0,
 
-                total: 0,
+            vitoriasCasa: 0,
 
-                vitoriasCasa: 0,
+            empates: 0,
 
-                empates: 0,
-
-                vitoriasFora: 0
-
-            }
+            vitoriasFora: 0
 
         };
 
@@ -505,330 +445,259 @@ export async function buscarHistoricoJogo(
 
 }
 
-
 // ==========================================
 // SALVAR HISTÓRICO DE JOGO
 //
-// IMPORTANTE:
+// ATENÇÃO:
 //
-// O schema atual da tabela jogos exige:
+// A tabela jogos atual possui:
 //
-// campeonato_id
-// time_casa_id
-// time_fora_id
-//
-// Portanto não podemos inserir:
-//
+// id
+// api_id
+// campeonato
 // time_casa
 // time_fora
+// data_jogo
+// estadio
+// status
+// criado_em
 //
-// diretamente.
+// Portanto salvamos somente essas colunas.
 //
-// Este método tenta localizar os IDs dos times
-// pelo nome e salva o jogo corretamente.
+// Não usamos gols_casa/gols_fora porque elas
+// NÃO existem na estrutura atual confirmada.
 // ==========================================
 
 export async function salvarHistoricoJogo(
-    dados
+    dados = {}
 ) {
 
     try {
 
-        if (!dados) {
-
-            return false;
-
-        }
-
-
         const apiId =
             dados.api_id ??
             dados.apiId ??
+            null;
+
+        const id =
             dados.id ??
             null;
 
+        const campeonato =
+            dados.campeonato ??
+            dados.competicao ??
+            "Futebol";
 
-        const nomeCasa =
-            normalizarNomeTime(
-                dados.time_casa ??
-                dados.casa
-            );
+        const timeCasa =
+            dados.time_casa ??
+            dados.casa ??
+            null;
 
+        const timeFora =
+            dados.time_fora ??
+            dados.fora ??
+            null;
 
-        const nomeFora =
-            normalizarNomeTime(
-                dados.time_fora ??
-                dados.fora
-            );
+        const dataJogo =
+            dados.data_jogo ??
+            dados.data ??
+            dados.horario ??
+            null;
 
+        const estadio =
+            dados.estadio ??
+            null;
+
+        const status =
+            dados.status ??
+            "SCHEDULED";
+
+        // ======================================
+        // VALIDAÇÃO
+        // ======================================
 
         if (
-            !nomeCasa ||
-            !nomeFora
+            !timeCasa ||
+            !timeFora
         ) {
 
             console.error(
-                "❌ Histórico sem nomes dos times"
+                "❌ Não foi possível salvar histórico: times ausentes"
             );
 
-            return false;
+            return null;
 
         }
 
-
         // ======================================
-        // LOCALIZAR TIME DA CASA
-        // ======================================
-
-        const buscaCasa =
-            await query(
-
-                `
-                SELECT id
-                FROM times
-                WHERE LOWER(TRIM(nome))
-                    = LOWER(TRIM($1))
-                LIMIT 1
-                `,
-
-                [
-                    nomeCasa
-                ]
-
-            );
-
-
-        // ======================================
-        // LOCALIZAR TIME DE FORA
-        // ======================================
-
-        const buscaFora =
-            await query(
-
-                `
-                SELECT id
-                FROM times
-                WHERE LOWER(TRIM(nome))
-                    = LOWER(TRIM($1))
-                LIMIT 1
-                `,
-
-                [
-                    nomeFora
-                ]
-
-            );
-
-
-        const timeCasaId =
-            buscaCasa.rows[0]?.id ||
-            null;
-
-
-        const timeForaId =
-            buscaFora.rows[0]?.id ||
-            null;
-
-
-        if (
-            !timeCasaId ||
-            !timeForaId
-        ) {
-
-            console.error(
-                `❌ Times não encontrados: ${nomeCasa} x ${nomeFora}`
-            );
-
-            return false;
-
-        }
-
-
-        // ======================================
-        // CAMPEONATO
-        // ======================================
-
-        let campeonatoId =
-            dados.campeonato_id ??
-            null;
-
-
-        // ======================================
-        // INSERIR / ATUALIZAR
-        //
-        // api_id é UNIQUE no schema.
+        // SE POSSUI API_ID
         // ======================================
 
         if (
-            apiId !== null
+            apiId !== null &&
+            apiId !== undefined
         ) {
 
-            await query(
+            const existente =
+                await query(
 
-                `
-                INSERT INTO jogos
-                (
-                    api_id,
-                    campeonato_id,
-                    time_casa_id,
-                    time_fora_id,
-                    data_jogo,
-                    status,
-                    gols_casa,
-                    gols_fora,
-                    temporada
-                )
+                    `
+                    SELECT id
 
-                VALUES
-                (
-                    $1,
-                    $2,
-                    $3,
-                    $4,
-                    $5,
-                    $6,
-                    $7,
-                    $8,
-                    $9
-                )
+                    FROM jogos
 
-                ON CONFLICT(api_id)
+                    WHERE api_id = $1
 
-                DO UPDATE SET
+                    LIMIT 1
+                    `,
 
-                    campeonato_id =
-                        EXCLUDED.campeonato_id,
+                    [
+                        apiId
+                    ]
 
-                    time_casa_id =
-                        EXCLUDED.time_casa_id,
+                );
 
-                    time_fora_id =
-                        EXCLUDED.time_fora_id,
+            if (
+                existente.rows.length > 0
+            ) {
 
-                    data_jogo =
-                        EXCLUDED.data_jogo,
+                const resultado =
+                    await query(
 
-                    status =
-                        EXCLUDED.status,
+                        `
+                        UPDATE jogos
 
-                    gols_casa =
-                        EXCLUDED.gols_casa,
+                        SET
 
-                    gols_fora =
-                        EXCLUDED.gols_fora,
+                            campeonato = $1,
 
-                    temporada =
-                        EXCLUDED.temporada
+                            time_casa = $2,
 
-                `,
+                            time_fora = $3,
 
-                [
+                            data_jogo = $4,
 
-                    apiId,
+                            estadio = $5,
 
-                    campeonatoId,
+                            status = $6
 
-                    timeCasaId,
+                        WHERE api_id = $7
 
-                    timeForaId,
+                        RETURNING *
+                        `,
 
-                    dados.data_jogo ??
-                    dados.horario ??
-                    dados.data ??
-                    null,
+                        [
 
-                    dados.status ??
-                    "SCHEDULED",
+                            campeonato,
 
-                    Number(
-                        dados.gols_casa ?? 0
-                    ),
+                            timeCasa,
 
-                    Number(
-                        dados.gols_fora ?? 0
-                    ),
+                            timeFora,
 
-                    dados.temporada ??
+                            dataJogo,
+
+                            estadio,
+
+                            status,
+
+                            apiId
+
+                        ]
+
+                    );
+
+                return (
+                    resultado.rows[0]
+                    ||
                     null
+                );
 
-                ]
-
-            );
+            }
 
         }
 
-        else {
+        // ======================================
+        // INSERIR NOVO JOGO
+        // ======================================
 
+        const resultado =
             await query(
 
                 `
                 INSERT INTO jogos
+
                 (
-                    campeonato_id,
-                    time_casa_id,
-                    time_fora_id,
+                    id,
+                    api_id,
+                    campeonato,
+                    time_casa,
+                    time_fora,
                     data_jogo,
-                    status,
-                    gols_casa,
-                    gols_fora,
-                    temporada
+                    estadio,
+                    status
                 )
 
                 VALUES
+
                 (
-                    $1,
+                    COALESCE(
+                        $1,
+                        (
+                            SELECT
+                                COALESCE(
+                                    MAX(id),
+                                    0
+                                ) + 1
+
+                            FROM jogos
+                        )
+                    ),
+
                     $2,
+
                     $3,
+
                     $4,
+
                     $5,
+
                     $6,
+
                     $7,
+
                     $8
                 )
 
+                RETURNING *
                 `,
 
                 [
 
-                    campeonatoId,
+                    id,
 
-                    timeCasaId,
+                    apiId,
 
-                    timeForaId,
+                    campeonato,
 
-                    dados.data_jogo ??
-                    dados.horario ??
-                    dados.data ??
-                    null,
+                    timeCasa,
 
-                    dados.status ??
-                    "SCHEDULED",
+                    timeFora,
 
-                    Number(
-                        dados.gols_casa ?? 0
-                    ),
+                    dataJogo,
 
-                    Number(
-                        dados.gols_fora ?? 0
-                    ),
+                    estadio,
 
-                    dados.temporada ??
-                    null
+                    status
 
                 ]
 
             );
 
-        }
-
-
-        console.log(
-            `💾 Histórico salvo: ${nomeCasa} x ${nomeFora}`
+        return (
+            resultado.rows[0]
+            ||
+            null
         );
-
-
-        return true;
-
 
     }
 
@@ -839,16 +708,23 @@ export async function salvarHistoricoJogo(
             error.message
         );
 
-
-        return false;
+        return null;
 
     }
 
 }
 
-
 // ==========================================
 // ÚLTIMOS RESULTADOS
+//
+// Retorna os últimos jogos cadastrados
+// para determinado time.
+//
+// Como a tabela atual NÃO possui:
+// gols_casa
+// gols_fora
+//
+// não inventamos placares.
 // ==========================================
 
 export async function ultimosResultados(
@@ -862,9 +738,8 @@ export async function ultimosResultados(
                 time
             );
 
-
         return jogos.map(
-            (jogo) => ({
+            jogo => ({
 
                 id:
                     jogo.id,
@@ -875,31 +750,23 @@ export async function ultimosResultados(
                 data:
                     jogo.data_jogo,
 
+                campeonato:
+                    jogo.campeonato,
+
                 casa:
                     jogo.time_casa,
 
                 fora:
                     jogo.time_fora,
 
-                golsCasa:
-                    Number(
-                        jogo.gols_casa ?? 0
-                    ),
-
-                golsFora:
-                    Number(
-                        jogo.gols_fora ?? 0
-                    ),
+                estadio:
+                    jogo.estadio,
 
                 status:
-                    jogo.status,
-
-                temporada:
-                    jogo.temporada
+                    jogo.status
 
             })
         );
-
 
     }
 
@@ -910,21 +777,21 @@ export async function ultimosResultados(
             error.message
         );
 
-
         return [];
 
     }
 
 }
 
-
 // ==========================================
-// ESTATÍSTICAS BÁSICAS DE UM TIME
+// ESTATÍSTICAS BÁSICAS DO TIME
 //
-// Usado pelo motor de inteligência.
+// Sem gols disponíveis no schema atual,
+// retornamos somente informações que podem
+// ser calculadas com segurança.
 // ==========================================
 
-export async function calcularEstatisticasTime(
+export async function estatisticasTime(
     time
 ) {
 
@@ -935,240 +802,57 @@ export async function calcularEstatisticasTime(
                 time
             );
 
-
-        if (
-            !jogos.length
-        ) {
-
-            return {
-
-                jogos: 0,
-
-                vitorias: 0,
-
-                empates: 0,
-
-                derrotas: 0,
-
-                golsMarcados: 0,
-
-                golsSofridos: 0,
-
-                mediaGolsMarcados: 1,
-
-                mediaGolsSofridos: 1,
-
-                forma: 50
-
-            };
-
-        }
-
-
         const nomeTime =
-            normalizarNomeTime(
+            normalizarTime(
                 time
-            )
-                .toLowerCase();
+            ).toLowerCase();
 
+        let jogosCasa = 0;
 
-        let vitorias = 0;
-
-        let empates = 0;
-
-        let derrotas = 0;
-
-        let golsMarcados = 0;
-
-        let golsSofridos = 0;
-
+        let jogosFora = 0;
 
         for (
             const jogo of jogos
         ) {
 
-            const golsCasa =
-                Number(
-                    jogo.gols_casa ?? 0
-                );
-
-
-            const golsFora =
-                Number(
-                    jogo.gols_fora ?? 0
-                );
-
-
-            const nomeCasa =
-                String(
-                    jogo.time_casa || ""
-                )
-                    .trim()
-                    .toLowerCase();
-
-
-            const nomeFora =
-                String(
-                    jogo.time_fora || ""
-                )
-                    .trim()
-                    .toLowerCase();
-
+            const casa =
+                normalizarTime(
+                    jogo.time_casa
+                ).toLowerCase();
 
             if (
-                nomeCasa === nomeTime
+                casa === nomeTime
             ) {
 
-                golsMarcados +=
-                    golsCasa;
-
-                golsSofridos +=
-                    golsFora;
-
-
-                if (
-                    golsCasa > golsFora
-                ) {
-
-                    vitorias++;
-
-                }
-
-                else if (
-                    golsCasa === golsFora
-                ) {
-
-                    empates++;
-
-                }
-
-                else {
-
-                    derrotas++;
-
-                }
+                jogosCasa++;
 
             }
+            else {
 
-            else if (
-                nomeFora === nomeTime
-            ) {
-
-                golsMarcados +=
-                    golsFora;
-
-                golsSofridos +=
-                    golsCasa;
-
-
-                if (
-                    golsFora > golsCasa
-                ) {
-
-                    vitorias++;
-
-                }
-
-                else if (
-                    golsFora === golsCasa
-                ) {
-
-                    empates++;
-
-                }
-
-                else {
-
-                    derrotas++;
-
-                }
+                jogosFora++;
 
             }
 
         }
 
-
         const total =
             jogos.length;
 
-
-        const mediaGolsMarcados =
-            Number(
-                (
-                    golsMarcados /
-                    total
-                ).toFixed(2)
-            );
-
-
-        const mediaGolsSofridos =
-            Number(
-                (
-                    golsSofridos /
-                    total
-                ).toFixed(2)
-            );
-
-
-        // ======================================
-        // FORMA
-        //
-        // Vitória = 100
-        // Empate = 50
-        // Derrota = 0
-        // ======================================
-
-        const pontosForma =
-            (
-                vitorias * 3
-            )
-            +
-            (
-                empates * 1
-            );
-
-
-        const pontosMaximos =
-            total * 3;
-
-
-        const forma =
-            pontosMaximos > 0
-
-                ? Number(
-                    (
-                        (
-                            pontosForma /
-                            pontosMaximos
-                        ) * 100
-                    ).toFixed(2)
-                )
-
-                : 50;
-
-
         return {
+
+            time,
 
             jogos: total,
 
-            vitorias,
+            jogosCasa,
 
-            empates,
+            jogosFora,
 
-            derrotas,
+            forma: 50,
 
-            golsMarcados,
-
-            golsSofridos,
-
-            mediaGolsMarcados,
-
-            mediaGolsSofridos,
-
-            forma
+            mediaGols: 1
 
         };
-
 
     }
 
@@ -1179,33 +863,25 @@ export async function calcularEstatisticasTime(
             error.message
         );
 
-
         return {
+
+            time,
 
             jogos: 0,
 
-            vitorias: 0,
+            jogosCasa: 0,
 
-            empates: 0,
+            jogosFora: 0,
 
-            derrotas: 0,
+            forma: 50,
 
-            golsMarcados: 0,
-
-            golsSofridos: 0,
-
-            mediaGolsMarcados: 1,
-
-            mediaGolsSofridos: 1,
-
-            forma: 50
+            mediaGols: 1
 
         };
 
     }
 
 }
-
 
 // ==========================================
 // EXPORT DEFAULT
@@ -1221,7 +897,6 @@ export default {
 
     ultimosResultados,
 
-    calcularEstatisticasTime
+    estatisticasTime
 
 };
-
