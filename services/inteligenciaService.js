@@ -1,4 +1,3 @@
-```javascript
 // ==================================================
 // BETVISION AI
 // services/inteligenciaService.js
@@ -612,4 +611,3 @@ export default {
     gerarValueBet
 
 };
-```
