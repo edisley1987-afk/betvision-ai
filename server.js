@@ -338,191 +338,108 @@ app.get(
 // ==================================================
 
 app.get(
-
     "/api/dashboard",
+    async (req, res) => {
 
-    async(req,res)=>{
+        const inicio = Date.now();
 
+        try {
 
-        try{
+            const resultado = await query(`
+                SELECT
 
+                    (SELECT COUNT(*)
+                     FROM campeonatos) AS campeonatos,
 
-            const campeonatos =
+                    (SELECT COUNT(*)
+                     FROM jogos) AS jogos,
 
-                await query(
+                    (SELECT COUNT(*)
+                     FROM analises) AS analises,
 
-                    `
-                    SELECT COUNT(*)
+                    (SELECT COUNT(*)
+                     FROM value_bets
+                     WHERE ativo = true) AS valuebets
+            `);
 
-                    FROM campeonatos
-                    `
+            const dados = resultado.rows[0];
 
-                );
-
-
-
-            const jogos =
-
-                await query(
-
-                    `
-                    SELECT COUNT(*)
-
-                    FROM jogos
-                    `
-
-                );
-
-
-
-            const analises =
-
-                await query(
-
-                    `
-                    SELECT COUNT(*)
-
-                    FROM analises
-                    `
-
-                );
-
-
-
-            const valuebets =
-
-                await query(
-
-                    `
-                    SELECT COUNT(*)
-
-                    FROM value_bets
-
-                    WHERE ativo=true
-                    `
-
-                );
-
-
-
-
-            res.json({
-
+            const resposta = {
 
                 sistema:
-
                     "BetVision AI",
 
-
-
                 status:
-
                     "operacional",
 
-
-
                 jogosHoje:
-
                     Number(
-
-                        jogos.rows[0].count
-
+                        dados.jogos || 0
                     ),
-
-
 
                 campeonatos:
-
                     Number(
-
-                        campeonatos.rows[0].count
-
+                        dados.campeonatos || 0
                     ),
-
-
 
                 analisesIA:
-
                     Number(
-
-                        analises.rows[0].count
-
+                        dados.analises || 0
                     ),
-
-
 
                 valueBets:
-
                     Number(
-
-                        valuebets.rows[0].count
-
+                        dados.valuebets || 0
                     ),
 
-
-
                 roi:
-
                     0,
-
-
 
                 precisao:
-
                     0,
 
-
-
                 modelo:
-
                     "Probabilidade + Estatística",
 
-
-
                 ultimaAtualizacao:
-
                     new Date()
 
+            };
 
-            });
+            const tempo =
+                Date.now() - inicio;
 
-
-
-        }
-
-        catch(erro){
-
-
-            console.error(
-
-                "Erro dashboard:",
-
-                erro.message
-
+            console.log(
+                `📊 Dashboard: ${tempo} ms`
             );
 
-
-
-            res.status(500)
-
-            .json({
-
-                sucesso:false,
-
-                erro:
-
-                    erro.message
-
-            });
-
+            res.json(
+                resposta
+            );
 
         }
 
+        catch (erro) {
+
+            console.error(
+                "🔴 Erro dashboard:",
+                erro.message
+            );
+
+            res.status(500)
+                .json({
+
+                    sucesso: false,
+
+                    erro:
+                        erro.message
+
+                });
+
+        }
 
     }
-
 );
-
 
 
 
