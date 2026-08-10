@@ -1,4 +1,3 @@
-```javascript
 // ==================================================
 // BETVISION AI
 // public/app.js
@@ -2534,4 +2533,3 @@ console.log(
     "🤖 Motor de análises reais conectado"
 );
 
-```
