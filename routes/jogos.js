@@ -1,22 +1,24 @@
 // ==========================================
 // BETVISION AI
 // routes/jogos.js
+//
 // Versão 14.0
-// API Jogos
-// PostgreSQL / NeonDB
+// API de Jogos
+// PostgreSQL / Neon
 //
 // CORREÇÕES:
-// 1. Não envia array para gerarAnaliseIA()
-// 2. Gera análise individual por jogo
-// 3. Evita análise falsa "Casa x Fora"
-// 4. Mantém integração com jogoBancoService
-// 5. Mantém endpoints existentes
+// - Processa cada jogo individualmente
+// - Não envia array para gerarAnaliseIA()
+// - Não gera "Casa x Fora"
+// - Não gera "Time A x Time B"
+// - Salva jogos no PostgreSQL
+// - Gera análise IA para cada jogo real
+// - Mantém compatibilidade das rotas existentes
 // ==========================================
 
 import express from "express";
 
-import jogoBancoService
-    from "../services/jogoBancoService.js";
+import jogoBancoService from "../services/jogoBancoService.js";
 
 import {
     buscarJogosDia
@@ -31,174 +33,63 @@ const router = express.Router();
 
 // ==========================================
 // FUNÇÃO AUXILIAR
-// GERAR ANÁLISE PARA CADA JOGO
+// NORMALIZAR JOGO
 // ==========================================
 
-async function gerarAnalisesDosJogos(jogos) {
+function normalizarJogo(jogo) {
 
-    if (!Array.isArray(jogos) || jogos.length === 0) {
-
-        return {
-            total: 0,
-            sucesso: true
-        };
-
+    if (!jogo) {
+        return null;
     }
 
+    const apiId =
+        jogo.api_id ??
+        jogo.apiId ??
+        jogo.id ??
+        null;
 
-    let processados = 0;
+    const campeonato =
+        jogo.campeonato ??
+        jogo.competicao ??
+        "Futebol";
 
-    let erros = 0;
+    const timeCasa =
+        jogo.time_casa ??
+        jogo.casa ??
+        jogo.homeTeam ??
+        null;
 
+    const timeFora =
+        jogo.time_fora ??
+        jogo.fora ??
+        jogo.awayTeam ??
+        null;
 
-    for (const jogo of jogos) {
+    const dataJogo =
+        jogo.data_jogo ??
+        jogo.horario ??
+        jogo.data ??
+        null;
 
-        try {
-
-            if (!jogo) {
-
-                continue;
-
-            }
-
-
-            const casa =
-                jogo.time_casa ||
-                jogo.casa;
-
-            const fora =
-                jogo.time_fora ||
-                jogo.fora;
-
-
-            // ==========================================
-            // NÃO ANALISAR JOGO SEM TIMES
-            // ==========================================
-
-            if (!casa || !fora) {
-
-                console.log(
-                    "⚠️ Jogo ignorado: times não identificados"
-                );
-
-                continue;
-
-            }
-
-
-            // ==========================================
-            // OBJETO COMPATÍVEL COM inteligenciaService
-            // ==========================================
-
-            const jogoNormalizado = {
-
-                id:
-                    jogo.id ||
-                    jogo.api_id ||
-                    null,
-
-                api_id:
-                    jogo.api_id ||
-                    jogo.id ||
-                    null,
-
-                time_casa:
-                    casa,
-
-                time_fora:
-                    fora,
-
-                casa:
-                    casa,
-
-                fora:
-                    fora,
-
-                campeonato:
-                    jogo.campeonato ||
-                    "Futebol",
-
-                data_jogo:
-                    jogo.data_jogo ||
-                    jogo.horario ||
-                    null,
-
-                status:
-                    jogo.status ||
-                    "SCHEDULED"
-
-            };
-
-
-            // ==========================================
-            // DADOS ESTATÍSTICOS BASE
-            //
-            // Enquanto o motor estatístico não recebe
-            // histórico detalhado dos times, usamos
-            // valores neutros.
-            // ==========================================
-
-            const dados = {
-
-                ataqueCasa: 50,
-
-                defesaCasa: 50,
-
-                ataqueFora: 50,
-
-                defesaFora: 50,
-
-                formaCasa: 50,
-
-                formaFora: 50,
-
-                mediaGolsCasa: 1,
-
-                mediaGolsFora: 1
-
-            };
-
-
-            console.log(
-                `🤖 Gerando análise: ${casa} x ${fora}`
-            );
-
-
-            await gerarAnaliseIA(
-                jogoNormalizado,
-                dados
-            );
-
-
-            processados++;
-
-
-        } catch (error) {
-
-            erros++;
-
-
-            console.error(
-                "❌ Erro análise do jogo:",
-                error.message
-            );
-
-        }
-
-    }
-
+    const status =
+        jogo.status ??
+        "SCHEDULED";
 
     return {
 
-        total:
-            jogos.length,
+        ...jogo,
 
-        processados,
+        api_id: apiId,
 
-        erros,
+        campeonato,
 
-        sucesso:
-            erros === 0
+        time_casa: timeCasa,
+
+        time_fora: timeFora,
+
+        data_jogo: dataJogo,
+
+        status
 
     };
 
@@ -206,428 +97,694 @@ async function gerarAnalisesDosJogos(jogos) {
 
 
 // ==========================================
-// GET /api/jogos
-//
-// Busca jogos na Football-Data,
-// salva no PostgreSQL,
-// gera análise individual,
-// depois retorna banco.
+// VALIDAR JOGO
 // ==========================================
 
-router.get("/", async (req, res) => {
+function jogoValido(jogo) {
 
-    try {
+    if (!jogo) {
+        return false;
+    }
+
+    const casa =
+        String(
+            jogo.time_casa ??
+            jogo.casa ??
+            ""
+        ).trim();
+
+    const fora =
+        String(
+            jogo.time_fora ??
+            jogo.fora ??
+            ""
+        ).trim();
+
+    const apiId =
+        jogo.api_id ??
+        jogo.apiId ??
+        jogo.id;
+
+    if (!apiId) {
+        return false;
+    }
+
+    if (!casa || !fora) {
+        return false;
+    }
+
+    // Evita dados de fallback/teste
+    if (
+        casa.toLowerCase() === "casa" ||
+        fora.toLowerCase() === "fora"
+    ) {
+        return false;
+    }
+
+    if (
+        casa.toLowerCase() === "time a" ||
+        fora.toLowerCase() === "time b"
+    ) {
+        return false;
+    }
+
+    return true;
+
+}
+
+
+// ==========================================
+// GERAR DADOS ESTATÍSTICOS INICIAIS
+//
+// Enquanto o sistema ainda não possui histórico
+// detalhado por equipe, utilizamos valores neutros.
+//
+// IMPORTANTE:
+// Esses valores NÃO criam jogos fictícios.
+// Servem somente como entrada inicial do modelo.
+// ==========================================
+
+function gerarDadosEstatisticos(jogo) {
+
+    return {
+
+        ataqueCasa:
+            Number(
+                jogo.ataque_casa ??
+                jogo.ataqueCasa ??
+                50
+            ),
+
+        defesaCasa:
+            Number(
+                jogo.defesa_casa ??
+                jogo.defesaCasa ??
+                50
+            ),
+
+        ataqueFora:
+            Number(
+                jogo.ataque_fora ??
+                jogo.ataqueFora ??
+                50
+            ),
+
+        defesaFora:
+            Number(
+                jogo.defesa_fora ??
+                jogo.defesaFora ??
+                50
+            ),
+
+        formaCasa:
+            Number(
+                jogo.forma_casa ??
+                jogo.formaCasa ??
+                50
+            ),
+
+        formaFora:
+            Number(
+                jogo.forma_fora ??
+                jogo.formaFora ??
+                50
+            ),
+
+        mediaGolsCasa:
+            Number(
+                jogo.media_gols_casa ??
+                jogo.mediaGolsCasa ??
+                1
+            ),
+
+        mediaGolsFora:
+            Number(
+                jogo.media_gols_fora ??
+                jogo.mediaGolsFora ??
+                1
+            )
+
+    };
+
+}
+
+
+// ==========================================
+// GERAR ANÁLISE DE UM JOGO
+// ==========================================
+
+async function analisarJogo(jogo) {
+
+    if (!jogoValido(jogo)) {
 
         console.log(
-            "=========================================="
+            "⚠️ Jogo inválido ignorado:",
+            jogo
         );
 
-        console.log(
-            "⚽ API JOGOS"
-        );
-
-        console.log(
-            "=========================================="
-        );
-
-
-        let jogosAPI = [];
-
-
-        // ==========================================
-        // BUSCAR JOGOS NA API
-        // ==========================================
-
-        try {
-
-            jogosAPI =
-                await buscarJogosDia();
-
-        } catch (error) {
-
-            console.error(
-                "❌ Erro API futebol:",
-                error.message
-            );
-
-            jogosAPI = [];
-
-        }
-
-
-        // ==========================================
-        // GARANTIR ARRAY
-        // ==========================================
-
-        if (!Array.isArray(jogosAPI)) {
-
-            jogosAPI = [];
-
-        }
-
-
-        console.log(
-            `⚽ Jogos recebidos da API: ${jogosAPI.length}`
-        );
-
-
-        // ==========================================
-        // SALVAR JOGOS
-        // ==========================================
-
-        if (jogosAPI.length > 0) {
-
-            try {
-
-                await jogoBancoService.salvarListaJogos(
-                    jogosAPI
-                );
-
-
-                console.log(
-                    `💾 Jogos salvos no PostgreSQL: ${jogosAPI.length}`
-                );
-
-
-            } catch (error) {
-
-                console.error(
-                    "❌ Erro salvar jogos:",
-                    error.message
-                );
-
-            }
-
-
-            // ==========================================
-            // GERAR ANÁLISES
-            //
-            // IMPORTANTE:
-            // NÃO enviar jogosAPI inteiro.
-            // A função agora processa um jogo por vez.
-            // ==========================================
-
-            try {
-
-                const resultadoAnalises =
-                    await gerarAnalisesDosJogos(
-                        jogosAPI
-                    );
-
-
-                console.log(
-                    "🤖 Resultado análises:",
-                    resultadoAnalises
-                );
-
-
-            } catch (error) {
-
-                console.error(
-                    "❌ Erro análises IA:",
-                    error.message
-                );
-
-            }
-
-        }
-
-
-        // ==========================================
-        // BUSCAR JOGOS DO BANCO
-        // ==========================================
-
-        const banco =
-            await jogoBancoService.listarJogos();
-
-
-        // ==========================================
-        // GARANTIR ARRAY
-        // ==========================================
-
-        const listaBanco =
-            Array.isArray(banco)
-                ? banco
-                : [];
-
-
-        // ==========================================
-        // FORMATAR RESPOSTA
-        // ==========================================
-
-        const resposta =
-            listaBanco.map((jogo) => {
-
-                return {
-
-                    id:
-                        jogo.id,
-
-                    api_id:
-                        jogo.api_id,
-
-                    campeonato:
-                        jogo.campeonato ||
-                        "Futebol",
-
-                    time_casa:
-                        jogo.time_casa ||
-                        null,
-
-                    time_fora:
-                        jogo.time_fora ||
-                        null,
-
-                    casa:
-                        jogo.time_casa ||
-                        null,
-
-                    fora:
-                        jogo.time_fora ||
-                        null,
-
-                    data_jogo:
-                        jogo.data_jogo ||
-                        null,
-
-                    horario:
-                        jogo.data_jogo ||
-                        null,
-
-                    estadio:
-                        jogo.estadio ||
-                        null,
-
-                    status:
-                        jogo.status ||
-                        "SCHEDULED"
-
-                };
-
-            });
-
-
-        // ==========================================
-        // RESPOSTA
-        // ==========================================
-
-        return res.json({
-
-            sucesso: true,
-
-            total:
-                resposta.length,
-
-            jogos:
-                resposta
-
-        });
-
-
-    } catch (error) {
-
-        console.error(
-            "❌ Erro API jogos:",
-            error.message
-        );
-
-
-        return res.status(500).json({
-
-            sucesso: false,
-
-            erro:
-                error.message
-
-        });
+        return null;
 
     }
 
-});
+    const jogoNormalizado =
+        normalizarJogo(jogo);
+
+    const dados =
+        gerarDadosEstatisticos(
+            jogoNormalizado
+        );
+
+    const nomeJogo =
+        `${jogoNormalizado.time_casa} x ${jogoNormalizado.time_fora}`;
+
+    console.log(
+        `🤖 Gerando análise: ${nomeJogo}`
+    );
+
+    try {
+
+        const resultado =
+            await gerarAnaliseIA(
+                jogoNormalizado,
+                dados
+            );
+
+        return resultado;
+
+    }
+
+    catch (error) {
+
+        console.error(
+            `❌ Erro análise ${nomeJogo}:`,
+            error.message
+        );
+
+        return null;
+
+    }
+
+}
+
+
+// ==========================================
+// GET /api/jogos
+//
+// Fluxo:
+//
+// Football-Data
+//      ↓
+// valida jogos
+//      ↓
+// PostgreSQL
+//      ↓
+// análise IA individual
+//      ↓
+// PostgreSQL
+//      ↓
+// resposta
+// ==========================================
+
+router.get(
+    "/",
+    async (req, res) => {
+
+        try {
+
+            console.log(
+                "=========================================="
+            );
+
+            console.log(
+                "⚽ API JOGOS"
+            );
+
+            console.log(
+                "=========================================="
+            );
+
+
+            // ======================================
+            // BUSCAR JOGOS NA API
+            // ======================================
+
+            let jogosAPI = [];
+
+            try {
+
+                jogosAPI =
+                    await buscarJogosDia();
+
+            }
+
+            catch (error) {
+
+                console.error(
+                    "❌ Erro API futebol:",
+                    error.message
+                );
+
+                jogosAPI = [];
+
+            }
+
+
+            // ======================================
+            // GARANTIR ARRAY
+            // ======================================
+
+            if (!Array.isArray(jogosAPI)) {
+
+                jogosAPI = [];
+
+            }
+
+
+            // ======================================
+            // NORMALIZAR E VALIDAR
+            // ======================================
+
+            const jogosValidos =
+                jogosAPI
+
+                    .map(
+                        normalizarJogo
+                    )
+
+                    .filter(
+                        jogoValido
+                    );
+
+
+            console.log(
+                `⚽ ${jogosValidos.length} jogos válidos carregados`
+            );
+
+
+            // ======================================
+            // SALVAR JOGOS
+            // ======================================
+
+            let jogosSalvos = [];
+
+            if (
+                jogosValidos.length > 0
+            ) {
+
+                try {
+
+                    jogosSalvos =
+                        await jogoBancoService.salvarListaJogos(
+                            jogosValidos
+                        );
+
+                    console.log(
+                        `💾 Jogos salvos no PostgreSQL: ${jogosSalvos.length}`
+                    );
+
+                }
+
+                catch (error) {
+
+                    console.error(
+                        "❌ Erro salvar jogos:",
+                        error.message
+                    );
+
+                }
+
+            }
+
+
+            // ======================================
+            // GERAR ANÁLISES IA
+            //
+            // IMPORTANTE:
+            // NÃO fazer:
+            //
+            // gerarAnaliseIA(jogosValidos)
+            //
+            // Porque gerarAnaliseIA() recebe
+            // apenas um jogo.
+            // ======================================
+
+            let analisesProcessadas = 0;
+
+            let errosAnalise = 0;
+
+
+            for (
+                const jogo of jogosValidos
+            ) {
+
+                try {
+
+                    const resultado =
+                        await analisarJogo(
+                            jogo
+                        );
+
+                    if (resultado) {
+
+                        analisesProcessadas++;
+
+                    }
+
+                }
+
+                catch (error) {
+
+                    errosAnalise++;
+
+                    console.error(
+                        "❌ Erro processamento análise:",
+                        error.message
+                    );
+
+                }
+
+            }
+
+
+            // ======================================
+            // RESULTADO DAS ANÁLISES
+            // ======================================
+
+            console.log(
+                "🤖 Resultado análises:",
+                {
+                    total:
+                        jogosValidos.length,
+
+                    processados:
+                        analisesProcessadas,
+
+                    erros:
+                        errosAnalise,
+
+                    sucesso:
+                        errosAnalise === 0
+                }
+            );
+
+
+            // ======================================
+            // BUSCAR JOGOS DO BANCO
+            // ======================================
+
+            const banco =
+                await jogoBancoService.listarJogos();
+
+
+            // ======================================
+            // GARANTIR ARRAY
+            // ======================================
+
+            const jogosBanco =
+                Array.isArray(banco)
+                    ? banco
+                    : [];
+
+
+            // ======================================
+            // FORMATAR RESPOSTA
+            // ======================================
+
+            const resposta =
+                jogosBanco.map(
+                    (jogo) => {
+
+                        return {
+
+                            id:
+                                jogo.id,
+
+                            api_id:
+                                jogo.api_id,
+
+                            campeonato:
+                                jogo.campeonato ||
+                                "Futebol",
+
+                            time_casa:
+                                jogo.time_casa ||
+                                null,
+
+                            time_fora:
+                                jogo.time_fora ||
+                                null,
+
+                            casa:
+                                jogo.time_casa ||
+                                null,
+
+                            fora:
+                                jogo.time_fora ||
+                                null,
+
+                            data_jogo:
+                                jogo.data_jogo ||
+                                null,
+
+                            horario:
+                                jogo.data_jogo ||
+                                null,
+
+                            estadio:
+                                jogo.estadio ||
+                                null,
+
+                            status:
+                                jogo.status ||
+                                "SCHEDULED"
+
+                        };
+
+                    }
+                );
+
+
+            // ======================================
+            // RESPOSTA
+            // ======================================
+
+            return res.json({
+
+                sucesso: true,
+
+                total:
+                    resposta.length,
+
+                jogos:
+                    resposta
+
+            });
+
+        }
+
+        catch (error) {
+
+            console.error(
+                "❌ Erro API jogos:",
+                error.message
+            );
+
+
+            return res.status(500).json({
+
+                sucesso: false,
+
+                erro:
+                    error.message
+
+            });
+
+        }
+
+    }
+);
 
 
 // ==========================================
 // GET /api/jogos/banco
+//
+// Lista somente jogos já salvos.
+// Não consulta API externa.
+// Não gera análise.
 // ==========================================
 
-router.get("/banco", async (req, res) => {
+router.get(
+    "/banco",
+    async (req, res) => {
 
-    try {
+        try {
 
-        const jogos =
-            await jogoBancoService.listarJogos();
-
-
-        const lista =
-            Array.isArray(jogos)
-                ? jogos
-                : [];
+            const jogos =
+                await jogoBancoService.listarJogos();
 
 
-        return res.json({
+            return res.json({
 
-            sucesso: true,
+                sucesso: true,
 
-            total:
-                lista.length,
+                total:
+                    jogos.length,
 
-            jogos:
-                lista
+                jogos
 
-        });
+            });
 
+        }
 
-    } catch (error) {
+        catch (error) {
 
-        console.error(
-            "❌ Erro banco jogos:",
-            error.message
-        );
-
-
-        return res.status(500).json({
-
-            sucesso: false,
-
-            erro:
+            console.error(
+                "❌ Erro banco jogos:",
                 error.message
+            );
 
-        });
+
+            return res.status(500).json({
+
+                sucesso: false,
+
+                erro:
+                    error.message
+
+            });
+
+        }
 
     }
-
-});
+);
 
 
 // ==========================================
 // GET /api/jogos/hoje
+//
+// Lista jogos do dia no PostgreSQL.
 // ==========================================
 
-router.get("/hoje", async (req, res) => {
+router.get(
+    "/hoje",
+    async (req, res) => {
 
-    try {
+        try {
 
-        const jogos =
-            await jogoBancoService.buscarJogosDoDia();
-
-
-        const lista =
-            Array.isArray(jogos)
-                ? jogos
-                : [];
+            const jogos =
+                await jogoBancoService.buscarJogosDoDia();
 
 
-        return res.json({
+            return res.json({
 
-            sucesso: true,
+                sucesso: true,
 
-            total:
-                lista.length,
+                total:
+                    jogos.length,
 
-            jogos:
-                lista
+                jogos
 
-        });
+            });
 
+        }
 
-    } catch (error) {
+        catch (error) {
 
-        console.error(
-            "❌ Erro jogos hoje:",
-            error.message
-        );
-
-
-        return res.status(500).json({
-
-            sucesso: false,
-
-            erro:
+            console.error(
+                "❌ Erro jogos hoje:",
                 error.message
+            );
 
-        });
+
+            return res.status(500).json({
+
+                sucesso: false,
+
+                erro:
+                    error.message
+
+            });
+
+        }
 
     }
-
-});
+);
 
 
 // ==========================================
 // GET /api/jogos/proximos
+//
+// Exemplo:
+// /api/jogos/proximos?limite=20
 // ==========================================
 
-router.get("/proximos", async (req, res) => {
+router.get(
+    "/proximos",
+    async (req, res) => {
 
-    try {
+        try {
 
-        let limite =
-            Number(req.query.limite);
+            let limite =
+                Number(
+                    req.query.limite
+                ) || 20;
 
 
-        if (
-            !Number.isFinite(limite) ||
-            limite <= 0
-        ) {
+            // Proteção contra valores absurdos
 
-            limite = 20;
+            if (limite < 1) {
+
+                limite = 20;
+
+            }
+
+            if (limite > 100) {
+
+                limite = 100;
+
+            }
+
+
+            const jogos =
+                await jogoBancoService.buscarProximosJogos(
+                    limite
+                );
+
+
+            return res.json({
+
+                sucesso: true,
+
+                total:
+                    jogos.length,
+
+                jogos
+
+            });
 
         }
 
+        catch (error) {
 
-        // Limite de segurança
-
-        limite =
-            Math.min(
-                limite,
-                100
-            );
-
-
-        const jogos =
-            await jogoBancoService.buscarProximosJogos(
-                limite
-            );
-
-
-        const lista =
-            Array.isArray(jogos)
-                ? jogos
-                : [];
-
-
-        return res.json({
-
-            sucesso: true,
-
-            total:
-                lista.length,
-
-            jogos:
-                lista
-
-        });
-
-
-    } catch (error) {
-
-        console.error(
-            "❌ Erro próximos jogos:",
-            error.message
-        );
-
-
-        return res.status(500).json({
-
-            sucesso: false,
-
-            erro:
+            console.error(
+                "❌ Erro próximos jogos:",
                 error.message
+            );
 
-        });
+
+            return res.status(500).json({
+
+                sucesso: false,
+
+                erro:
+                    error.message
+
+            });
+
+        }
 
     }
-
-});
+);
 
 
 // ==========================================
@@ -648,13 +805,13 @@ router.get(
 
                 sucesso: true,
 
-                estatisticas:
-                    estatisticas
+                estatisticas
 
             });
 
+        }
 
-        } catch (error) {
+        catch (error) {
 
             console.error(
                 "❌ Erro estatísticas jogos:",
@@ -678,7 +835,8 @@ router.get(
 
 
 // ==========================================
-// EXPORT
+// EXPORT DEFAULT
 // ==========================================
 
 export default router;
+
