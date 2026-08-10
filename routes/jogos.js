@@ -1,17 +1,15 @@
+```javascript
 // ==========================================
 // BetVision AI
 // routes/jogos.js
-// Versão 12.0
+// Versão 12.1
 // API Jogos + IA
-// Compatível PostgreSQL
+// Compatível PostgreSQL / Neon
 // ==========================================
 
 import express from "express";
 
-import {
-    salvarListaJogos,
-    listarJogos
-} from "../services/jogoBancoService.js";
+import jogoBancoService from "../services/jogoBancoService.js";
 
 import {
     buscarJogosDia
@@ -20,6 +18,7 @@ import {
 import {
     gerarAnaliseIA
 } from "../services/inteligenciaService.js";
+
 
 const router = express.Router();
 
@@ -35,17 +34,21 @@ router.get("/", async (req, res) => {
 
         console.log("⚽ API JOGOS DO DIA");
 
+
         let jogos = [];
 
-        // ==============================
-        // Buscar API Futebol
-        // ==============================
+
+        // ==========================================
+        // BUSCAR JOGOS NA API DE FUTEBOL
+        // ==========================================
 
         try {
 
             jogos = await buscarJogosDia();
 
-        } catch (error) {
+        }
+
+        catch (error) {
 
             console.log(
                 "⚠️ API futebol indisponível:",
@@ -54,31 +57,55 @@ router.get("/", async (req, res) => {
 
         }
 
-        // ==============================
-        // Salvar banco
-        // ==============================
 
-        if (jogos.length > 0) {
+        // ==========================================
+        // SALVAR JOGOS NO POSTGRESQL
+        // ==========================================
 
-            await salvarListaJogos(jogos);
+        if (
+            Array.isArray(jogos) &&
+            jogos.length > 0
+        ) {
 
-            console.log(
-                "💾 Jogos salvos PostgreSQL"
-            );
+            try {
 
-            // ==============================
-            // Gerar análises IA
-            // ==============================
+                await jogoBancoService.salvarListaJogos(
+                    jogos
+                );
+
+
+                console.log(
+                    `💾 ${jogos.length} jogos processados no PostgreSQL`
+                );
+
+            }
+
+            catch (error) {
+
+                console.log(
+                    "⚠️ Erro salvar jogos:",
+                    error.message
+                );
+
+            }
+
+
+            // ==========================================
+            // GERAR ANÁLISES IA
+            // ==========================================
 
             try {
 
                 await gerarAnaliseIA(jogos);
 
+
                 console.log(
                     "🤖 Análises IA geradas"
                 );
 
-            } catch (error) {
+            }
+
+            catch (error) {
 
                 console.log(
                     "⚠️ Erro gerar análises IA:",
@@ -89,11 +116,18 @@ router.get("/", async (req, res) => {
 
         }
 
-        // ==============================
-        // Buscar banco atualizado
-        // ==============================
 
-        const banco = await listarJogos();
+        // ==========================================
+        // BUSCAR BANCO ATUALIZADO
+        // ==========================================
+
+        const banco =
+            await jogoBancoService.listarJogos();
+
+
+        // ==========================================
+        // RESPOSTA
+        // ==========================================
 
         res.json({
 
@@ -105,15 +139,25 @@ router.get("/", async (req, res) => {
 
                 id: jogo.id,
 
-                campeonato: jogo.campeonato || "Futebol",
+                api_id: jogo.api_id,
 
-                casa: jogo.time_casa,
+                campeonato:
+                    jogo.campeonato || "Futebol",
 
-                fora: jogo.time_fora,
+                casa:
+                    jogo.time_casa || null,
 
-                horario: jogo.data_jogo,
+                fora:
+                    jogo.time_fora || null,
 
-                status: jogo.status || "SCHEDULED"
+                horario:
+                    jogo.data_jogo || null,
+
+                estadio:
+                    jogo.estadio || null,
+
+                status:
+                    jogo.status || "SCHEDULED"
 
             }))
 
@@ -125,8 +169,9 @@ router.get("/", async (req, res) => {
 
         console.error(
             "❌ Erro jogos:",
-            error.message
+            error
         );
+
 
         res.status(500).json({
 
@@ -150,7 +195,9 @@ router.get("/banco", async (req, res) => {
 
     try {
 
-        const jogos = await listarJogos();
+        const jogos =
+            await jogoBancoService.listarJogos();
+
 
         res.json({
 
@@ -166,6 +213,12 @@ router.get("/banco", async (req, res) => {
 
     catch (error) {
 
+        console.error(
+            "❌ Erro buscar jogos do banco:",
+            error.message
+        );
+
+
         res.status(500).json({
 
             sucesso: false,
@@ -178,4 +231,108 @@ router.get("/banco", async (req, res) => {
 
 });
 
+
+// ==========================================
+// GET /api/jogos/hoje
+// Jogos registrados hoje no PostgreSQL
+// ==========================================
+
+router.get("/hoje", async (req, res) => {
+
+    try {
+
+        const jogos =
+            await jogoBancoService.buscarJogosDoDia();
+
+
+        res.json({
+
+            sucesso: true,
+
+            total: jogos.length,
+
+            jogos
+
+        });
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "❌ Erro jogos de hoje:",
+            error.message
+        );
+
+
+        res.status(500).json({
+
+            sucesso: false,
+
+            erro: error.message
+
+        });
+
+    }
+
+});
+
+
+// ==========================================
+// GET /api/jogos/proximos
+// Próximos jogos
+// ==========================================
+
+router.get("/proximos", async (req, res) => {
+
+    try {
+
+        const limite =
+            Number(req.query.limite) || 20;
+
+
+        const jogos =
+            await jogoBancoService.buscarProximosJogos(
+                limite
+            );
+
+
+        res.json({
+
+            sucesso: true,
+
+            total: jogos.length,
+
+            jogos
+
+        });
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "❌ Erro próximos jogos:",
+            error.message
+        );
+
+
+        res.status(500).json({
+
+            sucesso: false,
+
+            erro: error.message
+
+        });
+
+    }
+
+});
+
+
+// ==========================================
+// EXPORTAÇÃO
+// ==========================================
+
 export default router;
+```
