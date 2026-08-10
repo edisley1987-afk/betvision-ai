@@ -1,13 +1,14 @@
+```javascript
 // ==================================================
 // BETVISION AI
 // public/app.js
-// Versão 5.0
+// Versão 6.0
 // Frontend Dashboard Inteligente
-// Compatível com PostgreSQL NeonDB
+// CORRIGIDO PARA API REAL DE ANÁLISES
+// PostgreSQL NeonDB
 // ==================================================
 
 "use strict";
-
 
 // ==================================================
 // CONFIGURAÇÃO
@@ -33,7 +34,6 @@ const CONFIG = {
         5000
 
 };
-
 
 // ==================================================
 // ESTADO GLOBAL
@@ -67,7 +67,6 @@ const estado = {
 
 };
 
-
 // ==================================================
 // INICIALIZAÇÃO
 // ==================================================
@@ -84,7 +83,6 @@ document.addEventListener(
 
     }
 );
-
 
 // ==================================================
 // INICIAR SISTEMA
@@ -104,10 +102,11 @@ function iniciarSistema() {
 
     conectarWebSocket();
 
+    verificarServidor();
+
     iniciarAtualizacaoAutomatica();
 
 }
-
 
 // ==================================================
 // ATUALIZAÇÃO AUTOMÁTICA
@@ -120,15 +119,20 @@ function iniciarAtualizacaoAutomatica() {
 
             carregarDashboard();
 
+            carregarJogos();
+
+            carregarValueBets();
+
+            carregarAnalisesIA();
+
         },
         CONFIG.INTERVALO_ATUALIZACAO
     );
 
 }
 
-
 // ==================================================
-// BUSCAR DASHBOARD
+// DASHBOARD
 // ==================================================
 
 async function carregarDashboard() {
@@ -143,7 +147,6 @@ async function carregarDashboard() {
                 }
             );
 
-
         if (!resposta.ok) {
 
             throw new Error(
@@ -152,10 +155,8 @@ async function carregarDashboard() {
 
         }
 
-
         const dados =
             await resposta.json();
-
 
         atualizarDashboard(
             dados
@@ -166,7 +167,7 @@ async function carregarDashboard() {
     catch (erro) {
 
         console.error(
-            "Erro dashboard:",
+            "❌ Erro dashboard:",
             erro
         );
 
@@ -177,7 +178,6 @@ async function carregarDashboard() {
     }
 
 }
-
 
 // ==================================================
 // ATUALIZAR DASHBOARD
@@ -196,7 +196,6 @@ function atualizarDashboard(
 
     }
 
-
     estado.dados = {
 
         ...estado.dados,
@@ -205,14 +204,12 @@ function atualizarDashboard(
 
     };
 
-
     estado.ultimaAtualizacao =
         dados.ultimaAtualizacao
             ? new Date(
                 dados.ultimaAtualizacao
             )
             : new Date();
-
 
     atualizarElemento(
         "jogosHoje",
@@ -221,14 +218,12 @@ function atualizarDashboard(
         )
     );
 
-
     atualizarElemento(
         "campeonatos",
         formatarNumero(
             dados.campeonatos ?? 0
         )
     );
-
 
     atualizarElemento(
         "analisesIA",
@@ -237,7 +232,6 @@ function atualizarDashboard(
         )
     );
 
-
     atualizarElemento(
         "valueBets",
         formatarNumero(
@@ -245,34 +239,31 @@ function atualizarDashboard(
         )
     );
 
-
     atualizarElemento(
         "roi",
         `${dados.roi ?? 0}%`
     );
-
 
     atualizarElemento(
         "precisaoIA",
         `${dados.precisao ?? 0}%`
     );
 
-
     atualizarElemento(
         "precisao",
         `${dados.precisao ?? 0}%`
     );
 
-
     atualizarUltimaAtualizacao();
 
-    atualizarStatus(true);
+    atualizarStatus(
+        true
+    );
 
 }
 
-
 // ==================================================
-// ATUALIZAR ELEMENTO HTML
+// ATUALIZAR ELEMENTO
 // ==================================================
 
 function atualizarElemento(
@@ -281,8 +272,9 @@ function atualizarElemento(
 ) {
 
     const elemento =
-        document.getElementById(id);
-
+        document.getElementById(
+            id
+        );
 
     if (!elemento) {
 
@@ -290,12 +282,10 @@ function atualizarElemento(
 
     }
 
-
     elemento.textContent =
         valor ?? "";
 
 }
-
 
 // ==================================================
 // ÚLTIMA ATUALIZAÇÃO
@@ -308,7 +298,6 @@ function atualizarUltimaAtualizacao() {
             "ultimaAtualizacao"
         );
 
-
     if (
         !elemento ||
         !estado.ultimaAtualizacao
@@ -318,7 +307,6 @@ function atualizarUltimaAtualizacao() {
 
     }
 
-
     elemento.textContent =
         formatarData(
             estado.ultimaAtualizacao
@@ -326,9 +314,8 @@ function atualizarUltimaAtualizacao() {
 
 }
 
-
 // ==================================================
-// STATUS DO SISTEMA
+// STATUS
 // ==================================================
 
 function atualizarStatus(
@@ -340,13 +327,11 @@ function atualizarStatus(
             "statusSistema"
         );
 
-
     if (!elemento) {
 
         return;
 
     }
-
 
     if (online) {
 
@@ -370,7 +355,6 @@ function atualizarStatus(
 
 }
 
-
 // ==================================================
 // WEBSOCKET
 // ==================================================
@@ -392,19 +376,16 @@ function conectarWebSocket() {
 
     }
 
-
     try {
 
         console.log(
             "🔌 Conectando WebSocket..."
         );
 
-
         estado.websocket =
             new WebSocket(
                 CONFIG.WS_URL
             );
-
 
         estado.websocket.onopen =
             () => {
@@ -413,20 +394,17 @@ function conectarWebSocket() {
                     "🟢 WebSocket conectado"
                 );
 
-
                 estado.conectado =
                     true;
 
                 estado.websocketReconectando =
                     false;
 
-
                 atualizarStatus(
                     true
                 );
 
             };
-
 
         estado.websocket.onmessage =
             (evento) => {
@@ -438,7 +416,6 @@ function conectarWebSocket() {
                             evento.data
                         );
 
-
                     processarMensagemWebSocket(
                         mensagem
                     );
@@ -448,7 +425,7 @@ function conectarWebSocket() {
                 catch (erro) {
 
                     console.error(
-                        "Erro mensagem WS:",
+                        "❌ Erro mensagem WS:",
                         erro
                     );
 
@@ -456,12 +433,11 @@ function conectarWebSocket() {
 
             };
 
-
         estado.websocket.onerror =
             (erro) => {
 
                 console.error(
-                    "Erro WebSocket:",
+                    "❌ Erro WebSocket:",
                     erro
                 );
 
@@ -470,7 +446,6 @@ function conectarWebSocket() {
 
             };
 
-
         estado.websocket.onclose =
             () => {
 
@@ -478,19 +453,11 @@ function conectarWebSocket() {
                     "🔴 WebSocket desconectado"
                 );
 
-
                 estado.conectado =
                     false;
 
-
                 estado.websocket =
                     null;
-
-
-                atualizarStatus(
-                    false
-                );
-
 
                 agendarReconexaoWebSocket();
 
@@ -501,14 +468,12 @@ function conectarWebSocket() {
     catch (erro) {
 
         console.error(
-            "Falha WebSocket:",
+            "❌ Falha WebSocket:",
             erro
         );
 
-
         estado.conectado =
             false;
-
 
         agendarReconexaoWebSocket();
 
@@ -516,9 +481,8 @@ function conectarWebSocket() {
 
 }
 
-
 // ==================================================
-// RECONEXÃO WEBSOCKET
+// RECONEXÃO
 // ==================================================
 
 function agendarReconexaoWebSocket() {
@@ -531,10 +495,8 @@ function agendarReconexaoWebSocket() {
 
     }
 
-
     estado.websocketReconectando =
         true;
-
 
     setTimeout(
         () => {
@@ -550,9 +512,8 @@ function agendarReconexaoWebSocket() {
 
 }
 
-
 // ==================================================
-// PROCESSAR EVENTOS WEBSOCKET
+// WEBSOCKET EVENTOS
 // ==================================================
 
 function processarMensagemWebSocket(
@@ -564,7 +525,6 @@ function processarMensagemWebSocket(
         mensagem
     );
 
-
     if (
         !mensagem ||
         typeof mensagem !== "object"
@@ -573,7 +533,6 @@ function processarMensagemWebSocket(
         return;
 
     }
-
 
     if (
         mensagem.tipo ===
@@ -587,7 +546,6 @@ function processarMensagemWebSocket(
 
     }
 
-
     if (
         mensagem.tipo ===
         "status"
@@ -598,7 +556,6 @@ function processarMensagemWebSocket(
         );
 
     }
-
 
     if (
         mensagem.tipo ===
@@ -611,11 +568,9 @@ function processarMensagemWebSocket(
             mensagem
         );
 
-
         carregarDashboard();
 
     }
-
 
     if (
         mensagem.tipo ===
@@ -627,16 +582,13 @@ function processarMensagemWebSocket(
                 mensagem
             );
 
-
         renderizarValueBets(
             lista
         );
 
-
         carregarDashboard();
 
     }
-
 
     if (
         mensagem.tipo ===
@@ -647,10 +599,24 @@ function processarMensagemWebSocket(
 
         carregarJogos();
 
+        carregarAnalisesIA();
+
+    }
+
+    if (
+        mensagem.tipo ===
+        "analise" ||
+        mensagem.tipo ===
+        "analiseIA"
+    ) {
+
+        carregarAnalisesIA();
+
+        carregarDashboard();
+
     }
 
 }
-
 
 // ==================================================
 // ENVIAR WEBSOCKET
@@ -676,14 +642,12 @@ function enviarWebSocket(
 
     }
 
-
     return false;
 
 }
 
-
 // ==================================================
-// CARREGAR CAMPEONATOS
+// CAMPEONATOS
 // ==================================================
 
 async function carregarCampeonatos() {
@@ -698,7 +662,6 @@ async function carregarCampeonatos() {
                 }
             );
 
-
         if (!resposta.ok) {
 
             throw new Error(
@@ -707,21 +670,19 @@ async function carregarCampeonatos() {
 
         }
 
-
         const dados =
             await resposta.json();
-
 
         const lista =
             extrairLista(
                 dados,
                 [
                     "campeonatos",
+                    "dados",
                     "data",
                     "resultados"
                 ]
             );
-
 
         renderizarCampeonatos(
             lista
@@ -732,14 +693,13 @@ async function carregarCampeonatos() {
     catch (erro) {
 
         console.error(
-            "Erro campeonatos:",
+            "❌ Erro campeonatos:",
             erro
         );
 
     }
 
 }
-
 
 // ==================================================
 // RENDER CAMPEONATOS
@@ -754,16 +714,13 @@ function renderizarCampeonatos(
             "listaCampeonatos"
         );
 
-
     if (!area) {
 
         return;
 
     }
 
-
     area.innerHTML = "";
-
 
     if (
         !Array.isArray(campeonatos) ||
@@ -781,7 +738,6 @@ function renderizarCampeonatos(
 
     }
 
-
     campeonatos.forEach(
         campeonato => {
 
@@ -790,22 +746,18 @@ function renderizarCampeonatos(
                     "div"
                 );
 
-
             div.className =
                 "campeonato-card";
-
 
             const nome =
                 campeonato.nome ??
                 campeonato.name ??
                 "Campeonato";
 
-
             const pais =
                 campeonato.pais ??
                 campeonato.country ??
                 "";
-
 
             div.innerHTML =
                 `
@@ -818,7 +770,6 @@ function renderizarCampeonatos(
                 </span>
                 `;
 
-
             area.appendChild(
                 div
             );
@@ -828,9 +779,8 @@ function renderizarCampeonatos(
 
 }
 
-
 // ==================================================
-// CARREGAR VALUE BETS
+// VALUE BETS
 // ==================================================
 
 async function carregarValueBets() {
@@ -841,7 +791,6 @@ async function carregarValueBets() {
             "💎 Buscando Value Bets..."
         );
 
-
         const resposta =
             await fetch(
                 `${CONFIG.API_URL}/api/valuebets`,
@@ -849,7 +798,6 @@ async function carregarValueBets() {
                     cache: "no-store"
                 }
             );
-
 
         if (!resposta.ok) {
 
@@ -859,35 +807,17 @@ async function carregarValueBets() {
 
         }
 
-
         const dados =
             await resposta.json();
-
-
-        // ==================================================
-        // CORREÇÃO PRINCIPAL
-        //
-        // O endpoint retorna:
-        //
-        // {
-        //     sucesso: true,
-        //     total: 0,
-        //     valuebets: []
-        // }
-        //
-        // Portanto precisamos extrair dados.valuebets.
-        // ==================================================
 
         const valuebets =
             extrairListaValueBets(
                 dados
             );
 
-
         console.log(
             `💎 ${valuebets.length} Value Bets encontradas`
         );
-
 
         renderizarValueBets(
             valuebets
@@ -898,10 +828,9 @@ async function carregarValueBets() {
     catch (erro) {
 
         console.error(
-            "Erro Value Bets:",
+            "❌ Erro Value Bets:",
             erro
         );
-
 
         renderizarValueBets(
             []
@@ -910,7 +839,6 @@ async function carregarValueBets() {
     }
 
 }
-
 
 // ==================================================
 // EXTRAIR VALUE BETS
@@ -928,7 +856,6 @@ function extrairListaValueBets(
 
     }
 
-
     if (
         dados &&
         Array.isArray(
@@ -940,6 +867,16 @@ function extrairListaValueBets(
 
     }
 
+    if (
+        dados &&
+        Array.isArray(
+            dados.dados
+        )
+    ) {
+
+        return dados.dados;
+
+    }
 
     if (
         dados &&
@@ -952,7 +889,6 @@ function extrairListaValueBets(
 
     }
 
-
     if (
         dados &&
         Array.isArray(
@@ -963,7 +899,6 @@ function extrairListaValueBets(
         return dados.resultados;
 
     }
-
 
     if (
         dados &&
@@ -976,11 +911,9 @@ function extrairListaValueBets(
 
     }
 
-
     return [];
 
 }
-
 
 // ==================================================
 // RENDER VALUE BETS
@@ -995,16 +928,13 @@ function renderizarValueBets(
             "listaValueBets"
         );
 
-
     if (!area) {
 
         return;
 
     }
 
-
     area.innerHTML = "";
-
 
     if (
         !Array.isArray(valuebets) ||
@@ -1014,16 +944,13 @@ function renderizarValueBets(
         area.innerHTML =
             `
             <div class="empty">
-
                 💎 Nenhuma Value Bet encontrada
-
             </div>
             `;
 
         return;
 
     }
-
 
     valuebets.forEach(
         aposta => {
@@ -1033,38 +960,16 @@ function renderizarValueBets(
                     "div"
                 );
 
-
             card.className =
                 "valuebet-card";
 
-
-            const timeCasa =
-                aposta.timeCasa ??
-                aposta.time_casa ??
-                extrairTimeCasa(
-                    aposta.jogo
-                ) ??
-                "Casa";
-
-
-            const timeFora =
-                aposta.timeFora ??
-                aposta.time_fora ??
-                extrairTimeFora(
-                    aposta.jogo
-                ) ??
-                "Fora";
-
+            const jogo =
+                aposta.jogo ??
+                "Jogo não informado";
 
             const mercado =
                 aposta.mercado ??
                 "Não informado";
-
-
-            const selecao =
-                aposta.selecao ??
-                "";
-
 
             const odd =
                 aposta.odd ??
@@ -1072,195 +977,61 @@ function renderizarValueBets(
                 aposta.odd_mercado ??
                 0;
 
-
             const probabilidade =
                 aposta.probabilidade ??
+                aposta.probabilidade_real ??
                 0;
-
 
             const edge =
                 aposta.edge ??
                 0;
 
-
             const roi =
                 aposta.roi ??
+                aposta.valor_esperado ??
                 0;
-
-
-            const kelly =
-                aposta.kelly ??
-                0;
-
-
-            const classificacao =
-                aposta.classificacao ??
-                "Value Bet";
-
-
-            const bookmaker =
-                aposta.bookmaker ??
-                aposta.casa_aposta ??
-                "Não informado";
-
-
-            const dataJogo =
-                aposta.data_jogo ??
-                aposta.dataJogo ??
-                "";
-
 
             card.innerHTML =
                 `
-
                 <div class="titulo">
-
-                    ${escaparHTML(
-                        timeCasa
-                    )}
-
-                    x
-
-                    ${escaparHTML(
-                        timeFora
-                    )}
-
+                    💎 ${escaparHTML(jogo)}
                 </div>
 
-
                 <div>
-
                     Mercado:
-
                     <strong>
-                        ${escaparHTML(
-                            mercado
-                        )}
+                        ${escaparHTML(mercado)}
                     </strong>
-
                 </div>
 
-
-                ${
-                    selecao
-                        ? `
-                        <div>
-                            Seleção:
-                            <strong>
-                                ${escaparHTML(
-                                    selecao
-                                )}
-                            </strong>
-                        </div>
-                        `
-                        : ""
-                }
-
-
                 <div>
-
                     Odd:
-
                     <strong>
-                        ${formatarOdd(
-                            odd
-                        )}
+                        ${formatarOdd(odd)}
                     </strong>
-
                 </div>
 
-
                 <div>
-
                     Probabilidade:
-
                     <strong>
-                        ${formatarPercentual(
-                            probabilidade
-                        )}
+                        ${formatarPercentual(probabilidade)}
                     </strong>
-
                 </div>
 
-
                 <div>
-
                     Edge:
-
                     <strong>
-                        ${formatarPercentual(
-                            edge
-                        )}
+                        ${formatarPercentual(edge)}
                     </strong>
-
                 </div>
 
-
                 <div>
-
                     ROI:
-
                     <strong>
-                        ${formatarPercentual(
-                            roi
-                        )}
+                        ${formatarPercentual(roi)}
                     </strong>
-
                 </div>
-
-
-                <div>
-
-                    Kelly:
-
-                    <strong>
-                        ${formatarPercentual(
-                            kelly
-                        )}
-                    </strong>
-
-                </div>
-
-
-                <div>
-
-                    Casa de aposta:
-
-                    <strong>
-                        ${escaparHTML(
-                            bookmaker
-                        )}
-                    </strong>
-
-                </div>
-
-
-                <div class="valor">
-
-                    ${escaparHTML(
-                        classificacao
-                    )}
-
-                </div>
-
-
-                ${
-                    dataJogo
-                        ? `
-                        <div>
-                            📅
-                            ${escaparHTML(
-                                formatarData(
-                                    dataJogo
-                                )
-                            )}
-                        </div>
-                        `
-                        : ""
-                }
-
                 `;
-
 
             area.appendChild(
                 card
@@ -1271,9 +1042,8 @@ function renderizarValueBets(
 
 }
 
-
 // ==================================================
-// ADICIONAR VALUE BET EM TEMPO REAL
+// ADICIONAR VALUE BET
 // ==================================================
 
 function adicionarValueBet(
@@ -1289,12 +1059,10 @@ function adicionarValueBet(
 
     }
 
-
     const area =
         document.getElementById(
             "listaValueBets"
         );
-
 
     if (!area) {
 
@@ -1302,12 +1070,10 @@ function adicionarValueBet(
 
     }
 
-
     const vazio =
         area.querySelector(
             ".empty"
         );
-
 
     if (vazio) {
 
@@ -1315,34 +1081,17 @@ function adicionarValueBet(
 
     }
 
-
     const card =
         document.createElement(
             "div"
         );
 
-
     card.className =
         "valuebet-card novo";
 
-
-    const timeCasa =
-        aposta.timeCasa ??
-        aposta.time_casa ??
-        extrairTimeCasa(
-            aposta.jogo
-        ) ??
-        "Casa";
-
-
-    const timeFora =
-        aposta.timeFora ??
-        aposta.time_fora ??
-        extrairTimeFora(
-            aposta.jogo
-        ) ??
-        "Fora";
-
+    const jogo =
+        aposta.jogo ??
+        "Jogo não informado";
 
     const odd =
         aposta.odd ??
@@ -1350,45 +1099,30 @@ function adicionarValueBet(
         aposta.odd_mercado ??
         0;
 
-
     card.innerHTML =
         `
-
         <strong>
             🆕 Nova Value Bet
         </strong>
 
         <br>
 
-        ${escaparHTML(
-            timeCasa
-        )}
-
-        x
-
-        ${escaparHTML(
-            timeFora
-        )}
+        ${escaparHTML(jogo)}
 
         <br>
 
         Mercado:
 
         ${escaparHTML(
-            aposta.mercado ??
-            ""
+            aposta.mercado ?? ""
         )}
 
         <br>
 
         Odd:
 
-        ${formatarOdd(
-            odd
-        )}
-
+        ${formatarOdd(odd)}
         `;
-
 
     area.prepend(
         card
@@ -1396,9 +1130,8 @@ function adicionarValueBet(
 
 }
 
-
 // ==================================================
-// CARREGAR JOGOS
+// JOGOS
 // ==================================================
 
 async function carregarJogos() {
@@ -1413,7 +1146,6 @@ async function carregarJogos() {
                 }
             );
 
-
         if (!resposta.ok) {
 
             throw new Error(
@@ -1422,21 +1154,19 @@ async function carregarJogos() {
 
         }
 
-
         const dados =
             await resposta.json();
-
 
         const jogos =
             extrairLista(
                 dados,
                 [
                     "jogos",
+                    "dados",
                     "data",
                     "resultados"
                 ]
             );
-
 
         renderizarJogos(
             jogos
@@ -1447,14 +1177,13 @@ async function carregarJogos() {
     catch (erro) {
 
         console.error(
-            "Erro jogos:",
+            "❌ Erro jogos:",
             erro
         );
 
     }
 
 }
-
 
 // ==================================================
 // RENDER JOGOS
@@ -1469,16 +1198,13 @@ function renderizarJogos(
             "listaJogos"
         );
 
-
     if (!area) {
 
         return;
 
     }
 
-
     area.innerHTML = "";
-
 
     if (
         !Array.isArray(jogos) ||
@@ -1488,16 +1214,13 @@ function renderizarJogos(
         area.innerHTML =
             `
             <div class="empty">
-
                 ⚽ Nenhum jogo encontrado
-
             </div>
             `;
 
         return;
 
     }
-
 
     jogos.forEach(
         jogo => {
@@ -1507,10 +1230,8 @@ function renderizarJogos(
                     "div"
                 );
 
-
             div.className =
                 "jogo-card";
-
 
             const casa =
                 jogo.casa ??
@@ -1518,72 +1239,48 @@ function renderizarJogos(
                 jogo.timeCasa ??
                 "Casa";
 
-
             const fora =
                 jogo.fora ??
                 jogo.time_fora ??
                 jogo.timeFora ??
                 "Fora";
 
-
             const campeonato =
                 jogo.campeonato ??
                 jogo.nome_campeonato ??
                 "";
 
-
             const data =
                 jogo.data ??
                 jogo.data_jogo ??
                 jogo.dataJogo ??
+                jogo.horario ??
                 "";
-
 
             div.innerHTML =
                 `
-
                 <h3>
-
-                    ${escaparHTML(
-                        casa
-                    )}
-
+                    ${escaparHTML(casa)}
                     x
-
-                    ${escaparHTML(
-                        fora
-                    )}
-
+                    ${escaparHTML(fora)}
                 </h3>
 
-
                 <p>
-
                     🏆
-                    ${escaparHTML(
-                        campeonato
-                    )}
-
+                    ${escaparHTML(campeonato)}
                 </p>
 
-
                 <p>
-
                     📅
                     ${
                         data
                             ? escaparHTML(
-                                formatarData(
-                                    data
-                                )
+                                formatarData(data)
                             )
                             : "-"
                     }
-
                 </p>
-
                 `;
-
 
             area.appendChild(
                 div
@@ -1594,14 +1291,34 @@ function renderizarJogos(
 
 }
 
-
 // ==================================================
-// CARREGAR ANÁLISES IA
+// ⭐ CARREGAR ANÁLISES IA
+// CORRIGIDO
 // ==================================================
 
 async function carregarAnalisesIA() {
 
+    const area =
+        document.getElementById(
+            "listaAnalisesIA"
+        );
+
     try {
+
+        console.log(
+            "🤖 Buscando análises reais da API..."
+        );
+
+        if (area) {
+
+            area.innerHTML =
+                `
+                <div class="loading">
+                    🤖 Carregando análises IA...
+                </div>
+                `;
+
+        }
 
         const resposta =
             await fetch(
@@ -1611,7 +1328,6 @@ async function carregarAnalisesIA() {
                 }
             );
 
-
         if (!resposta.ok) {
 
             throw new Error(
@@ -1620,21 +1336,28 @@ async function carregarAnalisesIA() {
 
         }
 
-
         const dados =
             await resposta.json();
 
+        console.log(
+            "🤖 Resposta /api/analises:",
+            dados
+        );
 
         const analises =
             extrairLista(
                 dados,
                 [
                     "analises",
+                    "dados",
                     "data",
                     "resultados"
                 ]
             );
 
+        console.log(
+            `🤖 ${analises.length} análises recebidas`
+        );
 
         renderizarAnalisesIA(
             analises
@@ -1645,17 +1368,28 @@ async function carregarAnalisesIA() {
     catch (erro) {
 
         console.error(
-            "Erro análise IA:",
+            "❌ Erro análises IA:",
             erro
         );
+
+        if (area) {
+
+            area.innerHTML =
+                `
+                <div class="empty">
+                    ❌ Não foi possível carregar as análises IA
+                </div>
+                `;
+
+        }
 
     }
 
 }
 
-
 // ==================================================
-// RENDER ANÁLISES IA
+// ⭐ RENDER ANÁLISES IA
+// COMPATÍVEL COM A ESTRUTURA REAL DO POSTGRESQL
 // ==================================================
 
 function renderizarAnalisesIA(
@@ -1667,16 +1401,17 @@ function renderizarAnalisesIA(
             "listaAnalisesIA"
         );
 
-
     if (!area) {
+
+        console.warn(
+            "⚠️ Elemento #listaAnalisesIA não encontrado"
+        );
 
         return;
 
     }
 
-
     area.innerHTML = "";
-
 
     if (
         !Array.isArray(analises) ||
@@ -1686,9 +1421,7 @@ function renderizarAnalisesIA(
         area.innerHTML =
             `
             <div class="empty">
-
                 🤖 Nenhuma análise disponível
-
             </div>
             `;
 
@@ -1696,8 +1429,43 @@ function renderizarAnalisesIA(
 
     }
 
+    /*
+     * Mostra primeiro as análises mais recentes.
+     *
+     * A API normalmente já retorna por ID DESC,
+     * mas fazemos a ordenação também no frontend.
+     */
 
-    analises.forEach(
+    const lista =
+        [...analises]
+        .sort(
+            (a, b) => {
+
+                const idA =
+                    Number(a?.id ?? 0);
+
+                const idB =
+                    Number(b?.id ?? 0);
+
+                return idB - idA;
+
+            }
+        );
+
+    /*
+     * Limite visual.
+     *
+     * Não precisamos renderizar milhares de cards
+     * no navegador.
+     */
+
+    const exibidas =
+        lista.slice(
+            0,
+            20
+        );
+
+    exibidas.forEach(
         analise => {
 
             const card =
@@ -1705,86 +1473,281 @@ function renderizarAnalisesIA(
                     "div"
                 );
 
-
             card.className =
                 "analise-card";
 
+            // ==========================================
+            // JOGO
+            // ==========================================
 
             const jogo =
                 analise.jogo ??
-                `${analise.time_casa ?? ""} x ${analise.time_fora ?? ""}`;
+                `${analise.time_casa ?? "Casa"} x ${analise.time_fora ?? "Fora"}`;
 
+            // ==========================================
+            // PROBABILIDADES REAIS
+            // ==========================================
 
-            const probabilidade =
-                analise.probabilidade ??
-                0;
+            const probCasa =
+                Number(
+                    analise.probabilidade_casa ?? 0
+                );
 
+            const probEmpate =
+                Number(
+                    analise.probabilidade_empate ?? 0
+                );
 
-            const previsao =
-                analise.previsao ??
-                "Não disponível";
+            const probFora =
+                Number(
+                    analise.probabilidade_fora ?? 0
+                );
 
+            // ==========================================
+            // GOLS
+            // ==========================================
+
+            const golsEsperados =
+                Number(
+                    analise.gols_esperados ?? 0
+                );
+
+            // ==========================================
+            // PLACAR
+            // ==========================================
+
+            const placar =
+                analise.placar_previsto ??
+                "--";
+
+            // ==========================================
+            // CONFIANÇA
+            // ==========================================
 
             const confianca =
                 analise.confianca ??
-                analise.confianca_ia ??
-                0;
+                "BAIXA";
 
+            // ==========================================
+            // ALGORITMO
+            // ==========================================
+
+            const algoritmo =
+                analise.algoritmo ??
+                "BetVision Statistical AI";
+
+            // ==========================================
+            // VALUE BET
+            // ==========================================
+
+            const possuiValueBet =
+                analise.value_bet === true ||
+                analise.value_bet === "true" ||
+                analise.value_bet === 1;
+
+            // ==========================================
+            // DATA
+            // ==========================================
+
+            const criadoEm =
+                analise.criado_em ??
+                analise.criadoEm ??
+                "";
+
+            // ==========================================
+            // COR / CLASSE CONFIANÇA
+            // ==========================================
+
+            const classeConfianca =
+                String(
+                    confianca
+                )
+                .toLowerCase()
+                .normalize("NFD")
+                .replace(
+                    /[\u0300-\u036f]/g,
+                    ""
+                );
+
+            // ==========================================
+            // CARD
+            // ==========================================
 
             card.innerHTML =
                 `
+                <div class="analise-header">
 
-                <h3>
+                    <h3>
+                        ⚽
+                        ${escaparHTML(jogo)}
+                    </h3>
 
-                    ${escaparHTML(
-                        jogo
-                    )}
+                    <span class="badge-confianca ${escaparHTML(classeConfianca)}">
 
-                </h3>
-
-
-                <p>
-
-                    Probabilidade:
-
-                    <strong>
-
-                        ${formatarPercentual(
-                            probabilidade
+                        ${escaparHTML(
+                            String(confianca).toUpperCase()
                         )}
 
-                    </strong>
+                    </span>
 
-                </p>
-
-
-                <p>
-
-                    Previsão:
-
-                    ${escaparHTML(
-                        previsao
-                    )}
-
-                </p>
+                </div>
 
 
-                <p>
+                <div class="analise-algoritmo">
 
-                    Confiança IA:
+                    🤖
+                    ${escaparHTML(algoritmo)}
+
+                </div>
+
+
+                <div class="analise-placar">
+
+                    <span>
+                        Placar IA
+                    </span>
 
                     <strong>
-
-                        ${formatarPercentual(
-                            confianca
-                        )}
-
+                        ${escaparHTML(placar)}
                     </strong>
 
-                </p>
+                </div>
+
+
+                <div class="probabilidades">
+
+                    <div class="probabilidade casa">
+
+                        <span>
+                            🏠 Casa
+                        </span>
+
+                        <strong>
+                            ${formatarPercentual(probCasa)}
+                        </strong>
+
+                    </div>
+
+
+                    <div class="probabilidade empate">
+
+                        <span>
+                            🤝 Empate
+                        </span>
+
+                        <strong>
+                            ${formatarPercentual(probEmpate)}
+                        </strong>
+
+                    </div>
+
+
+                    <div class="probabilidade fora">
+
+                        <span>
+                            ✈️ Fora
+                        </span>
+
+                        <strong>
+                            ${formatarPercentual(probFora)}
+                        </strong>
+
+                    </div>
+
+                </div>
+
+
+                <div class="analise-detalhes">
+
+                    <div>
+
+                        <span>
+                            ⚽ Gols Esperados
+                        </span>
+
+                        <strong>
+                            ${formatarDecimal(golsEsperados)}
+                        </strong>
+
+                    </div>
+
+
+                    <div>
+
+                        <span>
+                            🎯 Favorito
+                        </span>
+
+                        <strong>
+                            ${escaparHTML(
+                                determinarFavorito(
+                                    probCasa,
+                                    probEmpate,
+                                    probFora
+                                )
+                            )}
+                        </strong>
+
+                    </div>
+
+
+                    <div>
+
+                        <span>
+                            💎 Value Bet
+                        </span>
+
+                        <strong class="${
+                            possuiValueBet
+                                ? "value-positiva"
+                                : "value-negativa"
+                        }">
+
+                            ${
+                                possuiValueBet
+                                    ? "SIM"
+                                    : "NÃO"
+                            }
+
+                        </strong>
+
+                    </div>
+
+                </div>
+
+
+                ${
+                    criadoEm
+                        ? `
+                        <div class="analise-data">
+
+                            📅
+                            ${escaparHTML(
+                                formatarData(criadoEm)
+                            )}
+
+                        </div>
+                        `
+                        : ""
+                }
+
+
+                <button
+                    type="button"
+                    class="btn-analise"
+                    onclick='window.BetVisionAI.mostrarAnaliseCompleta(${JSON.stringify(
+                        analise
+                    ).replace(
+                        /'/g,
+                        "&#039;"
+                    )})'
+                >
+
+                    🔎 Ver análise completa
+
+                </button>
 
                 `;
-
 
             area.appendChild(
                 card
@@ -1793,8 +1756,337 @@ function renderizarAnalisesIA(
         }
     );
 
+    /*
+     * Indicador de quantidade.
+     */
+
+    if (
+        lista.length > exibidas.length
+    ) {
+
+        const contador =
+            document.createElement(
+                "div"
+            );
+
+        contador.className =
+            "analises-contador";
+
+        contador.textContent =
+            `Exibindo ${exibidas.length} de ${formatarNumero(lista.length)} análises`;
+
+        area.appendChild(
+            contador
+        );
+
+    }
+
 }
 
+// ==================================================
+// DETERMINAR FAVORITO
+// ==================================================
+
+function determinarFavorito(
+    casa,
+    empate,
+    fora
+) {
+
+    const valores = [
+
+        {
+            nome: "Casa",
+            valor: Number(casa)
+        },
+
+        {
+            nome: "Empate",
+            valor: Number(empate)
+        },
+
+        {
+            nome: "Fora",
+            valor: Number(fora)
+        }
+
+    ];
+
+    valores.sort(
+        (a, b) =>
+            b.valor - a.valor
+    );
+
+    return valores[0]?.nome ??
+        "Indefinido";
+
+}
+
+// ==================================================
+// ANÁLISE COMPLETA
+// ==================================================
+
+function mostrarAnaliseCompleta(
+    analise
+) {
+
+    if (
+        !analise ||
+        typeof analise !== "object"
+    ) {
+
+        return;
+
+    }
+
+    const jogo =
+        analise.jogo ??
+        "Jogo não informado";
+
+    const probCasa =
+        Number(
+            analise.probabilidade_casa ?? 0
+        );
+
+    const probEmpate =
+        Number(
+            analise.probabilidade_empate ?? 0
+        );
+
+    const probFora =
+        Number(
+            analise.probabilidade_fora ?? 0
+        );
+
+    const gols =
+        Number(
+            analise.gols_esperados ?? 0
+        );
+
+    const placar =
+        analise.placar_previsto ??
+        "--";
+
+    const confianca =
+        analise.confianca ??
+        "BAIXA";
+
+    const algoritmo =
+        analise.algoritmo ??
+        "BetVision Statistical AI";
+
+    const valueBet =
+        analise.value_bet === true ||
+        analise.value_bet === "true" ||
+        analise.value_bet === 1;
+
+    /*
+     * Procurar modal existente.
+     */
+
+    let modal =
+        document.getElementById(
+            "modalAnaliseIA"
+        );
+
+    /*
+     * Criar modal se ainda não existir.
+     */
+
+    if (!modal) {
+
+        modal =
+            document.createElement(
+                "div"
+            );
+
+        modal.id =
+            "modalAnaliseIA";
+
+        modal.className =
+            "modal-analise-ia";
+
+        document.body.appendChild(
+            modal
+        );
+
+    }
+
+    modal.innerHTML =
+        `
+        <div class="modal-conteudo">
+
+            <button
+                type="button"
+                class="modal-fechar"
+                onclick="window.BetVisionAI.fecharAnaliseCompleta()"
+            >
+                ✕
+            </button>
+
+
+            <h2>
+                🤖 Análise Completa da IA
+            </h2>
+
+
+            <h3>
+                ⚽ ${escaparHTML(jogo)}
+            </h3>
+
+
+            <div class="modal-algoritmo">
+
+                Modelo:
+                <strong>
+                    ${escaparHTML(algoritmo)}
+                </strong>
+
+            </div>
+
+
+            <div class="modal-placar">
+
+                <span>
+                    Placar Previsto
+                </span>
+
+                <strong>
+                    ${escaparHTML(placar)}
+                </strong>
+
+            </div>
+
+
+            <div class="modal-probabilidades">
+
+                <div>
+
+                    🏠 Casa
+
+                    <strong>
+                        ${formatarPercentual(probCasa)}
+                    </strong>
+
+                </div>
+
+
+                <div>
+
+                    🤝 Empate
+
+                    <strong>
+                        ${formatarPercentual(probEmpate)}
+                    </strong>
+
+                </div>
+
+
+                <div>
+
+                    ✈️ Fora
+
+                    <strong>
+                        ${formatarPercentual(probFora)}
+                    </strong>
+
+                </div>
+
+            </div>
+
+
+            <div class="modal-detalhes">
+
+                <p>
+
+                    ⚽
+                    <strong>
+                        Gols esperados:
+                    </strong>
+
+                    ${formatarDecimal(gols)}
+
+                </p>
+
+
+                <p>
+
+                    🎯
+                    <strong>
+                        Favorito:
+                    </strong>
+
+                    ${escaparHTML(
+                        determinarFavorito(
+                            probCasa,
+                            probEmpate,
+                            probFora
+                        )
+                    )}
+
+                </p>
+
+
+                <p>
+
+                    🎯
+                    <strong>
+                        Confiança:
+                    </strong>
+
+                    ${escaparHTML(
+                        String(confianca).toUpperCase()
+                    )}
+
+                </p>
+
+
+                <p>
+
+                    💎
+                    <strong>
+                        Value Bet:
+                    </strong>
+
+                    ${
+                        valueBet
+                            ? "SIM"
+                            : "NÃO"
+                    }
+
+                </p>
+
+            </div>
+
+        </div>
+        `;
+
+    modal.style.display =
+        "flex";
+
+}
+
+// ==================================================
+// FECHAR ANÁLISE
+// ==================================================
+
+function fecharAnaliseCompleta() {
+
+    const modal =
+        document.getElementById(
+            "modalAnaliseIA"
+        );
+
+    if (!modal) {
+
+        return;
+
+    }
+
+    modal.style.display =
+        "none";
+
+}
 
 // ==================================================
 // EXTRAIR LISTA GENÉRICA
@@ -1813,7 +2105,6 @@ function extrairLista(
 
     }
 
-
     if (
         dados &&
         typeof dados === "object"
@@ -1825,9 +2116,7 @@ function extrairLista(
 
             if (
                 Array.isArray(
-                    dados[
-                        propriedade
-                    ]
+                    dados[propriedade]
                 )
             ) {
 
@@ -1841,11 +2130,9 @@ function extrairLista(
 
     }
 
-
     return [];
 
 }
-
 
 // ==================================================
 // EXTRAIR TIME CASA
@@ -1864,18 +2151,15 @@ function extrairTimeCasa(
 
     }
 
-
     const partes =
         jogo.split(
             " x "
         );
 
-
     return partes[0] ??
         null;
 
 }
-
 
 // ==================================================
 // EXTRAIR TIME FORA
@@ -1894,21 +2178,18 @@ function extrairTimeFora(
 
     }
 
-
     const partes =
         jogo.split(
             " x "
         );
-
 
     return partes[1] ??
         null;
 
 }
 
-
 // ==================================================
-// FORMATAR NÚMEROS
+// FORMATAR NÚMERO
 // ==================================================
 
 function formatarNumero(
@@ -1925,23 +2206,16 @@ function formatarNumero(
 
     }
 
-
     const valor =
-        Number(
-            numero
-        );
-
+        Number(numero);
 
     if (
-        !Number.isFinite(
-            valor
-        )
+        !Number.isFinite(valor)
     ) {
 
         return "0";
 
     }
-
 
     return valor.toLocaleString(
         "pt-BR"
@@ -1949,6 +2223,34 @@ function formatarNumero(
 
 }
 
+// ==================================================
+// FORMATAR DECIMAL
+// ==================================================
+
+function formatarDecimal(
+    valor
+) {
+
+    const numero =
+        Number(valor);
+
+    if (
+        !Number.isFinite(numero)
+    ) {
+
+        return "0.00";
+
+    }
+
+    return numero.toLocaleString(
+        "pt-BR",
+        {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }
+    );
+
+}
 
 // ==================================================
 // FORMATAR ODD
@@ -1959,28 +2261,21 @@ function formatarOdd(
 ) {
 
     const numero =
-        Number(
-            valor
-        );
-
+        Number(valor);
 
     if (
-        !Number.isFinite(
-            numero
-        )
+        !Number.isFinite(numero)
     ) {
 
         return "0.00";
 
     }
 
-
     return numero.toFixed(
         2
     );
 
 }
-
 
 // ==================================================
 // FORMATAR PERCENTUAL
@@ -1991,26 +2286,19 @@ function formatarPercentual(
 ) {
 
     const numero =
-        Number(
-            valor
-        );
-
+        Number(valor);
 
     if (
-        !Number.isFinite(
-            numero
-        )
+        !Number.isFinite(numero)
     ) {
 
         return "0%";
 
     }
 
-
     return `${numero.toFixed(2)}%`;
 
 }
-
 
 // ==================================================
 // FORMATAR DATA
@@ -2028,12 +2316,10 @@ function formatarData(
 
         }
 
-
         const dataObj =
             data instanceof Date
                 ? data
                 : new Date(data);
-
 
         if (
             Number.isNaN(
@@ -2044,7 +2330,6 @@ function formatarData(
             return "-";
 
         }
-
 
         return dataObj.toLocaleString(
             "pt-BR"
@@ -2059,7 +2344,6 @@ function formatarData(
     }
 
 }
-
 
 // ==================================================
 // ESCAPAR HTML
@@ -2078,36 +2362,32 @@ function escaparHTML(
 
     }
 
-
-    return String(
-        valor
-    )
-    .replace(
-        /&/g,
-        "&amp;"
-    )
-    .replace(
-        /</g,
-        "&lt;"
-    )
-    .replace(
-        />/g,
-        "&gt;"
-    )
-    .replace(
-        /"/g,
-        "&quot;"
-    )
-    .replace(
-        /'/g,
-        "&#039;"
-    );
+    return String(valor)
+        .replace(
+            /&/g,
+            "&amp;"
+        )
+        .replace(
+            /</g,
+            "&lt;"
+        )
+        .replace(
+            />/g,
+            "&gt;"
+        )
+        .replace(
+            /"/g,
+            "&quot;"
+        )
+        .replace(
+            /'/g,
+            "&#039;"
+        );
 
 }
 
-
 // ==================================================
-// MOSTRAR MENSAGEM
+// MENSAGEM
 // ==================================================
 
 function mostrarMensagem(
@@ -2120,30 +2400,23 @@ function mostrarMensagem(
             id
         );
 
-
     if (!elemento) {
 
         return;
 
     }
 
-
     elemento.innerHTML =
         `
         <div class="alerta">
-
-            ${escaparHTML(
-                mensagem
-            )}
-
+            ${escaparHTML(mensagem)}
         </div>
         `;
 
 }
 
-
 // ==================================================
-// VERIFICAR STATUS API
+// VERIFICAR SERVIDOR
 // ==================================================
 
 async function verificarServidor() {
@@ -2158,24 +2431,9 @@ async function verificarServidor() {
                 }
             );
 
-
-        if (
+        atualizarStatus(
             resposta.ok
-        ) {
-
-            atualizarStatus(
-                true
-            );
-
-        }
-
-        else {
-
-            atualizarStatus(
-                false
-            );
-
-        }
+        );
 
     }
 
@@ -2189,7 +2447,6 @@ async function verificarServidor() {
 
 }
 
-
 // ==================================================
 // MONITORAMENTO API
 // ==================================================
@@ -2202,7 +2459,6 @@ setInterval(
     },
     CONFIG.INTERVALO_PING
 );
-
 
 // ==================================================
 // ATUALIZAÇÃO COMPLETA
@@ -2225,7 +2481,6 @@ async function atualizarTudo() {
     ]);
 
 }
-
 
 // ==================================================
 // DISPONIBILIZAR FUNÇÕES GLOBALMENTE
@@ -2259,15 +2514,24 @@ window.BetVisionAI = {
 
     verificarServidor,
 
+    mostrarAnaliseCompleta,
+
+    fecharAnaliseCompleta,
+
     estado
 
 };
-
 
 // ==================================================
 // FIM
 // ==================================================
 
 console.log(
-    "✅ BetVision AI Frontend carregado"
+    "✅ BetVision AI Frontend v6.0 carregado"
 );
+
+console.log(
+    "🤖 Motor de análises reais conectado"
+);
+
+```
