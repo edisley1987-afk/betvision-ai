@@ -1,4 +1,3 @@
-
 // ==================================================
 // BETVISION AI
 // services/jogoBancoService.js
@@ -592,4 +591,3 @@ export default {
     estatisticasJogos
 
 };
-```
