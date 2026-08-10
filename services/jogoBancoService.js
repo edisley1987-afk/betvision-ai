@@ -1,4 +1,4 @@
-```javascript
+
 // ==================================================
 // BETVISION AI
 // services/jogoBancoService.js
