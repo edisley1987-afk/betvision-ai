@@ -1,4 +1,3 @@
-```javascript
 // ==========================================
 // BetVision AI
 // services/valueBetService.js
@@ -945,4 +944,3 @@ export default {
     limparValueBets
 
 };
-```
