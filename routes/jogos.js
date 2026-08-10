@@ -1,4 +1,3 @@
-```javascript
 // ==========================================
 // BETVISION AI
 // routes/jogos.js
@@ -683,4 +682,3 @@ router.get(
 // ==========================================
 
 export default router;
-```
