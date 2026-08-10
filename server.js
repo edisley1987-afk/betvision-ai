@@ -345,23 +345,25 @@ app.get(
 
         try {
 
-            const resultado = await query(`
-                SELECT
+           const resultado = await query(`
+    SELECT
 
-                    (SELECT COUNT(*)
-                     FROM campeonatos) AS campeonatos,
+        (SELECT COUNT(*)
+         FROM campeonatos) AS campeonatos,
 
-                    (SELECT COUNT(*)
-                     FROM jogos) AS jogos,
+        (SELECT COUNT(*)
+         FROM jogos
+         WHERE DATE(data_jogo) =
+               (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::date
+        ) AS jogos,
 
-                    (SELECT COUNT(*)
-                     FROM analises) AS analises,
+        (SELECT COUNT(*)
+         FROM analises) AS analises,
 
-                    (SELECT COUNT(*)
-                     FROM value_bets
-                     WHERE ativo = true) AS valuebets
-            `);
-
+        (SELECT COUNT(*)
+         FROM value_bets
+         WHERE ativo = true) AS valuebets
+`);
             const dados = resultado.rows[0];
 
             const resposta = {
