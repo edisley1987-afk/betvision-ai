@@ -1,14 +1,13 @@
 // ==================================================
 // BETVISION AI
 // services/bancoService.js
-// Serviço central PostgreSQL v6.0
-// Neon PostgreSQL
+// Serviço central PostgreSQL v5.1
+// Compatível com NeonDB
 // ==================================================
 
 import {
     query
 } from "../database/database.js";
-
 
 
 // ==================================================
@@ -18,22 +17,13 @@ import {
 export async function listarCampeonatos() {
 
     const resultado = await query(`
-        SELECT
-            id,
-            nome,
-            pais,
-            continente,
-            temporada,
-            api_id,
-            logo,
-            ativo
+        SELECT *
         FROM campeonatos
         ORDER BY nome
     `);
 
-    return resultado.rows || [];
+    return resultado.rows;
 }
-
 
 
 // ==================================================
@@ -42,204 +32,70 @@ export async function listarCampeonatos() {
 
 export async function inserirCampeonato(campeonato) {
 
-    try {
+    const {
+        id,
+        nome,
+        pais,
+        continente,
+        temporada,
+        api_id,
+        logo,
+        ativo
+    } = campeonato;
 
-        const {
-
+    const resultado = await query(
+        `
+        INSERT INTO campeonatos
+        (
             id,
-            api_id,
             nome,
             pais,
             continente,
             temporada,
+            api_id,
             logo,
-            ativo = true
-
-        } = campeonato || {};
-
-
-
-        // --------------------------------------------------
-        // O ID do banco é gerado automaticamente.
-        // O ID da Football-Data vai para api_id.
-        // --------------------------------------------------
-
-        const identificadorApi =
-            api_id ??
-            id ??
-            null;
-
-
-
-        if (!identificadorApi) {
-
-            console.warn(
-                "⚠ Campeonato ignorado: api_id não informado"
-            );
-
-            return null;
-
-        }
-
-
-
-        if (!nome) {
-
-            console.warn(
-                "⚠ Campeonato ignorado: nome não informado"
-            );
-
-            return null;
-
-        }
-
-
-
-        // --------------------------------------------------
-        // Verifica se já existe pelo api_id
-        // --------------------------------------------------
-
-        const existente = await query(
-            `
-            SELECT id
-            FROM campeonatos
-            WHERE api_id = $1
-            LIMIT 1
-            `,
-            [
-                identificadorApi
-            ]
-        );
-
-
-
-        // --------------------------------------------------
-        // ATUALIZA
-        // --------------------------------------------------
-
-        if (existente.rows.length > 0) {
-
-            const resultado = await query(
-                `
-                UPDATE campeonatos
-
-                SET
-
-                    nome = $1,
-                    pais = $2,
-                    continente = $3,
-                    temporada = $4,
-                    logo = $5,
-                    ativo = $6
-
-                WHERE api_id = $7
-
-                RETURNING *
-                `,
-                [
-
-                    nome,
-
-                    pais || null,
-
-                    continente || null,
-
-                    temporada != null
-                        ? String(temporada)
-                        : null,
-
-                    logo || null,
-
-                    ativo,
-
-                    identificadorApi
-
-                ]
-            );
-
-
-
-            return resultado.rows[0] || null;
-
-        }
-
-
-
-        // --------------------------------------------------
-        // INSERE
-        // --------------------------------------------------
-        // NÃO inserimos id.
-        // PostgreSQL gera automaticamente.
-        // --------------------------------------------------
-
-        const resultado = await query(
-            `
-            INSERT INTO campeonatos
-
-            (
-                nome,
-                pais,
-                continente,
-                temporada,
-                api_id,
-                logo,
-                ativo
-            )
-
-            VALUES
-
-            (
-                $1,
-                $2,
-                $3,
-                $4,
-                $5,
-                $6,
-                $7
-            )
-
-            RETURNING *
-            `,
-            [
-
-                nome,
-
-                pais || null,
-
-                continente || null,
-
-                temporada != null
-                    ? String(temporada)
-                    : null,
-
-                identificadorApi,
-
-                logo || null,
-
-                ativo
-
-            ]
-        );
-
-
-
-        return resultado.rows[0] || null;
-
-    }
-
-    catch (erro) {
-
-        console.error(
-            "❌ Erro salvar campeonato:",
-            erro.message
-        );
-
-        return null;
-
-    }
-
+            ativo
+        )
+
+        VALUES
+        (
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6,
+            $7,
+            COALESCE($8, true)
+        )
+
+        ON CONFLICT(id)
+        DO UPDATE SET
+
+            nome = EXCLUDED.nome,
+            pais = EXCLUDED.pais,
+            continente = EXCLUDED.continente,
+            temporada = EXCLUDED.temporada,
+            api_id = EXCLUDED.api_id,
+            logo = EXCLUDED.logo,
+            ativo = EXCLUDED.ativo
+
+        RETURNING *
+        `,
+        [
+            id,
+            nome,
+            pais,
+            continente,
+            temporada,
+            api_id ?? id,
+            logo ?? null,
+            ativo ?? true
+        ]
+    );
+
+    return resultado.rows[0];
 }
-
 
 
 // ==================================================
@@ -254,10 +110,8 @@ export async function listarTimes() {
         ORDER BY nome
     `);
 
-    return resultado.rows || [];
-
+    return resultado.rows;
 }
-
 
 
 // ==================================================
@@ -266,325 +120,90 @@ export async function listarTimes() {
 
 export async function inserirTime(time) {
 
-    try {
+    const {
+        id,
+        campeonato_id,
+        nome,
+        pais
+    } = time;
 
-        const {
-
+    const resultado = await query(
+        `
+        INSERT INTO times
+        (
             id,
-            api_id,
             campeonato_id,
-            campeonato_api_id,
             nome,
-            pais,
-            logo
-
-        } = time || {};
-
-
-
-        if (!nome) {
-
-            console.warn(
-                "⚠ Time ignorado: nome não informado"
-            );
-
-            return null;
-
-        }
-
-
-
-        // --------------------------------------------------
-        // Compatibilidade com estruturas antigas
-        // --------------------------------------------------
-
-        const identificadorApi =
-            api_id ??
-            id ??
-            null;
-
-
-
-        // --------------------------------------------------
-        // Se existir api_id na tabela, utiliza.
-        // Caso contrário, usa o id antigo.
-        // --------------------------------------------------
-
-        if (identificadorApi) {
-
-            try {
-
-                const existente = await query(
-                    `
-                    SELECT id
-                    FROM times
-                    WHERE api_id = $1
-                    LIMIT 1
-                    `,
-                    [
-                        identificadorApi
-                    ]
-                );
-
-
-
-                if (existente.rows.length > 0) {
-
-                    const resultado = await query(
-                        `
-                        UPDATE times
-
-                        SET
-
-                            nome = $1,
-                            pais = $2,
-                            campeonato_id = $3,
-                            logo = COALESCE($4, logo)
-
-                        WHERE api_id = $5
-
-                        RETURNING *
-                        `,
-                        [
-
-                            nome,
-
-                            pais || null,
-
-                            campeonato_id || null,
-
-                            logo || null,
-
-                            identificadorApi
-
-                        ]
-                    );
-
-
-
-                    return resultado.rows[0] || null;
-
-                }
-
-            }
-
-            catch (erroApiId) {
-
-                // --------------------------------------------------
-                // Caso a tabela antiga não tenha api_id,
-                // continua para o método compatível.
-                // --------------------------------------------------
-
-                if (
-                    !String(
-                        erroApiId.message || ""
-                    ).toLowerCase().includes("api_id")
-                ) {
-
-                    throw erroApiId;
-
-                }
-
-            }
-
-        }
-
-
-
-        // --------------------------------------------------
-        // TABELA TIMES COM API_ID
-        // --------------------------------------------------
-
-        if (identificadorApi) {
-
-            try {
-
-                const resultado = await query(
-                    `
-                    INSERT INTO times
-
-                    (
-                        nome,
-                        pais,
-                        campeonato_id,
-                        api_id,
-                        logo
-                    )
-
-                    VALUES
-
-                    (
-                        $1,
-                        $2,
-                        $3,
-                        $4,
-                        $5
-                    )
-
-                    RETURNING *
-                    `,
-                    [
-
-                        nome,
-
-                        pais || null,
-
-                        campeonato_id || null,
-
-                        identificadorApi,
-
-                        logo || null
-
-                    ]
-                );
-
-
-
-                return resultado.rows[0] || null;
-
-            }
-
-            catch (erro) {
-
-                // --------------------------------------------------
-                // Se api_id não existir na estrutura atual,
-                // tenta estrutura antiga.
-                // --------------------------------------------------
-
-                if (
-                    !String(
-                        erro.message || ""
-                    ).toLowerCase().includes("api_id")
-                ) {
-
-                    throw erro;
-
-                }
-
-            }
-
-        }
-
-
-
-        // --------------------------------------------------
-        // ESTRUTURA ANTIGA
-        // --------------------------------------------------
-
-        const resultado = await query(
-            `
-            INSERT INTO times
-
-            (
-                nome,
-                pais,
-                campeonato_id
-            )
-
-            VALUES
-
-            (
-                $1,
-                $2,
-                $3
-            )
-
-            RETURNING *
-            `,
-            [
-
-                nome,
-
-                pais || null,
-
-                campeonato_id || null
-
-            ]
-        );
-
-
-
-        return resultado.rows[0] || null;
-
-    }
-
-    catch (erro) {
-
-        console.error(
-            "❌ Erro salvar time:",
-            erro.message
-        );
-
-        return null;
-
-    }
-
+            pais
+        )
+
+        VALUES
+        (
+            $1,
+            $2,
+            $3,
+            $4
+        )
+
+        ON CONFLICT(id)
+        DO UPDATE SET
+
+            nome = EXCLUDED.nome,
+            campeonato_id = EXCLUDED.campeonato_id,
+            pais = EXCLUDED.pais
+
+        RETURNING *
+        `,
+        [
+            id,
+            campeonato_id,
+            nome,
+            pais
+        ]
+    );
+
+    return resultado.rows[0];
 }
 
 
-
 // ==================================================
-// JOGOS
+// JOGOS DO DIA
 // ==================================================
 
 export async function listarJogosHoje() {
 
-    const resultado = await query(`
+    const resultado = await query(
+        `
         SELECT *
-
         FROM jogos
 
         WHERE DATE(data_jogo) = CURRENT_DATE
 
         ORDER BY data_jogo
-    `);
+        `
+    );
 
-    return resultado.rows || [];
-
+    return resultado.rows;
 }
 
 
-
 // ==================================================
-// LISTAR JOGOS
-// ==================================================
-
-export async function listarJogos() {
-
-    const resultado = await query(`
-        SELECT *
-
-        FROM jogos
-
-        ORDER BY data_jogo DESC
-
-        LIMIT 500
-    `);
-
-    return resultado.rows || [];
-
-}
-
-
-
-// ==================================================
-// BUSCAR JOGO POR API ID
+// BUSCAR JOGO POR API_ID
 // ==================================================
 
 export async function buscarJogoPorApiId(api_id) {
 
-    if (!api_id) {
-
+    if (
+        api_id === undefined ||
+        api_id === null ||
+        api_id === ""
+    ) {
         return null;
-
     }
-
-
 
     const resultado = await query(
         `
         SELECT *
-
         FROM jogos
 
         WHERE api_id = $1
@@ -596,22 +215,17 @@ export async function buscarJogoPorApiId(api_id) {
         ]
     );
 
-
-
     return resultado.rows[0] || null;
-
 }
-
 
 
 // ==================================================
 // ANÁLISES IA
-// ==================================================
+//
 // IMPORTANTE:
+// A tabela analises atual NÃO possui jogo_id.
 //
-// A tabela "analises" atual NÃO possui jogo_id.
-//
-// Estrutura informada:
+// Estrutura confirmada:
 //
 // id
 // jogo
@@ -624,117 +238,70 @@ export async function buscarJogoPorApiId(api_id) {
 // confianca
 // algoritmo
 // criado_em
-//
-// Portanto usamos somente "jogo".
 // ==================================================
 
 export async function salvarAnalise(analise) {
 
-    try {
+    const {
+        jogo,
+        probabilidade_casa,
+        probabilidade_empate,
+        probabilidade_fora,
+        gols_esperados,
+        placar_previsto,
+        value_bet,
+        confianca,
+        algoritmo
+    } = analise;
 
-        const {
 
+    const resultado = await query(
+        `
+        INSERT INTO analises
+
+        (
             jogo,
             probabilidade_casa,
             probabilidade_empate,
             probabilidade_fora,
             gols_esperados,
             placar_previsto,
-            value_bet = false,
+            value_bet,
             confianca,
             algoritmo
+        )
 
-        } = analise || {};
+        VALUES
 
+        (
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6,
+            COALESCE($7, false),
+            $8,
+            $9
+        )
 
+        RETURNING *
+        `,
+        [
+            jogo ?? null,
+            probabilidade_casa ?? null,
+            probabilidade_empate ?? null,
+            probabilidade_fora ?? null,
+            gols_esperados ?? null,
+            placar_previsto ?? null,
+            value_bet ?? false,
+            confianca ?? null,
+            algoritmo ?? "BetVision Statistical AI"
+        ]
+    );
 
-        if (!jogo) {
-
-            console.warn(
-                "⚠ Análise ignorada: jogo não informado"
-            );
-
-            return null;
-
-        }
-
-
-
-        const resultado = await query(
-            `
-            INSERT INTO analises
-
-            (
-                jogo,
-                probabilidade_casa,
-                probabilidade_empate,
-                probabilidade_fora,
-                gols_esperados,
-                placar_previsto,
-                value_bet,
-                confianca,
-                algoritmo
-            )
-
-            VALUES
-
-            (
-                $1,
-                $2,
-                $3,
-                $4,
-                $5,
-                $6,
-                $7,
-                $8,
-                $9
-            )
-
-            RETURNING *
-            `,
-            [
-
-                jogo,
-
-                probabilidade_casa ?? null,
-
-                probabilidade_empate ?? null,
-
-                probabilidade_fora ?? null,
-
-                gols_esperados ?? null,
-
-                placar_previsto || null,
-
-                Boolean(value_bet),
-
-                confianca || "BAIXA",
-
-                algoritmo ||
-                "Probabilidade + Estatística"
-
-            ]
-        );
-
-
-
-        return resultado.rows[0] || null;
-
-    }
-
-    catch (erro) {
-
-        console.error(
-            "❌ Erro salvar análise IA:",
-            erro.message
-        );
-
-        return null;
-
-    }
-
+    return resultado.rows[0];
 }
-
 
 
 // ==================================================
@@ -743,39 +310,18 @@ export async function salvarAnalise(analise) {
 
 export async function listarAnalises() {
 
-    try {
+    const resultado = await query(
+        `
+        SELECT *
 
-        const resultado = await query(
-            `
-            SELECT *
+        FROM analises
 
-            FROM analises
+        ORDER BY criado_em DESC
+        `
+    );
 
-            ORDER BY criado_em DESC
-
-            LIMIT 500
-            `
-        );
-
-
-
-        return resultado.rows || [];
-
-    }
-
-    catch (erro) {
-
-        console.error(
-            "❌ Erro listar análises:",
-            erro.message
-        );
-
-        return [];
-
-    }
-
+    return resultado.rows;
 }
-
 
 
 // ==================================================
@@ -784,124 +330,54 @@ export async function listarAnalises() {
 
 export async function salvarValueBet(valueBet) {
 
-    try {
+    const {
+        jogo_id,
+        mercado,
+        odd_mercado,
+        probabilidade_real,
+        valor_esperado,
+        confianca
+    } = valueBet;
 
-        const {
 
+    const resultado = await query(
+        `
+        INSERT INTO value_bets
+
+        (
             jogo_id,
             mercado,
             odd_mercado,
             probabilidade_real,
             valor_esperado,
             confianca
+        )
 
-        } = valueBet || {};
+        VALUES
 
+        (
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6
+        )
 
+        RETURNING *
+        `,
+        [
+            jogo_id,
+            mercado,
+            odd_mercado,
+            probabilidade_real,
+            valor_esperado,
+            confianca
+        ]
+    );
 
-        const resultado = await query(
-            `
-            INSERT INTO value_bets
-
-            (
-                jogo_id,
-                mercado,
-                odd_mercado,
-                probabilidade_real,
-                valor_esperado,
-                confianca
-            )
-
-            VALUES
-
-            (
-                $1,
-                $2,
-                $3,
-                $4,
-                $5,
-                $6
-            )
-
-            RETURNING *
-            `,
-            [
-
-                jogo_id ?? null,
-
-                mercado || null,
-
-                odd_mercado ?? null,
-
-                probabilidade_real ?? null,
-
-                valor_esperado ?? null,
-
-                confianca || "MEDIA"
-
-            ]
-        );
-
-
-
-        return resultado.rows[0] || null;
-
-    }
-
-    catch (erro) {
-
-        console.error(
-            "❌ Erro salvar Value Bet:",
-            erro.message
-        );
-
-        return null;
-
-    }
-
+    return resultado.rows[0];
 }
-
-
-
-// ==================================================
-// LISTAR VALUE BETS
-// ==================================================
-
-export async function listarValueBets() {
-
-    try {
-
-        const resultado = await query(
-            `
-            SELECT *
-
-            FROM value_bets
-
-            ORDER BY id DESC
-
-            LIMIT 500
-            `
-        );
-
-
-
-        return resultado.rows || [];
-
-    }
-
-    catch (erro) {
-
-        console.error(
-            "❌ Erro listar Value Bets:",
-            erro.message
-        );
-
-        return [];
-
-    }
-
-}
-
 
 
 // ==================================================
@@ -910,35 +386,15 @@ export async function listarValueBets() {
 
 export async function buscarDashboard() {
 
-    try {
+    const resultado = await query(
+        `
+        SELECT *
+        FROM dashboard_status
+        `
+    );
 
-        const resultado = await query(
-            `
-            SELECT *
-
-            FROM dashboard_status
-            `
-        );
-
-
-
-        return resultado.rows[0] || null;
-
-    }
-
-    catch (erro) {
-
-        console.error(
-            "❌ Erro dashboard_status:",
-            erro.message
-        );
-
-        return null;
-
-    }
-
+    return resultado.rows[0];
 }
-
 
 
 // ==================================================
@@ -957,8 +413,6 @@ export default {
 
     listarJogosHoje,
 
-    listarJogos,
-
     buscarJogoPorApiId,
 
     salvarAnalise,
@@ -966,8 +420,6 @@ export default {
     listarAnalises,
 
     salvarValueBet,
-
-    listarValueBets,
 
     buscarDashboard
 
