@@ -1,15 +1,19 @@
 // ==================================================
 // BETVISION AI
 // services/inteligenciaService.js
-// Motor Inteligência Estatística v7.0
+// Motor Inteligência Estatística v8.0
 // PostgreSQL + NeonDB
 //
-// Correções:
-// - Proteção contra análise duplicada
-// - Reutilização de análise existente
-// - Compatibilidade com tabela analises atual
+// CORREÇÕES:
+// - Usa api_id como identificador único da análise
+// - Não usa mais nome do jogo para identificar análise
+// - Reutiliza análise existente pelo api_id
+// - Compatível com índice UNIQUE(api_id)
+// - Compatível com tabela analises atual
 // - Probabilidades normalizadas para 100%
 // - Sem criação de jogos fictícios
+// - Rejeita jogos sem api_id válido
+// - Mantém compatibilidade com análises antigas sem api_id
 // ==================================================
 
 import {
@@ -69,6 +73,41 @@ function numeroSeguro(
     return Number.isFinite(numero)
         ? numero
         : padrao;
+
+}
+
+
+// ==================================================
+// NORMALIZAR API ID
+// ==================================================
+
+function normalizarApiId(
+    valor
+) {
+
+    if (
+        valor === undefined ||
+        valor === null ||
+        valor === ""
+    ) {
+
+        return null;
+
+    }
+
+    const numero =
+        Number(valor);
+
+    if (
+        !Number.isInteger(numero) ||
+        numero <= 0
+    ) {
+
+        return null;
+
+    }
+
+    return numero;
 
 }
 
@@ -217,11 +256,13 @@ export function calcularProbabilidades(
     // ==========================================
 
     const casaBruta =
-        proporcaoCasa * 70;
+        proporcaoCasa *
+        70;
 
 
     const foraBruta =
-        proporcaoFora * 70;
+        proporcaoFora *
+        70;
 
 
     // ==========================================
@@ -237,7 +278,10 @@ export function calcularProbabilidades(
 
     let empateBruto =
         30 -
-        (diferenca * 0.5);
+        (
+            diferenca *
+            0.5
+        );
 
 
     empateBruto =
@@ -281,21 +325,24 @@ export function calcularProbabilidades(
         (
             casaBruta /
             totalBruto
-        ) * 100;
+        ) *
+        100;
 
 
     const empate =
         (
             empateBruto /
             totalBruto
-        ) * 100;
+        ) *
+        100;
 
 
     const fora =
         (
             foraBruta /
             totalBruto
-        ) * 100;
+        ) *
+        100;
 
 
     // ==========================================
@@ -304,22 +351,25 @@ export function calcularProbabilidades(
 
     const casaFinal =
         Number(
-            limitar(casa)
-                .toFixed(2)
+            limitar(
+                casa
+            ).toFixed(2)
         );
 
 
     const empateFinal =
         Number(
-            limitar(empate)
-                .toFixed(2)
+            limitar(
+                empate
+            ).toFixed(2)
         );
 
 
     let foraFinal =
         Number(
-            limitar(fora)
-                .toFixed(2)
+            limitar(
+                fora
+            ).toFixed(2)
         );
 
 
@@ -420,15 +470,18 @@ export function calcularConfianca(
         Math.max(
 
             Number(
-                probabilidades?.casa || 0
+                probabilidades?.casa ||
+                0
             ),
 
             Number(
-                probabilidades?.empate || 0
+                probabilidades?.empate ||
+                0
             ),
 
             Number(
-                probabilidades?.fora || 0
+                probabilidades?.fora ||
+                0
             )
 
         );
@@ -506,18 +559,69 @@ function obterNomeJogo(
 
 
 // ==================================================
+// OBTER API ID DO JOGO
+// ==================================================
+
+function obterApiId(
+    jogo
+) {
+
+    const apiId =
+        normalizarApiId(
+
+            jogo?.api_id ??
+            jogo?.apiId ??
+            jogo?.external_id ??
+            jogo?.externalId
+
+        );
+
+
+    if (
+        !apiId
+    ) {
+
+        throw new Error(
+            "Jogo não possui api_id válido"
+        );
+
+    }
+
+
+    return apiId;
+
+}
+
+
+// ==================================================
 // VERIFICAR ANÁLISE EXISTENTE
 //
-// A tabela analises atual não possui jogo_id.
-// Portanto usamos o nome do jogo.
+// REGRA:
 //
-// Isso impede que chamadas repetidas de
-// /api/jogos criem milhares de análises iguais.
+// 1 api_id = 1 análise
+//
+// O nome do jogo NÃO é mais utilizado
+// como identificador.
 // ==================================================
 
 async function buscarAnaliseExistente(
-    nomeJogo
+    api_id
 ) {
+
+    const apiId =
+        normalizarApiId(
+            api_id
+        );
+
+
+    if (
+        !apiId
+    ) {
+
+        return null;
+
+    }
+
 
     try {
 
@@ -526,30 +630,42 @@ async function buscarAnaliseExistente(
 
                 `
                 SELECT
+
                     id,
+
                     jogo,
+
                     probabilidade_casa,
+
                     probabilidade_empate,
+
                     probabilidade_fora,
+
                     gols_esperados,
+
                     placar_previsto,
+
                     value_bet,
+
                     confianca,
+
                     algoritmo,
-                    criado_em
+
+                    criado_em,
+
+                    api_id
 
                 FROM analises
 
-                WHERE LOWER(TRIM(jogo))
-                    = LOWER(TRIM($1))
-
-                ORDER BY criado_em DESC, id DESC
+                WHERE api_id = $1
 
                 LIMIT 1
                 `,
 
                 [
-                    nomeJogo
+
+                    apiId
+
                 ]
 
             );
@@ -572,8 +688,7 @@ async function buscarAnaliseExistente(
 
         );
 
-
-        return null;
+        throw erro;
 
     }
 
@@ -618,8 +733,18 @@ export async function gerarAnaliseIA(
         );
 
 
+    // ==========================================
+    // IDENTIFICAR API ID
+    // ==========================================
+
+    const apiId =
+        obterApiId(
+            jogo
+        );
+
+
     console.log(
-        `🤖 Gerando análise: ${nomeJogo}`
+        `🤖 Analisando: ${nomeJogo} (API ${apiId})`
     );
 
 
@@ -629,7 +754,7 @@ export async function gerarAnaliseIA(
 
     const existente =
         await buscarAnaliseExistente(
-            nomeJogo
+            apiId
         );
 
 
@@ -640,6 +765,12 @@ export async function gerarAnaliseIA(
         console.log(
 
             `♻️ Análise já existente: ${nomeJogo}`
+
+        );
+
+        console.log(
+
+            `♻️ API ID: ${apiId}`
 
         );
 
@@ -699,8 +830,7 @@ export async function gerarAnaliseIA(
             (
                 mediaCasa +
                 mediaFora
-            )
-            .toFixed(2)
+            ).toFixed(2)
 
         );
 
@@ -723,6 +853,9 @@ export async function gerarAnaliseIA(
 
         jogo:
             nomeJogo,
+
+        api_id:
+            apiId,
 
         probabilidade_casa:
             probabilidades.casa,
@@ -752,37 +885,94 @@ export async function gerarAnaliseIA(
 
 
     console.log(
-        `🤖 Criando nova análise IA: ${nomeCasa} x ${nomeFora}`
+
+        `🤖 Criando análise IA: ${nomeCasa} x ${nomeFora} (API ${apiId})`
+
     );
 
 
     // ==========================================
     // SALVAR
+    //
+    // bancoService.js utiliza:
+    //
+    // UNIQUE(api_id)
+    //
+    // para impedir duplicação.
     // ==========================================
 
-    const salva =
-        await salvarAnalise(
-            analise
+    try {
+
+        const salva =
+            await salvarAnalise(
+                analise
+            );
+
+
+        if (
+            !salva
+        ) {
+
+            throw new Error(
+                "Não foi possível salvar a análise"
+            );
+
+        }
+
+
+        console.log(
+
+            `✅ Análise salva: ${nomeJogo} (API ${apiId})`
+
         );
 
 
-    if (
-        !salva
-    ) {
-
-        throw new Error(
-            "Não foi possível salvar a análise"
-        );
+        return salva;
 
     }
 
+    catch (erro) {
 
-    console.log(
-        `✅ Análise salva: ${nomeJogo}`
-    );
+        // ======================================
+        // CONCORRÊNCIA
+        //
+        // Caso outra requisição tenha criado
+        // a análise entre a verificação acima
+        // e o INSERT, buscamos novamente.
+        // ======================================
+
+        console.warn(
+
+            `⚠️ Não foi possível inserir análise ${apiId}: ${erro.message}`
+
+        );
 
 
-    return salva;
+        const recuperada =
+            await buscarAnaliseExistente(
+                apiId
+            );
+
+
+        if (
+            recuperada
+        ) {
+
+            console.log(
+
+                `♻️ Análise recuperada após concorrência: API ${apiId}`
+
+            );
+
+
+            return recuperada;
+
+        }
+
+
+        throw erro;
+
+    }
 
 }
 
@@ -850,11 +1040,17 @@ export async function listarAnalises() {
 
                     algoritmo,
 
-                    criado_em
+                    criado_em,
+
+                    api_id
 
                 FROM analises
 
-                ORDER BY criado_em DESC, id DESC
+                ORDER BY
+
+                    criado_em DESC,
+
+                    id DESC
                 `
 
             );
@@ -880,6 +1076,102 @@ export async function listarAnalises() {
 
 
         return [];
+
+    }
+
+}
+
+
+// ==================================================
+// BUSCAR ANÁLISE POR API ID
+// ==================================================
+
+export async function buscarAnalisePorApiId(
+    api_id
+) {
+
+    const apiId =
+        normalizarApiId(
+            api_id
+        );
+
+
+    if (
+        !apiId
+    ) {
+
+        return null;
+
+    }
+
+
+    try {
+
+        const resultado =
+            await query(
+
+                `
+                SELECT
+
+                    id,
+
+                    jogo,
+
+                    probabilidade_casa,
+
+                    probabilidade_empate,
+
+                    probabilidade_fora,
+
+                    gols_esperados,
+
+                    placar_previsto,
+
+                    value_bet,
+
+                    confianca,
+
+                    algoritmo,
+
+                    criado_em,
+
+                    api_id
+
+                FROM analises
+
+                WHERE api_id = $1
+
+                LIMIT 1
+                `,
+
+                [
+
+                    apiId
+
+                ]
+
+            );
+
+
+        return (
+            resultado.rows[0] ||
+            null
+        );
+
+    }
+
+    catch (erro) {
+
+        console.error(
+
+            "❌ Erro buscando análise por api_id:",
+
+            erro.message
+
+        );
+
+
+        return null;
 
     }
 
@@ -1040,6 +1332,8 @@ export default {
     analisarMercado,
 
     listarAnalises,
+
+    buscarAnalisePorApiId,
 
     calcularValueBet,
 
