@@ -2,41 +2,26 @@
 // BETVISION AI
 // routes/jogos.js
 //
-// Versão 15.0
-// API de Jogos
+// Versão 16.0
+// API DE JOGOS
 // PostgreSQL / NeonDB
 //
-// NOVA INTELIGÊNCIA:
+// CORREÇÕES:
 //
-// Football-Data
-//      ↓
-// jogos reais
-//      ↓
-// PostgreSQL
-//      ↓
-// histórico dos times
-//      ↓
-// forma recente
-//      ↓
-// ataque
-//      ↓
-// defesa
-//      ↓
-// gols marcados/sofridos
-//      ↓
-// confronto direto
-//      ↓
-// inteligênciaService
-//      ↓
-// análise IA
-//
-// Não utiliza mais valores neutros 50/50
-// quando existe histórico real.
+// - /api/jogos mostra SOMENTE jogos de hoje
+// - /api/jogos/hoje mostra SOMENTE jogos de hoje
+// - /api/jogos/proximos mostra somente próximos
+// - Jogos antigos continuam no banco
+// - Histórico não é apagado
+// - IA continua usando histórico real
+// - api_id continua como identificador principal
+// - Não cria jogos fictícios
 // ==========================================
 
 import express from "express";
 
-import jogoBancoService from "../services/jogoBancoService.js";
+import jogoBancoService
+    from "../services/jogoBancoService.js";
 
 import {
     buscarJogosDia
@@ -50,6 +35,7 @@ import {
     buscarHistoricoJogo
 } from "../services/historicoService.js";
 
+
 const router = express.Router();
 
 
@@ -60,59 +46,85 @@ const router = express.Router();
 function normalizarJogo(jogo) {
 
     if (!jogo) {
+
         return null;
+
     }
 
+
     const apiId =
+
         jogo.api_id ??
         jogo.apiId ??
         jogo.id ??
         null;
 
+
     const campeonato =
+
         jogo.campeonato ??
         jogo.competicao ??
         jogo.competition?.name ??
         "Futebol";
 
+
     const timeCasa =
+
         jogo.time_casa ??
+        jogo.timeCasa ??
         jogo.casa ??
         jogo.homeTeam?.name ??
+        jogo.home_team?.name ??
         null;
+
 
     const timeFora =
+
         jogo.time_fora ??
+        jogo.timeFora ??
         jogo.fora ??
         jogo.awayTeam?.name ??
+        jogo.away_team?.name ??
         null;
 
+
     const dataJogo =
+
         jogo.data_jogo ??
+        jogo.dataJogo ??
         jogo.horario ??
         jogo.data ??
         jogo.utcDate ??
         null;
 
+
     const status =
+
         jogo.status ??
         "SCHEDULED";
+
 
     return {
 
         ...jogo,
 
-        api_id: apiId,
+        api_id:
+            apiId,
 
-        campeonato,
+        campeonato:
+            campeonato,
 
-        time_casa: timeCasa,
+        time_casa:
+            timeCasa,
 
-        time_fora: timeFora,
+        time_fora:
+            timeFora,
 
-        data_jogo: dataJogo,
+        data_jogo:
+            dataJogo,
 
-        status
+        status:
+            status
 
     };
 
@@ -126,49 +138,105 @@ function normalizarJogo(jogo) {
 function jogoValido(jogo) {
 
     if (!jogo) {
+
         return false;
+
     }
 
+
     const casa =
+
         String(
             jogo.time_casa ??
             jogo.casa ??
             ""
-        ).trim();
+        )
+        .trim();
+
 
     const fora =
+
         String(
             jogo.time_fora ??
             jogo.fora ??
             ""
-        ).trim();
+        )
+        .trim();
+
 
     const apiId =
+
         jogo.api_id ??
         jogo.apiId ??
         jogo.id;
 
+
     if (!apiId) {
+
         return false;
+
     }
+
 
     if (!casa || !fora) {
+
         return false;
+
     }
 
-    if (
-        casa.toLowerCase() === "casa" ||
-        fora.toLowerCase() === "fora"
-    ) {
-        return false;
-    }
+
+    const casaNormalizada =
+        casa.toLowerCase();
+
+
+    const foraNormalizada =
+        fora.toLowerCase();
+
+
+    const nomesInvalidos = [
+
+        "casa",
+        "fora",
+        "time a",
+        "time b",
+        "home",
+        "away",
+        "home team",
+        "away team"
+
+    ];
+
 
     if (
-        casa.toLowerCase() === "time a" ||
-        fora.toLowerCase() === "time b"
+
+        nomesInvalidos.includes(
+            casaNormalizada
+        )
+
+        ||
+
+        nomesInvalidos.includes(
+            foraNormalizada
+        )
+
     ) {
+
         return false;
+
     }
+
+
+    if (
+
+        casaNormalizada ===
+        foraNormalizada
+
+    ) {
+
+        return false;
+
+    }
+
 
     return true;
 
@@ -179,12 +247,18 @@ function jogoValido(jogo) {
 // CONVERTER NÚMERO
 // ==========================================
 
-function numeroSeguro(valor, padrao = 0) {
+function numeroSeguro(
+    valor,
+    padrao = 0
+) {
 
     const numero =
         Number(valor);
 
-    return Number.isFinite(numero)
+
+    return Number.isFinite(
+        numero
+    )
         ? numero
         : padrao;
 
@@ -198,28 +272,38 @@ function numeroSeguro(valor, padrao = 0) {
 function obterGols(jogo) {
 
     const golsCasa =
+
         numeroSeguro(
+
             jogo.gols_casa ??
             jogo.golsCasa ??
             jogo.placar?.casa ??
             jogo.score?.fullTime?.home ??
             0
+
         );
 
+
     const golsFora =
+
         numeroSeguro(
+
             jogo.gols_fora ??
             jogo.golsFora ??
             jogo.placar?.fora ??
             jogo.score?.fullTime?.away ??
             0
+
         );
+
 
     return {
 
-        casa: golsCasa,
+        casa:
+            golsCasa,
 
-        fora: golsFora
+        fora:
+            golsFora
 
     };
 
@@ -227,7 +311,7 @@ function obterGols(jogo) {
 
 
 // ==========================================
-// CALCULAR ESTATÍSTICAS DE UM TIME
+// CALCULAR ESTATÍSTICAS DO TIME
 // ==========================================
 
 function calcularEstatisticasTime(
@@ -236,9 +320,11 @@ function calcularEstatisticasTime(
 ) {
 
     if (
+
         !Array.isArray(jogos) ||
         jogos.length === 0 ||
         !nomeTime
+
     ) {
 
         return {
@@ -287,26 +373,35 @@ function calcularEstatisticasTime(
     let jogosProcessados = 0;
 
 
-    for (const jogo of jogos) {
+    for (
+        const jogo of jogos
+    ) {
 
         const casa =
+
             String(
                 jogo.time_casa ??
                 jogo.casa ??
                 ""
-            ).trim();
+            )
+            .trim();
+
 
         const fora =
+
             String(
                 jogo.time_fora ??
                 jogo.fora ??
                 ""
-            ).trim();
+            )
+            .trim();
 
 
         if (
+
             casa !== nomeTime &&
             fora !== nomeTime
+
         ) {
 
             continue;
@@ -323,12 +418,14 @@ function calcularEstatisticasTime(
 
 
         const golsTime =
+
             emCasa
                 ? gols.casa
                 : gols.fora;
 
 
         const golsAdversario =
+
             emCasa
                 ? gols.fora
                 : gols.casa;
@@ -410,53 +507,52 @@ function calcularEstatisticasTime(
 
 
     const forma =
+
         (
             pontos /
-            (jogosProcessados * 3)
-        ) * 100;
+            (
+                jogosProcessados *
+                3
+            )
+        ) *
+        100;
 
 
     const mediaGolsMarcados =
+
         golsMarcados /
         jogosProcessados;
 
 
     const mediaGolsSofridos =
+
         golsSofridos /
         jogosProcessados;
 
 
-    // ======================================
-    // ATAQUE
-    //
-    // 1.5 gols/jogo ≈ 50
-    // 3 gols/jogo = 100
-    // ======================================
-
     const ataque =
+
         Math.max(
             0,
             Math.min(
                 100,
-                mediaGolsMarcados * 33.33
+                mediaGolsMarcados *
+                33.33
             )
         );
 
 
-    // ======================================
-    // DEFESA
-    //
-    // Quanto menos sofre,
-    // maior a nota.
-    // ======================================
-
     const defesa =
+
         Math.max(
             0,
             Math.min(
                 100,
                 100 -
-                (mediaGolsSofridos * 33.33)
+                (
+                    mediaGolsSofridos *
+                    33.33
+                )
             )
         );
 
@@ -509,7 +605,7 @@ function calcularEstatisticasTime(
 
 
 // ==========================================
-// CALCULAR CONFRONTOS DIRETOS
+// CALCULAR CONFRONTO DIRETO
 // ==========================================
 
 function calcularConfrontoDireto(
@@ -519,9 +615,11 @@ function calcularConfrontoDireto(
 ) {
 
     if (
+
         !Array.isArray(jogos) ||
         !timeCasa ||
         !timeFora
+
     ) {
 
         return {
@@ -556,21 +654,28 @@ function calcularConfrontoDireto(
     let total = 0;
 
 
-    for (const jogo of jogos) {
+    for (
+        const jogo of jogos
+    ) {
 
         const casa =
+
             String(
                 jogo.time_casa ??
                 jogo.casa ??
                 ""
-            ).trim();
+            )
+            .trim();
+
 
         const fora =
+
             String(
                 jogo.time_fora ??
                 jogo.fora ??
                 ""
-            ).trim();
+            )
+            .trim();
 
 
         const confrontoNormal =
@@ -586,8 +691,10 @@ function calcularConfrontoDireto(
 
 
         if (
+
             !confrontoNormal &&
             !confrontoInvertido
+
         ) {
 
             continue;
@@ -602,15 +709,20 @@ function calcularConfrontoDireto(
         total++;
 
 
-        if (confrontoNormal) {
+        if (
+            confrontoNormal
+        ) {
 
-            golsCasa += gols.casa;
+            golsCasa +=
+                gols.casa;
 
-            golsFora += gols.fora;
+            golsFora +=
+                gols.fora;
 
 
             if (
-                gols.casa > gols.fora
+                gols.casa >
+                gols.fora
             ) {
 
                 vitoriasCasa++;
@@ -618,7 +730,8 @@ function calcularConfrontoDireto(
             }
 
             else if (
-                gols.casa === gols.fora
+                gols.casa ===
+                gols.fora
             ) {
 
                 empates++;
@@ -635,13 +748,16 @@ function calcularConfrontoDireto(
 
         else {
 
-            golsCasa += gols.fora;
+            golsCasa +=
+                gols.fora;
 
-            golsFora += gols.casa;
+            golsFora +=
+                gols.casa;
 
 
             if (
-                gols.fora > gols.casa
+                gols.fora >
+                gols.casa
             ) {
 
                 vitoriasCasa++;
@@ -649,7 +765,8 @@ function calcularConfrontoDireto(
             }
 
             else if (
-                gols.fora === gols.casa
+                gols.fora ===
+                gols.casa
             ) {
 
                 empates++;
@@ -689,13 +806,15 @@ function calcularConfrontoDireto(
 
 // ==========================================
 // GERAR DADOS ESTATÍSTICOS
-// AQUI A IA PASSA A USAR HISTÓRICO REAL
 // ==========================================
 
-async function gerarDadosEstatisticos(jogo) {
+async function gerarDadosEstatisticos(
+    jogo
+) {
 
     const timeCasa =
         jogo.time_casa;
+
 
     const timeFora =
         jogo.time_fora;
@@ -736,6 +855,7 @@ async function gerarDadosEstatisticos(jogo) {
 
 
     const historicoCasa =
+
         Array.isArray(
             historico?.historicoCasa
         )
@@ -744,6 +864,7 @@ async function gerarDadosEstatisticos(jogo) {
 
 
     const historicoFora =
+
         Array.isArray(
             historico?.historicoFora
         )
@@ -751,11 +872,8 @@ async function gerarDadosEstatisticos(jogo) {
             : [];
 
 
-    // ======================================
-    // ESTATÍSTICAS DOS TIMES
-    // ======================================
-
     const estatisticasCasa =
+
         calcularEstatisticasTime(
             historicoCasa,
             timeCasa
@@ -763,27 +881,24 @@ async function gerarDadosEstatisticos(jogo) {
 
 
     const estatisticasFora =
+
         calcularEstatisticasTime(
             historicoFora,
             timeFora
         );
 
 
-    // ======================================
-    // CONFRONTO DIRETO
-    // ======================================
+    const confrontos = [
 
-    const confrontos =
-        [
+        ...historicoCasa,
 
-            ...historicoCasa,
+        ...historicoFora
 
-            ...historicoFora
-
-        ];
+    ];
 
 
     const h2h =
+
         calcularConfrontoDireto(
             confrontos,
             timeCasa,
@@ -792,29 +907,36 @@ async function gerarDadosEstatisticos(jogo) {
 
 
     console.log(
-        `📊 ${timeCasa}: ${estatisticasCasa.jogos} jogos | forma ${estatisticasCasa.forma}% | gols ${estatisticasCasa.mediaGolsMarcados}`
+
+        `📊 ${timeCasa}: ` +
+        `${estatisticasCasa.jogos} jogos | ` +
+        `forma ${estatisticasCasa.forma}% | ` +
+        `gols ${estatisticasCasa.mediaGolsMarcados}`
+
     );
 
 
     console.log(
-        `📊 ${timeFora}: ${estatisticasFora.jogos} jogos | forma ${estatisticasFora.forma}% | gols ${estatisticasFora.mediaGolsMarcados}`
+
+        `📊 ${timeFora}: ` +
+        `${estatisticasFora.jogos} jogos | ` +
+        `forma ${estatisticasFora.forma}% | ` +
+        `gols ${estatisticasFora.mediaGolsMarcados}`
+
     );
 
 
     console.log(
-        `⚔️ H2H: ${h2h.jogos} confrontos | Casa ${h2h.vitoriasCasa} vitórias | Empates ${h2h.empates} | Fora ${h2h.vitoriasFora}`
+
+        `⚔️ H2H: ${h2h.jogos} confrontos | ` +
+        `Casa ${h2h.vitoriasCasa} vitórias | ` +
+        `Empates ${h2h.empates} | ` +
+        `Fora ${h2h.vitoriasFora}`
+
     );
 
-
-    // ======================================
-    // DADOS ENVIADOS PARA A IA
-    // ======================================
 
     return {
-
-        // ==================================
-        // TIME CASA
-        // ==================================
 
         ataqueCasa:
             estatisticasCasa.ataque,
@@ -829,10 +951,6 @@ async function gerarDadosEstatisticos(jogo) {
             estatisticasCasa.mediaGolsMarcados,
 
 
-        // ==================================
-        // TIME FORA
-        // ==================================
-
         ataqueFora:
             estatisticasFora.ataque,
 
@@ -846,18 +964,10 @@ async function gerarDadosEstatisticos(jogo) {
             estatisticasFora.mediaGolsMarcados,
 
 
-        // ==================================
-        // HISTÓRICO COMPLETO
-        // ==================================
-
         historicoCasa,
 
         historicoFora,
 
-
-        // ==================================
-        // H2H
-        // ==================================
 
         confrontoDireto:
             h2h,
@@ -875,10 +985,6 @@ async function gerarDadosEstatisticos(jogo) {
             h2h.vitoriasFora,
 
 
-        // ==================================
-        // INDICADOR DE DADOS
-        // ==================================
-
         possuiHistorico:
 
             (
@@ -895,10 +1001,12 @@ async function gerarDadosEstatisticos(jogo) {
 
 
 // ==========================================
-// GERAR ANÁLISE DE UM JOGO
+// ANALISAR JOGO
 // ==========================================
 
-async function analisarJogo(jogo) {
+async function analisarJogo(
+    jogo
+) {
 
     if (
         !jogoValido(jogo)
@@ -919,7 +1027,9 @@ async function analisarJogo(jogo) {
 
 
     const nomeJogo =
-        `${jogoNormalizado.time_casa} x ${jogoNormalizado.time_fora}`;
+
+        `${jogoNormalizado.time_casa} x ` +
+        `${jogoNormalizado.time_fora}`;
 
 
     console.log(
@@ -929,21 +1039,15 @@ async function analisarJogo(jogo) {
 
     try {
 
-        // ==================================
-        // BUSCAR HISTÓRICO REAL
-        // ==================================
-
         const dados =
+
             await gerarDadosEstatisticos(
                 jogoNormalizado
             );
 
 
-        // ==================================
-        // GERAR IA
-        // ==================================
-
         const resultado =
+
             await gerarAnaliseIA(
                 jogoNormalizado,
                 dados
@@ -957,9 +1061,12 @@ async function analisarJogo(jogo) {
     catch (error) {
 
         console.error(
+
             `❌ Erro análise ${nomeJogo}:`,
             error.message
+
         );
+
 
         return null;
 
@@ -970,6 +1077,15 @@ async function analisarJogo(jogo) {
 
 // ==========================================
 // GET /api/jogos
+//
+// IMPORTANTE:
+//
+// A API externa traz somente hoje.
+//
+// O banco possui histórico.
+//
+// Portanto, aqui usamos
+// buscarJogosDoDia() e NÃO listarJogos().
 // ==========================================
 
 router.get(
@@ -987,12 +1103,16 @@ router.get(
             );
 
             console.log(
+                "📅 SOMENTE JOGOS DE HOJE"
+            );
+
+            console.log(
                 "=========================================="
             );
 
 
             // ==================================
-            // BUSCAR JOGOS NA API
+            // BUSCAR API
             // ==================================
 
             let jogosAPI = [];
@@ -1031,6 +1151,7 @@ router.get(
             // ==================================
 
             const jogosValidos =
+
                 jogosAPI
 
                     .map(
@@ -1047,19 +1168,8 @@ router.get(
             );
 
 
-            if (
-                jogosValidos.length > 0
-            ) {
-
-                console.log(
-                    `⚽ Exemplo: ${jogosValidos[0].time_casa} x ${jogosValidos[0].time_fora}`
-                );
-
-            }
-
-
             // ==================================
-            // SALVAR JOGOS
+            // SALVAR / ATUALIZAR BANCO
             // ==================================
 
             let jogosSalvos = [];
@@ -1072,13 +1182,18 @@ router.get(
                 try {
 
                     jogosSalvos =
-                        await jogoBancoService.salvarListaJogos(
-                            jogosValidos
-                        );
+
+                        await jogoBancoService
+                            .salvarListaJogos(
+                                jogosValidos
+                            );
 
 
                     console.log(
-                        `💾 Jogos salvos no PostgreSQL: ${jogosSalvos.length}`
+
+                        `💾 ${jogosSalvos.length} jogos ` +
+                        `salvos/atualizados no PostgreSQL`
+
                     );
 
                 }
@@ -1097,6 +1212,8 @@ router.get(
 
             // ==================================
             // GERAR ANÁLISES
+            //
+            // Somente os jogos recebidos hoje.
             // ==================================
 
             let analisesProcessadas = 0;
@@ -1111,6 +1228,7 @@ router.get(
                 try {
 
                     const resultado =
+
                         await analisarJogo(
                             jogo
                         );
@@ -1131,8 +1249,10 @@ router.get(
                     errosAnalise++;
 
                     console.error(
+
                         "❌ Erro processamento análise:",
                         error.message
+
                     );
 
                 }
@@ -1161,14 +1281,23 @@ router.get(
 
 
             // ==================================
-            // BUSCAR JOGOS DO BANCO
+            // IMPORTANTE:
+            //
+            // NÃO usar listarJogos()
+            //
+            // pois ele retorna histórico inteiro.
+            //
+            // Aqui queremos somente HOJE.
             // ==================================
 
             const banco =
-                await jogoBancoService.listarJogos();
+
+                await jogoBancoService
+                    .buscarJogosDoDia();
 
 
             const jogosBanco =
+
                 Array.isArray(banco)
                     ? banco
                     : [];
@@ -1179,6 +1308,7 @@ router.get(
             // ==================================
 
             const resposta =
+
                 jogosBanco.map(
                     jogo => {
 
@@ -1234,7 +1364,8 @@ router.get(
 
             return res.json({
 
-                sucesso: true,
+                sucesso:
+                    true,
 
                 total:
                     resposta.length,
@@ -1256,7 +1387,8 @@ router.get(
 
             return res.status(500).json({
 
-                sucesso: false,
+                sucesso:
+                    false,
 
                 erro:
                     error.message
@@ -1271,6 +1403,11 @@ router.get(
 
 // ==========================================
 // GET /api/jogos/banco
+//
+// Este endpoint continua mostrando
+// todos os jogos armazenados.
+//
+// Útil para histórico/admin.
 // ==========================================
 
 router.get(
@@ -1280,12 +1417,14 @@ router.get(
         try {
 
             const jogos =
-                await jogoBancoService.listarJogos();
+                await jogoBancoService
+                    .listarJogos();
 
 
             return res.json({
 
-                sucesso: true,
+                sucesso:
+                    true,
 
                 total:
                     jogos.length,
@@ -1306,7 +1445,8 @@ router.get(
 
             return res.status(500).json({
 
-                sucesso: false,
+                sucesso:
+                    false,
 
                 erro:
                     error.message
@@ -1330,12 +1470,15 @@ router.get(
         try {
 
             const jogos =
-                await jogoBancoService.buscarJogosDoDia();
+
+                await jogoBancoService
+                    .buscarJogosDoDia();
 
 
             return res.json({
 
-                sucesso: true,
+                sucesso:
+                    true,
 
                 total:
                     jogos.length,
@@ -1356,7 +1499,8 @@ router.get(
 
             return res.status(500).json({
 
-                sucesso: false,
+                sucesso:
+                    false,
 
                 erro:
                     error.message
@@ -1380,6 +1524,7 @@ router.get(
         try {
 
             let limite =
+
                 Number(
                     req.query.limite
                 ) || 20;
@@ -1404,14 +1549,17 @@ router.get(
 
 
             const jogos =
-                await jogoBancoService.buscarProximosJogos(
-                    limite
-                );
+
+                await jogoBancoService
+                    .buscarProximosJogos(
+                        limite
+                    );
 
 
             return res.json({
 
-                sucesso: true,
+                sucesso:
+                    true,
 
                 total:
                     jogos.length,
@@ -1432,7 +1580,8 @@ router.get(
 
             return res.status(500).json({
 
-                sucesso: false,
+                sucesso:
+                    false,
 
                 erro:
                     error.message
@@ -1456,12 +1605,15 @@ router.get(
         try {
 
             const estatisticas =
-                await jogoBancoService.estatisticasJogos();
+
+                await jogoBancoService
+                    .estatisticasJogos();
 
 
             return res.json({
 
-                sucesso: true,
+                sucesso:
+                    true,
 
                 estatisticas
 
@@ -1479,7 +1631,8 @@ router.get(
 
             return res.status(500).json({
 
-                sucesso: false,
+                sucesso:
+                    false,
 
                 erro:
                     error.message
@@ -1497,4 +1650,3 @@ router.get(
 // ==========================================
 
 export default router;
-
