@@ -1,111 +1,683 @@
 // ==================================================
 // BETVISION AI
 // services/jogoBancoService.js
-// Controle de Jogos PostgreSQL
-// Versao 5.4
-// Compatibilidade com Neon PostgreSQL
+//
+// Controle de Jogos PostgreSQL / NeonDB
+// Versão 6.0
+//
+// OBJETIVOS:
+// - Evitar jogos duplicados
+// - Usar api_id como identificador externo
+// - Validar dados recebidos da API
+// - Atualizar jogo existente em vez de duplicar
+// - Manter compatibilidade com PostgreSQL / NeonDB
+// - Compatível com historicoService.js
+// - Compatível com inteligenciaService.js
+//
+// ESTRUTURA REAL DA TABELA jogos:
+//
+// id
+// api_id
+// campeonato
+// time_casa
+// time_fora
+// data_jogo
+// estadio
+// status
+// criado_em
+//
+// NÃO UTILIZA:
+// - time_casa_id
+// - time_fora_id
+// - campeonato_id
+// - gols_casa
+// - gols_fora
 // ==================================================
 
 import { query } from "../database/database.js";
 
+// ==================================================
+// CONSTANTES
+// ==================================================
+
+const STATUS_PADRAO = "SCHEDULED";
+
+const LIMITE_JOGOS_PADRAO = 20;
+
+const LIMITE_JOGOS_MAXIMO = 100;
 
 // ==================================================
-// SALVAR JOGO INDIVIDUAL DA API
+// NORMALIZAR TEXTO
 // ==================================================
 
-export async function salvarJogoAPI(jogo) {
+function normalizarTexto(valor) {
 
-    if (!jogo) {
+    if (
+        valor === undefined ||
+        valor === null
+    ) {
 
-        throw new Error(
-            "Dados do jogo nao informados"
-        );
+        return null;
 
     }
 
+    const texto =
+        String(valor)
+            .trim();
 
-    const {
-
-        api_id,
-        campeonato,
-        time_casa,
-        time_fora,
-        data_jogo,
-        estadio,
-        status
-
-    } = jogo;
-
-
-    if (!api_id) {
-
-        throw new Error(
-            "api_id do jogo e obrigatorio"
-        );
-
-    }
-
-
-    const resultado = await query(
-
-        "INSERT INTO jogos " +
-
-        "(api_id, campeonato, time_casa, time_fora, data_jogo, estadio, status) " +
-
-        "VALUES ($1, $2, $3, $4, $5, $6, $7) " +
-
-        "ON CONFLICT (api_id) DO UPDATE SET " +
-
-        "campeonato = EXCLUDED.campeonato, " +
-
-        "time_casa = EXCLUDED.time_casa, " +
-
-        "time_fora = EXCLUDED.time_fora, " +
-
-        "data_jogo = EXCLUDED.data_jogo, " +
-
-        "estadio = EXCLUDED.estadio, " +
-
-        "status = EXCLUDED.status " +
-
-        "RETURNING *",
-
-        [
-
-            api_id,
-
-            campeonato || null,
-
-            time_casa || null,
-
-            time_fora || null,
-
-            data_jogo || null,
-
-            estadio || null,
-
-            status || "SCHEDULED"
-
-        ]
-
-    );
-
-
-    return resultado.rows[0];
+    return texto
+        ? texto
+        : null;
 
 }
 
+// ==================================================
+// NORMALIZAR API ID
+// ==================================================
 
+function normalizarApiId(valor) {
+
+    if (
+        valor === undefined ||
+        valor === null ||
+        valor === ""
+    ) {
+
+        return null;
+
+    }
+
+    const numero =
+        Number(valor);
+
+    if (
+        !Number.isInteger(numero) ||
+        numero <= 0
+    ) {
+
+        return null;
+
+    }
+
+    return numero;
+
+}
+
+// ==================================================
+// NORMALIZAR DATA
+//
+// Não converte datas inválidas.
+// O PostgreSQL recebe:
+// - Date
+// - string válida
+// - null
+// ==================================================
+
+function normalizarData(valor) {
+
+    if (
+        valor === undefined ||
+        valor === null ||
+        valor === ""
+    ) {
+
+        return null;
+
+    }
+
+    if (
+        valor instanceof Date
+    ) {
+
+        if (
+            Number.isNaN(
+                valor.getTime()
+            )
+        ) {
+
+            return null;
+
+        }
+
+        return valor;
+
+    }
+
+    const data =
+        new Date(valor);
+
+    if (
+        Number.isNaN(
+            data.getTime()
+        )
+    ) {
+
+        return null;
+
+    }
+
+    return data;
+
+}
+
+// ==================================================
+// NORMALIZAR STATUS
+// ==================================================
+
+function normalizarStatus(valor) {
+
+    const status =
+        normalizarTexto(
+            valor
+        );
+
+    if (!status) {
+
+        return STATUS_PADRAO;
+
+    }
+
+    return status
+        .toUpperCase();
+
+}
+
+// ==================================================
+// NORMALIZAR JOGO
+// ==================================================
+
+function normalizarJogo(jogo) {
+
+    if (
+        !jogo ||
+        typeof jogo !== "object"
+    ) {
+
+        return null;
+
+    }
+
+    const apiId =
+        normalizarApiId(
+            jogo.api_id ??
+            jogo.apiId ??
+            jogo.id
+        );
+
+    const campeonato =
+        normalizarTexto(
+            jogo.campeonato ??
+            jogo.competicao ??
+            jogo.competition
+        );
+
+    const timeCasa =
+        normalizarTexto(
+            jogo.time_casa ??
+            jogo.timeCasa ??
+            jogo.casa ??
+            jogo.homeTeam
+        );
+
+    const timeFora =
+        normalizarTexto(
+            jogo.time_fora ??
+            jogo.timeFora ??
+            jogo.fora ??
+            jogo.awayTeam
+        );
+
+    const dataJogo =
+        normalizarData(
+            jogo.data_jogo ??
+            jogo.dataJogo ??
+            jogo.horario ??
+            jogo.data
+        );
+
+    const estadio =
+        normalizarTexto(
+            jogo.estadio ??
+            jogo.stadium
+        );
+
+    const status =
+        normalizarStatus(
+            jogo.status
+        );
+
+    return {
+
+        api_id:
+            apiId,
+
+        campeonato:
+            campeonato ||
+            "Futebol",
+
+        time_casa:
+            timeCasa,
+
+        time_fora:
+            timeFora,
+
+        data_jogo:
+            dataJogo,
+
+        estadio:
+            estadio,
+
+        status:
+            status
+
+    };
+
+}
+
+// ==================================================
+// VALIDAR JOGO
+// ==================================================
+
+function validarJogo(jogo) {
+
+    if (!jogo) {
+
+        return {
+
+            valido: false,
+
+            erro:
+                "Jogo não informado"
+
+        };
+
+    }
+
+    if (
+        !jogo.api_id
+    ) {
+
+        return {
+
+            valido: false,
+
+            erro:
+                "api_id inválido ou ausente"
+
+        };
+
+    }
+
+    if (
+        !jogo.time_casa
+    ) {
+
+        return {
+
+            valido: false,
+
+            erro:
+                "time_casa ausente"
+
+        };
+
+    }
+
+    if (
+        !jogo.time_fora
+    ) {
+
+        return {
+
+            valido: false,
+
+            erro:
+                "time_fora ausente"
+
+        };
+
+    }
+
+    // ------------------------------------------
+    // Não aceitar times fictícios
+    // ------------------------------------------
+
+    const casa =
+        jogo.time_casa
+            .toLowerCase();
+
+    const fora =
+        jogo.time_fora
+            .toLowerCase();
+
+    const nomesInvalidos = [
+
+        "casa",
+
+        "fora",
+
+        "time a",
+
+        "time b",
+
+        "home",
+
+        "away",
+
+        "home team",
+
+        "away team"
+
+    ];
+
+    if (
+        nomesInvalidos.includes(casa) ||
+        nomesInvalidos.includes(fora)
+    ) {
+
+        return {
+
+            valido: false,
+
+            erro:
+                "Times fictícios ou de fallback"
+
+        };
+
+    }
+
+    // ------------------------------------------
+    // Casa e fora não podem ser iguais
+    // ------------------------------------------
+
+    if (
+        casa === fora
+    ) {
+
+        return {
+
+            valido: false,
+
+            erro:
+                "Time da casa e visitante são iguais"
+
+        };
+
+    }
+
+    return {
+
+        valido: true,
+
+        erro: null
+
+    };
+
+}
+
+// ==================================================
+// BUSCAR JOGO PELO API ID
+// ==================================================
+
+export async function buscarPorApiId(
+    api_id
+) {
+
+    const apiId =
+        normalizarApiId(
+            api_id
+        );
+
+    if (!apiId) {
+
+        return null;
+
+    }
+
+    const resultado =
+        await query(
+
+            `
+            SELECT
+
+                id,
+                api_id,
+                campeonato,
+                time_casa,
+                time_fora,
+                data_jogo,
+                estadio,
+                status,
+                criado_em
+
+            FROM jogos
+
+            WHERE api_id = $1
+
+            LIMIT 1
+            `,
+
+            [
+                apiId
+            ]
+
+        );
+
+    return (
+        resultado.rows[0]
+        ||
+        null
+    );
+
+}
+
+// ==================================================
+// SALVAR JOGO INDIVIDUAL
+//
+// FLUXO:
+//
+// 1. Normaliza
+// 2. Valida
+// 3. Procura api_id
+// 4. Se existe -> UPDATE
+// 5. Se não existe -> INSERT
+//
+// IMPORTANTE:
+// Não cria duplicidade.
+// ==================================================
+
+export async function salvarJogoAPI(
+    jogo
+) {
+
+    const normalizado =
+        normalizarJogo(
+            jogo
+        );
+
+    const validacao =
+        validarJogo(
+            normalizado
+        );
+
+    if (
+        !validacao.valido
+    ) {
+
+        throw new Error(
+            `Jogo inválido: ${validacao.erro}`
+        );
+
+    }
+
+    const existente =
+        await buscarPorApiId(
+            normalizado.api_id
+        );
+
+    // ==================================================
+    // JOGO JÁ EXISTE
+    // ==================================================
+
+    if (existente) {
+
+        const resultado =
+            await query(
+
+                `
+                UPDATE jogos
+
+                SET
+
+                    campeonato = COALESCE($2, campeonato),
+
+                    time_casa = COALESCE($3, time_casa),
+
+                    time_fora = COALESCE($4, time_fora),
+
+                    data_jogo = COALESCE($5, data_jogo),
+
+                    estadio = COALESCE($6, estadio),
+
+                    status = COALESCE($7, status)
+
+                WHERE api_id = $1
+
+                RETURNING
+
+                    id,
+                    api_id,
+                    campeonato,
+                    time_casa,
+                    time_fora,
+                    data_jogo,
+                    estadio,
+                    status,
+                    criado_em
+                `,
+
+                [
+
+                    normalizado.api_id,
+
+                    normalizado.campeonato,
+
+                    normalizado.time_casa,
+
+                    normalizado.time_fora,
+
+                    normalizado.data_jogo,
+
+                    normalizado.estadio,
+
+                    normalizado.status
+
+                ]
+
+            );
+
+        console.log(
+            `🔄 Jogo atualizado: ${normalizado.time_casa} x ${normalizado.time_fora} (API ${normalizado.api_id})`
+        );
+
+        return (
+            resultado.rows[0]
+            ||
+            existente
+        );
+
+    }
+
+    // ==================================================
+    // JOGO NOVO
+    // ==================================================
+
+    const resultado =
+        await query(
+
+            `
+            INSERT INTO jogos
+
+            (
+                api_id,
+                campeonato,
+                time_casa,
+                time_fora,
+                data_jogo,
+                estadio,
+                status
+            )
+
+            VALUES
+
+            (
+                $1,
+                $2,
+                $3,
+                $4,
+                $5,
+                $6,
+                $7
+            )
+
+            RETURNING
+
+                id,
+                api_id,
+                campeonato,
+                time_casa,
+                time_fora,
+                data_jogo,
+                estadio,
+                status,
+                criado_em
+            `,
+
+            [
+
+                normalizado.api_id,
+
+                normalizado.campeonato,
+
+                normalizado.time_casa,
+
+                normalizado.time_fora,
+
+                normalizado.data_jogo,
+
+                normalizado.estadio,
+
+                normalizado.status
+
+            ]
+
+        );
+
+    console.log(
+        `💾 Novo jogo salvo: ${normalizado.time_casa} x ${normalizado.time_fora} (API ${normalizado.api_id})`
+    );
+
+    return (
+        resultado.rows[0]
+        ||
+        null
+    );
+
+}
 
 // ==================================================
 // SALVAR LISTA DE JOGOS
+//
+// Cada jogo é processado individualmente.
 // ==================================================
 
 export async function salvarListaJogos(
     jogos = []
 ) {
 
-    if (!Array.isArray(jogos)) {
+    if (
+        !Array.isArray(jogos)
+    ) {
 
         throw new Error(
             "A lista de jogos deve ser um array"
@@ -113,21 +685,82 @@ export async function salvarListaJogos(
 
     }
 
-
     const lista = [];
 
+    const idsProcessados =
+        new Set();
 
-    for (const jogo of jogos) {
+    for (
+        const jogo of jogos
+    ) {
 
         try {
 
-            const salvo =
-                await salvarJogoAPI(jogo);
+            const normalizado =
+                normalizarJogo(
+                    jogo
+                );
 
+            if (!normalizado) {
+
+                console.warn(
+                    "⚠️ Jogo ignorado: dados inválidos"
+                );
+
+                continue;
+
+            }
+
+            // ------------------------------------------
+            // Evitar duplicação dentro da própria resposta
+            // da API.
+            // ------------------------------------------
+
+            if (
+                idsProcessados.has(
+                    normalizado.api_id
+                )
+            ) {
+
+                console.warn(
+                    `♻️ Jogo duplicado na resposta da API ignorado: API ${normalizado.api_id}`
+                );
+
+                continue;
+
+            }
+
+            idsProcessados.add(
+                normalizado.api_id
+            );
+
+            const validacao =
+                validarJogo(
+                    normalizado
+                );
+
+            if (
+                !validacao.valido
+            ) {
+
+                console.warn(
+                    `⚠️ Jogo inválido ignorado: ${validacao.erro}`
+                );
+
+                continue;
+
+            }
+
+            const salvo =
+                await salvarJogoAPI(
+                    normalizado
+                );
 
             if (salvo) {
 
-                lista.push(salvo);
+                lista.push(
+                    salvo
+                );
 
             }
 
@@ -137,7 +770,7 @@ export async function salvarListaJogos(
 
             console.error(
 
-                "Erro ao salvar jogo:",
+                "❌ Erro ao salvar jogo:",
 
                 erro.message
 
@@ -147,45 +780,9 @@ export async function salvarListaJogos(
 
     }
 
-
     return lista;
 
 }
-
-
-
-// ==================================================
-// BUSCAR JOGO PELO API_ID
-// ==================================================
-
-export async function buscarPorApiId(
-    api_id
-) {
-
-    const resultado = await query(
-
-        "SELECT * " +
-
-        "FROM jogos " +
-
-        "WHERE api_id = $1 " +
-
-        "LIMIT 1",
-
-        [
-
-            api_id
-
-        ]
-
-    );
-
-
-    return resultado.rows[0] || null;
-
-}
-
-
 
 // ==================================================
 // LISTAR TODOS OS JOGOS
@@ -193,40 +790,42 @@ export async function buscarPorApiId(
 
 export async function listarJogos() {
 
-    const resultado = await query(
+    const resultado =
+        await query(
 
-        "SELECT " +
+            `
+            SELECT
 
-        "id, " +
+                id,
+                api_id,
+                campeonato,
+                time_casa,
+                time_fora,
+                data_jogo,
+                estadio,
+                status,
+                criado_em
 
-        "api_id, " +
+            FROM jogos
 
-        "campeonato, " +
+            ORDER BY
 
-        "time_casa, " +
+                data_jogo DESC NULLS LAST,
 
-        "time_fora, " +
+                id DESC
+            `
 
-        "data_jogo, " +
+        );
 
-        "estadio, " +
-
-        "status, " +
-
-        "criado_em " +
-
-        "FROM jogos " +
-
-        "ORDER BY data_jogo DESC"
-
+    return (
+        Array.isArray(
+            resultado.rows
+        )
+            ? resultado.rows
+            : []
     );
 
-
-    return resultado.rows;
-
 }
-
-
 
 // ==================================================
 // BUSCAR JOGOS DO DIA
@@ -234,239 +833,372 @@ export async function listarJogos() {
 
 export async function buscarJogosDoDia() {
 
-    const resultado = await query(
+    const resultado =
+        await query(
 
-        "SELECT " +
+            `
+            SELECT
 
-        "id, " +
+                id,
+                api_id,
+                campeonato,
+                time_casa,
+                time_fora,
+                data_jogo,
+                estadio,
+                status,
+                criado_em
 
-        "api_id, " +
+            FROM jogos
 
-        "campeonato, " +
+            WHERE
 
-        "time_casa, " +
+                data_jogo IS NOT NULL
 
-        "time_fora, " +
+                AND DATE(data_jogo)
+                    =
+                    CURRENT_DATE
 
-        "data_jogo, " +
+            ORDER BY
 
-        "estadio, " +
+                data_jogo ASC NULLS LAST,
 
-        "status, " +
+                id ASC
+            `
 
-        "criado_em " +
+        );
 
-        "FROM jogos " +
-
-        "WHERE DATE(data_jogo) = CURRENT_DATE " +
-
-        "ORDER BY data_jogo ASC"
-
+    return (
+        Array.isArray(
+            resultado.rows
+        )
+            ? resultado.rows
+            : []
     );
 
-
-    return resultado.rows;
-
 }
-
-
 
 // ==================================================
 // BUSCAR PRÓXIMOS JOGOS
 // ==================================================
 
 export async function buscarProximosJogos(
-    limite = 20
+    limite = LIMITE_JOGOS_PADRAO
 ) {
 
-    const limiteNumerico =
-        Number(limite);
-
+    let limiteNumerico =
+        Number(
+            limite
+        );
 
     if (
-        !Number.isInteger(limiteNumerico) ||
-        limiteNumerico <= 0
+        !Number.isInteger(
+            limiteNumerico
+        )
     ) {
 
-        throw new Error(
-            "Limite de jogos invalido"
-        );
+        limiteNumerico =
+            LIMITE_JOGOS_PADRAO;
 
     }
 
+    if (
+        limiteNumerico <= 0
+    ) {
 
-    const resultado = await query(
+        limiteNumerico =
+            LIMITE_JOGOS_PADRAO;
 
-        "SELECT " +
+    }
 
-        "id, " +
+    if (
+        limiteNumerico >
+        LIMITE_JOGOS_MAXIMO
+    ) {
 
-        "api_id, " +
+        limiteNumerico =
+            LIMITE_JOGOS_MAXIMO;
 
-        "campeonato, " +
+    }
 
-        "time_casa, " +
+    const resultado =
+        await query(
 
-        "time_fora, " +
+            `
+            SELECT
 
-        "data_jogo, " +
+                id,
+                api_id,
+                campeonato,
+                time_casa,
+                time_fora,
+                data_jogo,
+                estadio,
+                status,
+                criado_em
 
-        "estadio, " +
+            FROM jogos
 
-        "status, " +
+            WHERE
 
-        "criado_em " +
+                data_jogo IS NOT NULL
 
-        "FROM jogos " +
+                AND data_jogo >= NOW()
 
-        "WHERE data_jogo >= NOW() " +
+            ORDER BY
 
-        "ORDER BY data_jogo ASC " +
+                data_jogo ASC
 
-        "LIMIT $1",
+            LIMIT $1
+            `,
 
-        [
+            [
+                limiteNumerico
+            ]
 
-            limiteNumerico
+        );
 
-        ]
-
+    return (
+        Array.isArray(
+            resultado.rows
+        )
+            ? resultado.rows
+            : []
     );
 
-
-    return resultado.rows;
-
 }
-
-
 
 // ==================================================
 // ATUALIZAR STATUS DO JOGO
 // ==================================================
 
 export async function atualizarStatusJogo(
-
     api_id,
-
     status
-
 ) {
 
-    if (!api_id) {
+    const apiId =
+        normalizarApiId(
+            api_id
+        );
+
+    if (!apiId) {
 
         throw new Error(
-            "api_id e obrigatorio"
+            "api_id inválido"
         );
 
     }
 
+    const novoStatus =
+        normalizarStatus(
+            status
+        );
 
-    const resultado = await query(
+    const resultado =
+        await query(
 
-        "UPDATE jogos " +
+            `
+            UPDATE jogos
 
-        "SET status = $2 " +
+            SET
 
-        "WHERE api_id = $1 " +
+                status = $2
 
-        "RETURNING *",
+            WHERE api_id = $1
 
-        [
+            RETURNING
 
-            api_id,
+                id,
+                api_id,
+                campeonato,
+                time_casa,
+                time_fora,
+                data_jogo,
+                estadio,
+                status,
+                criado_em
+            `,
 
-            status || "SCHEDULED"
+            [
 
-        ]
+                apiId,
 
+                novoStatus
+
+            ]
+
+        );
+
+    return (
+        resultado.rows[0]
+        ||
+        null
     );
 
-
-    return resultado.rows[0] || null;
-
 }
-
-
 
 // ==================================================
 // ATUALIZAR DADOS DO JOGO
 // ==================================================
 
 export async function atualizarJogo(
-
     api_id,
-
     dados = {}
-
 ) {
 
-    if (!api_id) {
+    const apiId =
+        normalizarApiId(
+            api_id
+        );
+
+    if (!apiId) {
 
         throw new Error(
-            "api_id e obrigatorio"
+            "api_id inválido"
         );
 
     }
 
+    if (
+        !dados ||
+        typeof dados !== "object"
+    ) {
 
-    const {
+        throw new Error(
+            "Dados do jogo inválidos"
+        );
 
-        campeonato,
-        time_casa,
-        time_fora,
-        data_jogo,
-        estadio,
-        status
+    }
 
-    } = dados;
+    const campeonato =
+        normalizarTexto(
+            dados.campeonato ??
+            dados.competicao
+        );
 
+    const timeCasa =
+        normalizarTexto(
+            dados.time_casa ??
+            dados.timeCasa ??
+            dados.casa
+        );
 
-    const resultado = await query(
+    const timeFora =
+        normalizarTexto(
+            dados.time_fora ??
+            dados.timeFora ??
+            dados.fora
+        );
 
-        "UPDATE jogos SET " +
+    const dataJogo =
+        normalizarData(
+            dados.data_jogo ??
+            dados.dataJogo ??
+            dados.horario ??
+            dados.data
+        );
 
-        "campeonato = COALESCE($2, campeonato), " +
+    const estadio =
+        normalizarTexto(
+            dados.estadio
+        );
 
-        "time_casa = COALESCE($3, time_casa), " +
+    const status =
+        dados.status !== undefined &&
+        dados.status !== null &&
+        dados.status !== ""
+            ? normalizarStatus(
+                dados.status
+            )
+            : null;
 
-        "time_fora = COALESCE($4, time_fora), " +
+    const resultado =
+        await query(
 
-        "data_jogo = COALESCE($5, data_jogo), " +
+            `
+            UPDATE jogos
 
-        "estadio = COALESCE($6, estadio), " +
+            SET
 
-        "status = COALESCE($7, status) " +
+                campeonato =
+                    COALESCE(
+                        $2,
+                        campeonato
+                    ),
 
-        "WHERE api_id = $1 " +
+                time_casa =
+                    COALESCE(
+                        $3,
+                        time_casa
+                    ),
 
-        "RETURNING *",
+                time_fora =
+                    COALESCE(
+                        $4,
+                        time_fora
+                    ),
 
-        [
+                data_jogo =
+                    COALESCE(
+                        $5,
+                        data_jogo
+                    ),
 
-            api_id,
+                estadio =
+                    COALESCE(
+                        $6,
+                        estadio
+                    ),
 
-            campeonato || null,
+                status =
+                    COALESCE(
+                        $7,
+                        status
+                    )
 
-            time_casa || null,
+            WHERE api_id = $1
 
-            time_fora || null,
+            RETURNING
 
-            data_jogo || null,
+                id,
+                api_id,
+                campeonato,
+                time_casa,
+                time_fora,
+                data_jogo,
+                estadio,
+                status,
+                criado_em
+            `,
 
-            estadio || null,
+            [
 
-            status || null
+                apiId,
 
-        ]
+                campeonato,
 
+                timeCasa,
+
+                timeFora,
+
+                dataJogo,
+
+                estadio,
+
+                status
+
+            ]
+
+        );
+
+    return (
+        resultado.rows[0]
+        ||
+        null
     );
 
-
-    return resultado.rows[0] || null;
-
 }
-
-
 
 // ==================================================
 // REMOVER JOGOS ANTIGOS
@@ -476,96 +1208,180 @@ export async function removerJogosAntigos(
     dias = 90
 ) {
 
-    const diasNumerico =
-        Number(dias);
-
+    let diasNumerico =
+        Number(
+            dias
+        );
 
     if (
-        !Number.isInteger(diasNumerico) ||
+        !Number.isInteger(
+            diasNumerico
+        ) ||
         diasNumerico <= 0
     ) {
 
         throw new Error(
-            "Quantidade de dias invalida"
+            "Quantidade de dias inválida"
         );
 
     }
 
+    const resultado =
+        await query(
 
-    const resultado = await query(
+            `
+            DELETE FROM jogos
 
-        "DELETE FROM jogos " +
+            WHERE
 
-        "WHERE data_jogo < " +
+                data_jogo IS NOT NULL
 
-        "NOW() - ($1 * INTERVAL '1 day') " +
+                AND data_jogo <
+                    NOW()
+                    -
+                    (
+                        $1 *
+                        INTERVAL '1 day'
+                    )
 
-        "RETURNING id",
+            RETURNING id
+            `,
 
-        [
+            [
+                diasNumerico
+            ]
 
-            diasNumerico
+        );
 
-        ]
-
+    console.log(
+        `🧹 Jogos antigos removidos: ${resultado.rowCount}`
     );
 
-
-    return resultado.rowCount;
+    return (
+        resultado.rowCount ||
+        0
+    );
 
 }
 
-
-
 // ==================================================
-// ESTATISTICAS DOS JOGOS
+// ESTATÍSTICAS DOS JOGOS
 // ==================================================
 
 export async function estatisticasJogos() {
 
-    const resultado = await query(
+    const resultado =
+        await query(
 
-        "SELECT " +
+            `
+            SELECT
 
-        "COUNT(*) AS total, " +
+                COUNT(*)::integer
+                    AS total,
 
-        "COUNT(" +
+                COUNT(
+                    CASE
+                        WHEN UPPER(status)
+                            = 'FINISHED'
+                        THEN 1
+                    END
+                )::integer
+                    AS finalizados,
 
-        "CASE " +
+                COUNT(
+                    CASE
+                        WHEN UPPER(status)
+                            IN (
+                                'SCHEDULED',
+                                'TIMED'
+                            )
+                        THEN 1
+                    END
+                )::integer
+                    AS agendados,
 
-        "WHEN status = 'FINISHED' " +
+                COUNT(
+                    CASE
+                        WHEN UPPER(status)
+                            NOT IN (
+                                'FINISHED',
+                                'SCHEDULED',
+                                'TIMED'
+                            )
+                        THEN 1
+                    END
+                )::integer
+                    AS outros
 
-        "THEN 1 " +
+            FROM jogos
+            `
 
-        "END" +
+        );
 
-        ") AS finalizados, " +
+    return (
+        resultado.rows[0]
+        ||
+        {
+            total: 0,
 
-        "COUNT(" +
+            finalizados: 0,
 
-        "CASE " +
+            agendados: 0,
 
-        "WHEN status IN ('SCHEDULED', 'TIMED') " +
+            outros: 0
 
-        "THEN 1 " +
-
-        "END" +
-
-        ") AS agendados " +
-
-        "FROM jogos"
-
+        }
     );
-
-
-    return resultado.rows[0];
 
 }
 
+// ==================================================
+// VERIFICAR SE JOGO EXISTE
+// ==================================================
 
+export async function jogoExiste(
+    api_id
+) {
+
+    const jogo =
+        await buscarPorApiId(
+            api_id
+        );
+
+    return Boolean(
+        jogo
+    );
+
+}
 
 // ==================================================
-// EXPORTACAO DEFAULT
+// CONTAR JOGOS
+// ==================================================
+
+export async function contarJogos() {
+
+    const resultado =
+        await query(
+
+            `
+            SELECT
+                COUNT(*)::integer AS total
+
+            FROM jogos
+            `
+
+        );
+
+    return (
+        resultado.rows[0]?.total
+        ||
+        0
+    );
+
+}
+
+// ==================================================
+// EXPORT DEFAULT
 // ==================================================
 
 export default {
@@ -588,6 +1404,10 @@ export default {
 
     removerJogosAntigos,
 
-    estatisticasJogos
+    estatisticasJogos,
+
+    jogoExiste,
+
+    contarJogos
 
 };
