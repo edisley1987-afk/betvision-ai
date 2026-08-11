@@ -2,31 +2,38 @@
 // BETVISION AI
 // services/inteligenciaService.js
 //
-// Motor de Inteligência Estatística v8.2
+// Motor de Inteligência Estatística v8.3
 // PostgreSQL + NeonDB
 //
-// PROTEÇÕES:
-// - api_id é o identificador principal da análise
-// - Não cria análise duplicada para o mesmo jogo
-// - Reutiliza análise existente pelo api_id
-// - Compatibilidade com análises antigas sem api_id
-// - Busca por nome somente para análises antigas
-// - Trava de processamento simultâneo por api_id
-// - Trava liberada sempre no finally
-// - Nova análise salva sempre com api_id
-// - Proteção adicional no PostgreSQL
+// CORREÇÕES:
+//
+// - api_id é identificador principal
+// - Não cria análise duplicada
+// - Reutiliza análise existente
+// - Compatibilidade com análises antigas
+// - Trava contra processamento simultâneo
+// - Trava liberada no finally
+// - Nova análise salva com api_id
+// - Proteção PostgreSQL
 // - Não cria jogos fictícios
-// - Probabilidades sempre normalizadas em 100%
+// - Probabilidades normalizadas
 // - Compatível com bancoService.js
 // - Compatível com jogoBancoService.js
+// - LISTAGEM DE ANÁLISES SOMENTE DOS JOGOS DE HOJE
 // ==================================================
 
 import {
+
     salvarAnalise,
+
     salvarValueBet,
+
     buscarAnalisePorApiId,
+
     buscarAnalisePorNome
+
 } from "./bancoService.js";
+
 
 import {
     query
@@ -35,18 +42,6 @@ import {
 
 // ==================================================
 // TRAVA DE PROCESSAMENTO
-//
-// Essa trava existe por instância do Node.js.
-//
-// Exemplo:
-//
-// 564455 -> processando
-// 564455 -> bloqueado
-// 567257 -> pode processar
-// 567260 -> pode processar
-//
-// A proteção definitiva contra concorrência também
-// existe no bancoService.js através do PostgreSQL.
 // ==================================================
 
 const analisesEmProcessamento =
@@ -66,6 +61,7 @@ function limitar(
     const numero =
         Number(valor);
 
+
     if (
         !Number.isFinite(numero)
     ) {
@@ -74,12 +70,16 @@ function limitar(
 
     }
 
+
     return Math.max(
+
         minimo,
+
         Math.min(
             maximo,
             numero
         )
+
     );
 
 }
@@ -97,6 +97,7 @@ function numeroSeguro(
     const numero =
         Number(valor);
 
+
     return Number.isFinite(numero)
         ? numero
         : padrao;
@@ -113,26 +114,33 @@ function normalizarApiId(
 ) {
 
     if (
+
         valor === undefined ||
         valor === null ||
         valor === ""
+
     ) {
 
         return null;
 
     }
+
 
     const numero =
         Number(valor);
 
+
     if (
+
         !Number.isInteger(numero) ||
         numero <= 0
+
     ) {
 
         return null;
 
     }
+
 
     return numero;
 
@@ -150,22 +158,26 @@ export function calcularProbabilidades(
     const {
 
         ataqueCasa = 50,
+
         defesaCasa = 50,
 
         ataqueFora = 50,
+
         defesaFora = 50,
 
         formaCasa = 50,
+
         formaFora = 50,
 
         mediaGolsCasa = 1,
+
         mediaGolsFora = 1
 
     } = dados;
 
 
     // ==========================================
-    // FORÇA DA CASA
+    // FORÇA CASA
     // ==========================================
 
     const forcaCasa =
@@ -174,7 +186,8 @@ export function calcularProbabilidades(
             numeroSeguro(
                 ataqueCasa,
                 50
-            ) * 0.30
+            ) *
+            0.30
         )
 
         +
@@ -183,7 +196,8 @@ export function calcularProbabilidades(
             numeroSeguro(
                 defesaFora,
                 50
-            ) * 0.20
+            ) *
+            0.20
         )
 
         +
@@ -192,7 +206,8 @@ export function calcularProbabilidades(
             numeroSeguro(
                 formaCasa,
                 50
-            ) * 0.30
+            ) *
+            0.30
         )
 
         +
@@ -201,12 +216,13 @@ export function calcularProbabilidades(
             numeroSeguro(
                 mediaGolsCasa,
                 1
-            ) * 10
+            ) *
+            10
         );
 
 
     // ==========================================
-    // FORÇA DO FORA
+    // FORÇA FORA
     // ==========================================
 
     const forcaFora =
@@ -215,7 +231,8 @@ export function calcularProbabilidades(
             numeroSeguro(
                 ataqueFora,
                 50
-            ) * 0.30
+            ) *
+            0.30
         )
 
         +
@@ -224,7 +241,8 @@ export function calcularProbabilidades(
             numeroSeguro(
                 defesaCasa,
                 50
-            ) * 0.20
+            ) *
+            0.20
         )
 
         +
@@ -233,7 +251,8 @@ export function calcularProbabilidades(
             numeroSeguro(
                 formaFora,
                 50
-            ) * 0.30
+            ) *
+            0.30
         )
 
         +
@@ -242,7 +261,8 @@ export function calcularProbabilidades(
             numeroSeguro(
                 mediaGolsFora,
                 1
-            ) * 10
+            ) *
+            10
         );
 
 
@@ -261,9 +281,14 @@ export function calcularProbabilidades(
 
         return {
 
-            casa: 33.33,
-            empate: 33.34,
-            fora: 33.33
+            casa:
+                33.33,
+
+            empate:
+                33.34,
+
+            fora:
+                33.33
 
         };
 
@@ -275,25 +300,29 @@ export function calcularProbabilidades(
     // ==========================================
 
     const proporcaoCasa =
+
         forcaCasa /
         totalForcas;
 
 
     const proporcaoFora =
+
         forcaFora /
         totalForcas;
 
 
     // ==========================================
-    // DISTRIBUIR 70% ENTRE CASA/FORA
+    // 70% CASA/FORA
     // ==========================================
 
     const casaBruta =
-        proporcaoCasa * 70;
+        proporcaoCasa *
+        70;
 
 
     const foraBruta =
-        proporcaoFora * 70;
+        proporcaoFora *
+        70;
 
 
     // ==========================================
@@ -301,6 +330,7 @@ export function calcularProbabilidades(
     // ==========================================
 
     const diferenca =
+
         Math.abs(
             casaBruta -
             foraBruta
@@ -308,6 +338,7 @@ export function calcularProbabilidades(
 
 
     let empateBruto =
+
         30 -
         (
             diferenca *
@@ -316,6 +347,7 @@ export function calcularProbabilidades(
 
 
     empateBruto =
+
         limitar(
             empateBruto,
             10,
@@ -328,6 +360,7 @@ export function calcularProbabilidades(
     // ==========================================
 
     const totalBruto =
+
         casaBruta +
         empateBruto +
         foraBruta;
@@ -339,9 +372,14 @@ export function calcularProbabilidades(
 
         return {
 
-            casa: 33.33,
-            empate: 33.34,
-            fora: 33.33
+            casa:
+                33.33,
+
+            empate:
+                33.34,
+
+            fora:
+                33.33
 
         };
 
@@ -349,75 +387,98 @@ export function calcularProbabilidades(
 
 
     const casa =
+
         (
             casaBruta /
             totalBruto
-        ) * 100;
+        ) *
+        100;
 
 
     const empate =
+
         (
             empateBruto /
             totalBruto
-        ) * 100;
+        ) *
+        100;
 
 
     const fora =
+
         (
             foraBruta /
             totalBruto
-        ) * 100;
+        ) *
+        100;
 
-
-    // ==========================================
-    // ARREDONDAMENTO
-    // ==========================================
 
     const casaFinal =
+
         Number(
+
             limitar(
                 casa
-            ).toFixed(2)
+            )
+            .toFixed(2)
+
         );
 
 
     const empateFinal =
+
         Number(
+
             limitar(
                 empate
-            ).toFixed(2)
+            )
+            .toFixed(2)
+
         );
 
 
     let foraFinal =
+
         Number(
+
             limitar(
                 fora
-            ).toFixed(2)
+            )
+            .toFixed(2)
+
         );
 
 
     const soma =
+
         casaFinal +
         empateFinal +
         foraFinal;
 
 
     const ajuste =
+
         Number(
+
             (
                 100 -
                 soma
-            ).toFixed(2)
+            )
+            .toFixed(2)
+
         );
 
 
     foraFinal =
+
         Number(
+
             (
                 foraFinal +
                 ajuste
-            ).toFixed(2)
+            )
+            .toFixed(2)
+
         );
 
 
@@ -446,6 +507,7 @@ export function calcularPlacar(
 ) {
 
     const golsCasa =
+
         numeroSeguro(
             dados.mediaGolsCasa,
             1
@@ -453,6 +515,7 @@ export function calcularPlacar(
 
 
     const golsFora =
+
         numeroSeguro(
             dados.mediaGolsFora,
             1
@@ -462,6 +525,7 @@ export function calcularPlacar(
     return {
 
         casa:
+
             Math.max(
                 0,
                 Math.round(
@@ -470,6 +534,7 @@ export function calcularPlacar(
             ),
 
         fora:
+
             Math.max(
                 0,
                 Math.round(
@@ -491,6 +556,7 @@ export function calcularConfianca(
 ) {
 
     const maior =
+
         Math.max(
 
             Number(
@@ -535,7 +601,7 @@ export function calcularConfianca(
 
 
 // ==================================================
-// OBTER API ID DO JOGO
+// OBTER API ID
 // ==================================================
 
 function obterApiId(
@@ -565,7 +631,7 @@ function obterApiId(
 
 
 // ==================================================
-// NORMALIZAR NOME DO JOGO
+// NORMALIZAR NOME
 // ==================================================
 
 function obterNomeJogo(
@@ -652,9 +718,7 @@ function validarJogo(
     jogo
 ) {
 
-    if (
-        !jogo
-    ) {
+    if (!jogo) {
 
         return {
 
@@ -675,9 +739,7 @@ function validarJogo(
         );
 
 
-    if (
-        !apiId
-    ) {
+    if (!apiId) {
 
         return {
 
@@ -693,6 +755,7 @@ function validarJogo(
 
 
     let nomes;
+
 
     try {
 
@@ -745,8 +808,10 @@ function validarJogo(
 
 
     if (
+
         nomesInvalidos.includes(casa) ||
         nomesInvalidos.includes(fora)
+
     ) {
 
         return {
@@ -794,9 +859,6 @@ function validarJogo(
 
 // ==================================================
 // BUSCAR ANÁLISE EXISTENTE
-//
-// PRIMEIRO API_ID
-// DEPOIS NOME DE ANÁLISE ANTIGA
 // ==================================================
 
 async function buscarAnaliseExistente(
@@ -804,17 +866,12 @@ async function buscarAnaliseExistente(
     apiId
 ) {
 
-    // ==========================================
-    // PRIMEIRO: API ID
-    // ==========================================
-
-    if (
-        apiId
-    ) {
+    if (apiId) {
 
         try {
 
             const existente =
+
                 await buscarAnalisePorApiId(
                     apiId
                 );
@@ -833,8 +890,10 @@ async function buscarAnaliseExistente(
         catch (erro) {
 
             console.error(
+
                 "❌ Erro buscando análise por api_id:",
                 erro.message
+
             );
 
         }
@@ -842,20 +901,12 @@ async function buscarAnaliseExistente(
     }
 
 
-    // ==========================================
-    // SEGUNDO: NOME
-    //
-    // buscarAnalisePorNome já filtra
-    // api_id IS NULL.
-    // ==========================================
-
-    if (
-        nomeJogo
-    ) {
+    if (nomeJogo) {
 
         try {
 
             const antiga =
+
                 await buscarAnalisePorNome(
                     nomeJogo
                 );
@@ -874,8 +925,10 @@ async function buscarAnaliseExistente(
         catch (erro) {
 
             console.error(
+
                 "❌ Erro buscando análise antiga por nome:",
                 erro.message
+
             );
 
         }
@@ -897,9 +950,7 @@ export async function gerarAnaliseIA(
     dados = {}
 ) {
 
-    if (
-        !jogo
-    ) {
+    if (!jogo) {
 
         throw new Error(
             "Jogo é obrigatório para gerar análise"
@@ -908,19 +959,13 @@ export async function gerarAnaliseIA(
     }
 
 
-    // ==========================================
-    // API ID
-    // ==========================================
-
     const apiId =
         obterApiId(
             jogo
         );
 
 
-    if (
-        !apiId
-    ) {
+    if (!apiId) {
 
         throw new Error(
             "api_id é obrigatório para gerar análise"
@@ -929,10 +974,6 @@ export async function gerarAnaliseIA(
     }
 
 
-    // ==========================================
-    // TIMES
-    // ==========================================
-
     const {
 
         nomeCasa,
@@ -940,6 +981,7 @@ export async function gerarAnaliseIA(
         nomeJogo
 
     } =
+
         obterNomeJogo(
             jogo
         );
@@ -955,10 +997,6 @@ export async function gerarAnaliseIA(
     );
 
 
-    // ==========================================
-    // VALIDAR
-    // ==========================================
-
     const validacao =
         validarJogo(
             jogo
@@ -970,15 +1008,18 @@ export async function gerarAnaliseIA(
     ) {
 
         throw new Error(
-            `Jogo inválido para análise: ${validacao.erro}`
+
+            `Jogo inválido para análise: ` +
+            `${validacao.erro}`
+
         );
 
     }
 
 
-    // ==================================================
-    // TRAVA EM MEMÓRIA
-    // ==================================================
+    // ==========================================
+    // TRAVA
+    // ==========================================
 
     if (
         analisesEmProcessamento.has(
@@ -987,16 +1028,17 @@ export async function gerarAnaliseIA(
     ) {
 
         console.log(
-            `⏳ API ${apiId} já está em processamento: ${nomeJogo}`
+
+            `⏳ API ${apiId} já está em processamento: ` +
+            `${nomeJogo}`
+
         );
 
-
-        // Tenta recuperar a análise que a primeira
-        // chamada pode ter acabado de salvar.
 
         try {
 
             const existente =
+
                 await buscarAnalisePorApiId(
                     apiId
                 );
@@ -1007,8 +1049,12 @@ export async function gerarAnaliseIA(
             ) {
 
                 console.log(
-                    `♻️ Análise recuperada durante processamento: API ${apiId}`
+
+                    `♻️ Análise recuperada durante ` +
+                    `processamento: API ${apiId}`
+
                 );
+
 
                 return existente;
 
@@ -1019,23 +1065,19 @@ export async function gerarAnaliseIA(
         catch (erro) {
 
             console.error(
+
                 "⚠️ Erro consultando análise durante trava:",
                 erro.message
+
             );
 
         }
 
 
-        // Não gera uma segunda análise.
-
         return null;
 
     }
 
-
-    // ==========================================
-    // ATIVAR TRAVA
-    // ==========================================
 
     analisesEmProcessamento.add(
         apiId
@@ -1049,11 +1091,12 @@ export async function gerarAnaliseIA(
 
     try {
 
-        // ==========================================
-        // VERIFICAR ANÁLISE EXISTENTE
-        // ==========================================
+        // ======================================
+        // VERIFICAR EXISTENTE
+        // ======================================
 
         const existente =
+
             await buscarAnaliseExistente(
                 nomeJogo,
                 apiId
@@ -1079,18 +1122,21 @@ export async function gerarAnaliseIA(
             );
 
 
-            // ======================================
+            // ==================================
             // VINCULAR ANÁLISE ANTIGA
-            // ======================================
+            // ==================================
 
             if (
+
                 existente.api_id === null ||
                 existente.api_id === undefined
+
             ) {
 
                 try {
 
                     const vinculada =
+
                         await query(
 
                             `
@@ -1106,8 +1152,11 @@ export async function gerarAnaliseIA(
                             `,
 
                             [
+
                                 apiId,
+
                                 existente.id
+
                             ]
 
                         );
@@ -1118,7 +1167,11 @@ export async function gerarAnaliseIA(
                     ) {
 
                         console.log(
-                            `🔗 Análise antiga ${existente.id} vinculada à API ${apiId}`
+
+                            `🔗 Análise antiga ` +
+                            `${existente.id} vinculada à API ` +
+                            `${apiId}`
+
                         );
 
 
@@ -1131,8 +1184,10 @@ export async function gerarAnaliseIA(
                 catch (erro) {
 
                     console.error(
+
                         "⚠️ Não foi possível vincular análise antiga:",
                         erro.message
+
                     );
 
                 }
@@ -1145,31 +1200,34 @@ export async function gerarAnaliseIA(
         }
 
 
-        // ==========================================
-        // CALCULAR PROBABILIDADES
-        // ==========================================
+        // ======================================
+        // PROBABILIDADES
+        // ======================================
 
         const probabilidades =
+
             calcularProbabilidades(
                 dados
             );
 
 
-        // ==========================================
-        // CALCULAR PLACAR
-        // ==========================================
+        // ======================================
+        // PLACAR
+        // ======================================
 
         const placar =
+
             calcularPlacar(
                 dados
             );
 
 
-        // ==========================================
-        // GOLS ESPERADOS
-        // ==========================================
+        // ======================================
+        // MÉDIAS
+        // ======================================
 
         const mediaCasa =
+
             numeroSeguro(
                 dados.mediaGolsCasa,
                 1
@@ -1177,6 +1235,7 @@ export async function gerarAnaliseIA(
 
 
         const mediaFora =
+
             numeroSeguro(
                 dados.mediaGolsFora,
                 1
@@ -1184,6 +1243,7 @@ export async function gerarAnaliseIA(
 
 
         const golsEsperados =
+
             Number(
 
                 (
@@ -1195,19 +1255,20 @@ export async function gerarAnaliseIA(
             );
 
 
-        // ==========================================
+        // ======================================
         // CONFIANÇA
-        // ==========================================
+        // ======================================
 
         const confianca =
+
             calcularConfianca(
                 probabilidades
             );
 
 
-        // ==========================================
-        // OBJETO DA ANÁLISE
-        // ==========================================
+        // ======================================
+        // ANÁLISE
+        // ======================================
 
         const analise = {
 
@@ -1239,13 +1300,16 @@ export async function gerarAnaliseIA(
                 confianca,
 
             algoritmo:
-                "BetVision Statistical AI v8.2"
+                "BetVision Statistical AI v8.3"
 
         };
 
 
         console.log(
-            `🤖 Criando nova análise IA: ${nomeCasa} x ${nomeFora}`
+
+            `🤖 Criando nova análise IA: ` +
+            `${nomeCasa} x ${nomeFora}`
+
         );
 
 
@@ -1254,22 +1318,14 @@ export async function gerarAnaliseIA(
         );
 
 
-        // ==========================================
-        // SALVAR
-        //
-        // bancoService possui proteção adicional
-        // contra concorrência no PostgreSQL.
-        // ==========================================
-
         const salva =
+
             await salvarAnalise(
                 analise
             );
 
 
-        if (
-            !salva
-        ) {
+        if (!salva) {
 
             throw new Error(
                 "Não foi possível salvar a análise"
@@ -1279,7 +1335,10 @@ export async function gerarAnaliseIA(
 
 
         console.log(
-            `✅ Análise salva: ${nomeJogo} | API ${apiId} | ID ${salva.id}`
+
+            `✅ Análise salva: ${nomeJogo} | ` +
+            `API ${apiId} | ID ${salva.id}`
+
         );
 
 
@@ -1290,8 +1349,10 @@ export async function gerarAnaliseIA(
     catch (erro) {
 
         console.error(
+
             `❌ Erro gerar análise API ${apiId}:`,
             erro.message
+
         );
 
 
@@ -1300,10 +1361,6 @@ export async function gerarAnaliseIA(
     }
 
     finally {
-
-        // ==========================================
-        // SEMPRE LIBERAR A TRAVA
-        // ==========================================
 
         analisesEmProcessamento.delete(
             apiId
@@ -1329,6 +1386,7 @@ export async function analisarMercado(
 ) {
 
     const resultado =
+
         await gerarAnaliseIA(
             jogo,
             dados
@@ -1350,6 +1408,16 @@ export async function analisarMercado(
 
 // ==================================================
 // LISTAR ANÁLISES
+//
+// IMPORTANTE:
+//
+// NÃO usamos somente criado_em.
+//
+// A análise é relacionada ao jogo através
+// do api_id.
+//
+// Assim a tela mostra somente análises
+// dos jogos cuja data é HOJE.
 // ==================================================
 
 export async function listarAnalises() {
@@ -1357,32 +1425,65 @@ export async function listarAnalises() {
     try {
 
         const resultado =
+
             await query(
 
                 `
                 SELECT
 
-                    id,
-                    api_id,
-                    jogo,
+                    a.id,
 
-                    probabilidade_casa,
-                    probabilidade_empate,
-                    probabilidade_fora,
+                    a.api_id,
 
-                    gols_esperados,
-                    placar_previsto,
+                    a.jogo,
 
-                    value_bet,
-                    confianca,
-                    algoritmo,
-                    criado_em
+                    a.probabilidade_casa,
 
-                FROM analises
+                    a.probabilidade_empate,
+
+                    a.probabilidade_fora,
+
+                    a.gols_esperados,
+
+                    a.placar_previsto,
+
+                    a.value_bet,
+
+                    a.confianca,
+
+                    a.algoritmo,
+
+                    a.criado_em,
+
+                    j.data_jogo,
+
+                    j.campeonato,
+
+                    j.time_casa,
+
+                    j.time_fora,
+
+                    j.status
+
+                FROM analises a
+
+                INNER JOIN jogos j
+
+                    ON j.api_id = a.api_id
+
+                WHERE
+
+                    j.data_jogo IS NOT NULL
+
+                    AND DATE(
+                        j.data_jogo
+                    ) = CURRENT_DATE
 
                 ORDER BY
-                    criado_em DESC,
-                    id DESC
+
+                    j.data_jogo ASC,
+
+                    a.id DESC
                 `
 
             );
@@ -1421,15 +1522,11 @@ export function calcularValueBet(
 ) {
 
     const oddNumero =
-        Number(
-            odd
-        );
+        Number(odd);
 
 
     const probabilidadeNumero =
-        Number(
-            probabilidade
-        );
+        Number(probabilidade);
 
 
     if (
@@ -1480,20 +1577,24 @@ export function calcularValueBet(
                 100
             )
         )
-
         - 1;
 
 
     return {
 
         valor:
+
             Number(
+
                 valorEsperado
                     .toFixed(3)
+
             ),
 
         possui:
-            valorEsperado > 0.05
+
+            valorEsperado >
+            0.05
 
     };
 
@@ -1511,9 +1612,7 @@ export async function gerarValueBet(
     probabilidade
 ) {
 
-    if (
-        !jogo
-    ) {
+    if (!jogo) {
 
         return null;
 
@@ -1527,6 +1626,7 @@ export async function gerarValueBet(
 
 
     const resultado =
+
         calcularValueBet(
             odd,
             probabilidade
@@ -1547,11 +1647,6 @@ export async function gerarValueBet(
         null;
 
 
-    // ==========================================
-    // SE NÃO HOUVER ID INTERNO
-    // PROCURA PELO API_ID
-    // ==========================================
-
     if (
         !jogoId &&
         apiId
@@ -1560,6 +1655,7 @@ export async function gerarValueBet(
         try {
 
             const encontrado =
+
                 await query(
 
                     `
@@ -1580,7 +1676,10 @@ export async function gerarValueBet(
 
 
             jogoId =
-                encontrado.rows[0]?.id ||
+
+                encontrado
+                    .rows[0]
+                    ?.id ||
                 null;
 
         }
@@ -1588,32 +1687,15 @@ export async function gerarValueBet(
         catch (erro) {
 
             console.error(
+
                 "⚠️ Erro buscando jogo para Value Bet:",
                 erro.message
+
             );
 
         }
 
     }
-
-
-    const nomeCasa =
-        jogo.time_casa ||
-        jogo.timeCasa ||
-        jogo.casa ||
-        "Casa";
-
-
-    const nomeFora =
-        jogo.time_fora ||
-        jogo.timeFora ||
-        jogo.fora ||
-        "Fora";
-
-
-    // Mantido para compatibilidade.
-    void nomeCasa;
-    void nomeFora;
 
 
     return await salvarValueBet({
@@ -1655,6 +1737,7 @@ export async function estatisticasAnalises() {
     try {
 
         const resultado =
+
             await query(
 
                 `
@@ -1687,9 +1770,12 @@ export async function estatisticasAnalises() {
 
         return (
 
-            resultado.rows[0] ||
+            resultado.rows[0]
+
+            ||
 
             {
+
                 total:
                     0,
 
@@ -1698,6 +1784,7 @@ export async function estatisticasAnalises() {
 
                 sem_api_id:
                     0
+
             }
 
         );
@@ -1707,8 +1794,10 @@ export async function estatisticasAnalises() {
     catch (erro) {
 
         console.error(
+
             "❌ Erro estatísticas análises:",
             erro.message
+
         );
 
 
