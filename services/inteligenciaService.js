@@ -2,21 +2,21 @@
 // BETVISION AI
 // services/inteligenciaService.js
 //
-// Motor de Inteligência Estatística v8.1
+// Motor de Inteligência Estatística v8.2
 // PostgreSQL + NeonDB
 //
-// CORREÇÕES:
-//
+// PROTEÇÕES:
 // - api_id é o identificador principal da análise
 // - Não cria análise duplicada para o mesmo jogo
 // - Reutiliza análise existente pelo api_id
 // - Compatibilidade com análises antigas sem api_id
-// - Busca por nome somente como compatibilidade
-// - Não cria jogos fictícios
-// - Probabilidades sempre normalizadas em 100%
-// - Trava contra processamento simultâneo por api_id
+// - Busca por nome somente para análises antigas
+// - Trava de processamento simultâneo por api_id
 // - Trava liberada sempre no finally
 // - Nova análise salva sempre com api_id
+// - Proteção adicional no PostgreSQL
+// - Não cria jogos fictícios
+// - Probabilidades sempre normalizadas em 100%
 // - Compatível com bancoService.js
 // - Compatível com jogoBancoService.js
 // ==================================================
@@ -36,21 +36,17 @@ import {
 // ==================================================
 // TRAVA DE PROCESSAMENTO
 //
-// Impede que duas chamadas simultâneas processem
-// o mesmo api_id ao mesmo tempo.
+// Essa trava existe por instância do Node.js.
 //
 // Exemplo:
 //
-// chamada 1 -> 564455 -> processando
-// chamada 2 -> 564455 -> bloqueada
-// chamada 3 -> 564455 -> bloqueada
-//
-// Jogos diferentes continuam podendo processar
-// simultaneamente:
-//
 // 564455 -> processando
-// 567257 -> processando
-// 567260 -> processando
+// 564455 -> bloqueado
+// 567257 -> pode processar
+// 567260 -> pode processar
+//
+// A proteção definitiva contra concorrência também
+// existe no bancoService.js através do PostgreSQL.
 // ==================================================
 
 const analisesEmProcessamento =
@@ -154,19 +150,15 @@ export function calcularProbabilidades(
     const {
 
         ataqueCasa = 50,
-
         defesaCasa = 50,
 
         ataqueFora = 50,
-
         defesaFora = 50,
 
         formaCasa = 50,
-
         formaFora = 50,
 
         mediaGolsCasa = 1,
-
         mediaGolsFora = 1
 
     } = dados;
@@ -270,9 +262,7 @@ export function calcularProbabilidades(
         return {
 
             casa: 33.33,
-
             empate: 33.34,
-
             fora: 33.33
 
         };
@@ -338,7 +328,6 @@ export function calcularProbabilidades(
     // ==========================================
 
     const totalBruto =
-
         casaBruta +
         empateBruto +
         foraBruta;
@@ -351,9 +340,7 @@ export function calcularProbabilidades(
         return {
 
             casa: 33.33,
-
             empate: 33.34,
-
             fora: 33.33
 
         };
@@ -588,30 +575,20 @@ function obterNomeJogo(
     const nomeCasa =
 
         jogo?.time_casa ||
-
         jogo?.timeCasa ||
-
         jogo?.casa ||
-
         jogo?.homeTeam?.name ||
-
         jogo?.home_team?.name ||
-
         null;
 
 
     const nomeFora =
 
         jogo?.time_fora ||
-
         jogo?.timeFora ||
-
         jogo?.fora ||
-
         jogo?.awayTeam?.name ||
-
         jogo?.away_team?.name ||
-
         null;
 
 
@@ -753,26 +730,15 @@ function validarJogo(
             .trim();
 
 
-    // ==========================================
-    // PROTEGER CONTRA TIMES FICTÍCIOS
-    // ==========================================
-
     const nomesInvalidos = [
 
         "casa",
-
         "fora",
-
         "time a",
-
         "time b",
-
         "home",
-
         "away",
-
         "home team",
-
         "away team"
 
     ];
@@ -795,10 +761,6 @@ function validarJogo(
 
     }
 
-
-    // ==========================================
-    // CASA E FORA DIFERENTES
-    // ==========================================
 
     if (
         casa === fora
@@ -833,10 +795,8 @@ function validarJogo(
 // ==================================================
 // BUSCAR ANÁLISE EXISTENTE
 //
-// PRIORIDADE:
-//
-// 1. api_id
-// 2. nome para compatibilidade
+// PRIMEIRO API_ID
+// DEPOIS NOME DE ANÁLISE ANTIGA
 // ==================================================
 
 async function buscarAnaliseExistente(
@@ -873,11 +833,8 @@ async function buscarAnaliseExistente(
         catch (erro) {
 
             console.error(
-
                 "❌ Erro buscando análise por api_id:",
-
                 erro.message
-
             );
 
         }
@@ -888,7 +845,8 @@ async function buscarAnaliseExistente(
     // ==========================================
     // SEGUNDO: NOME
     //
-    // Compatibilidade com análises antigas.
+    // buscarAnalisePorNome já filtra
+    // api_id IS NULL.
     // ==========================================
 
     if (
@@ -916,11 +874,8 @@ async function buscarAnaliseExistente(
         catch (erro) {
 
             console.error(
-
                 "❌ Erro buscando análise antiga por nome:",
-
                 erro.message
-
             );
 
         }
@@ -954,7 +909,7 @@ export async function gerarAnaliseIA(
 
 
     // ==========================================
-    // IDENTIFICAR API ID
+    // API ID
     // ==========================================
 
     const apiId =
@@ -975,15 +930,13 @@ export async function gerarAnaliseIA(
 
 
     // ==========================================
-    // IDENTIFICAR TIMES
+    // TIMES
     // ==========================================
 
     const {
 
         nomeCasa,
-
         nomeFora,
-
         nomeJogo
 
     } =
@@ -1024,23 +977,7 @@ export async function gerarAnaliseIA(
 
 
     // ==================================================
-    // TRAVA POR API ID
-    //
-    // A trava é colocada ANTES da segunda consulta
-    // ao banco.
-    //
-    // Isso é importante porque duas requisições
-    // simultâneas poderiam fazer:
-    //
-    // chamada A -> busca banco -> não encontra
-    // chamada B -> busca banco -> não encontra
-    // chamada A -> salva
-    // chamada B -> salva duplicado
-    //
-    // Agora:
-    //
-    // chamada A -> trava 564455
-    // chamada B -> detecta 564455 ocupado
+    // TRAVA EM MEMÓRIA
     // ==================================================
 
     if (
@@ -1050,39 +987,30 @@ export async function gerarAnaliseIA(
     ) {
 
         console.log(
-
-            `⏳ Análise já está sendo processada para API ${apiId}: ${nomeJogo}`
-
+            `⏳ API ${apiId} já está em processamento: ${nomeJogo}`
         );
 
 
-        // Enquanto outra chamada está processando,
-        // fazemos uma última tentativa de encontrar
-        // uma análise já salva.
-        //
-        // Isso evita simplesmente retornar null
-        // quando a primeira chamada terminar rapidamente.
+        // Tenta recuperar a análise que a primeira
+        // chamada pode ter acabado de salvar.
 
         try {
 
-            const existenteDuranteProcessamento =
+            const existente =
                 await buscarAnalisePorApiId(
                     apiId
                 );
 
 
             if (
-                existenteDuranteProcessamento
+                existente
             ) {
 
                 console.log(
-
-                    `♻️ Análise encontrada durante processamento: API ${apiId}`
-
+                    `♻️ Análise recuperada durante processamento: API ${apiId}`
                 );
 
-
-                return existenteDuranteProcessamento;
+                return existente;
 
             }
 
@@ -1091,24 +1019,23 @@ export async function gerarAnaliseIA(
         catch (erro) {
 
             console.error(
-
-                "⚠️ Erro verificando análise durante trava:",
-
+                "⚠️ Erro consultando análise durante trava:",
                 erro.message
-
             );
 
         }
 
+
+        // Não gera uma segunda análise.
 
         return null;
 
     }
 
 
-    // ==================================================
+    // ==========================================
     // ATIVAR TRAVA
-    // ==================================================
+    // ==========================================
 
     analisesEmProcessamento.add(
         apiId
@@ -1116,9 +1043,7 @@ export async function gerarAnaliseIA(
 
 
     console.log(
-
-        `🔒 Trava de análise ativada: API ${apiId}`
-
+        `🔒 Trava ativada para API ${apiId}`
     );
 
 
@@ -1130,11 +1055,8 @@ export async function gerarAnaliseIA(
 
         const existente =
             await buscarAnaliseExistente(
-
                 nomeJogo,
-
                 apiId
-
             );
 
 
@@ -1143,28 +1065,22 @@ export async function gerarAnaliseIA(
         ) {
 
             console.log(
-
                 `♻️ Análise já existente: ${nomeJogo}`
-
             );
 
 
             console.log(
-
                 `♻️ API ID: ${apiId}`
-
             );
 
 
             console.log(
-
                 `♻️ ID da análise: ${existente.id}`
-
             );
 
 
             // ======================================
-            // ANÁLISE ANTIGA SEM API ID
+            // VINCULAR ANÁLISE ANTIGA
             // ======================================
 
             if (
@@ -1190,11 +1106,8 @@ export async function gerarAnaliseIA(
                             `,
 
                             [
-
                                 apiId,
-
                                 existente.id
-
                             ]
 
                         );
@@ -1205,9 +1118,7 @@ export async function gerarAnaliseIA(
                     ) {
 
                         console.log(
-
                             `🔗 Análise antiga ${existente.id} vinculada à API ${apiId}`
-
                         );
 
 
@@ -1220,11 +1131,8 @@ export async function gerarAnaliseIA(
                 catch (erro) {
 
                     console.error(
-
                         "⚠️ Não foi possível vincular análise antiga:",
-
                         erro.message
-
                     );
 
                 }
@@ -1331,27 +1239,26 @@ export async function gerarAnaliseIA(
                 confianca,
 
             algoritmo:
-                "BetVision Statistical AI v8.1"
+                "BetVision Statistical AI v8.2"
 
         };
 
 
         console.log(
-
             `🤖 Criando nova análise IA: ${nomeCasa} x ${nomeFora}`
-
         );
 
 
         console.log(
-
             `🤖 API ID associado: ${apiId}`
-
         );
 
 
         // ==========================================
         // SALVAR
+        //
+        // bancoService possui proteção adicional
+        // contra concorrência no PostgreSQL.
         // ==========================================
 
         const salva =
@@ -1372,9 +1279,7 @@ export async function gerarAnaliseIA(
 
 
         console.log(
-
             `✅ Análise salva: ${nomeJogo} | API ${apiId} | ID ${salva.id}`
-
         );
 
 
@@ -1382,15 +1287,23 @@ export async function gerarAnaliseIA(
 
     }
 
+    catch (erro) {
+
+        console.error(
+            `❌ Erro gerar análise API ${apiId}:`,
+            erro.message
+        );
+
+
+        throw erro;
+
+    }
+
     finally {
 
-        // ==================================================
-        // LIBERAR TRAVA
-        //
-        // O finally garante que a trava será removida
-        // mesmo se ocorrer erro no PostgreSQL, na IA,
-        // no cálculo ou no salvarAnalise().
-        // ==================================================
+        // ==========================================
+        // SEMPRE LIBERAR A TRAVA
+        // ==========================================
 
         analisesEmProcessamento.delete(
             apiId
@@ -1398,9 +1311,7 @@ export async function gerarAnaliseIA(
 
 
         console.log(
-
-            `🔓 Trava de análise liberada: API ${apiId}`
-
+            `🔓 Trava liberada para API ${apiId}`
         );
 
     }
@@ -1452,27 +1363,19 @@ export async function listarAnalises() {
                 SELECT
 
                     id,
-
                     api_id,
-
                     jogo,
 
                     probabilidade_casa,
-
                     probabilidade_empate,
-
                     probabilidade_fora,
 
                     gols_esperados,
-
                     placar_previsto,
 
                     value_bet,
-
                     confianca,
-
                     algoritmo,
-
                     criado_em
 
                 FROM analises
@@ -1496,11 +1399,8 @@ export async function listarAnalises() {
     catch (erro) {
 
         console.error(
-
             "❌ Erro listar análises:",
-
             erro.message
-
         );
 
 
@@ -1648,8 +1548,8 @@ export async function gerarValueBet(
 
 
     // ==========================================
-    // Se não houver id interno, procura pelo
-    // api_id.
+    // SE NÃO HOUVER ID INTERNO
+    // PROCURA PELO API_ID
     // ==========================================
 
     if (
@@ -1688,11 +1588,8 @@ export async function gerarValueBet(
         catch (erro) {
 
             console.error(
-
                 "⚠️ Erro buscando jogo para Value Bet:",
-
                 erro.message
-
             );
 
         }
@@ -1714,13 +1611,17 @@ export async function gerarValueBet(
         "Fora";
 
 
+    // Mantido para compatibilidade.
+    void nomeCasa;
+    void nomeFora;
+
+
     return await salvarValueBet({
 
         jogo_id:
             jogoId,
 
         mercado:
-
             mercado ||
             "N/A",
 
@@ -1789,7 +1690,6 @@ export async function estatisticasAnalises() {
             resultado.rows[0] ||
 
             {
-
                 total:
                     0,
 
@@ -1798,7 +1698,6 @@ export async function estatisticasAnalises() {
 
                 sem_api_id:
                     0
-
             }
 
         );
@@ -1808,11 +1707,8 @@ export async function estatisticasAnalises() {
     catch (erro) {
 
         console.error(
-
             "❌ Erro estatísticas análises:",
-
             erro.message
-
         );
 
 
@@ -1859,4 +1755,3 @@ export default {
     estatisticasAnalises
 
 };
-
