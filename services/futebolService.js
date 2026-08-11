@@ -1,10 +1,21 @@
 // ==========================================
 // BetVision AI
 // services/futebolService.js
-// Versão 14.0
+// Versão 15.0
 // Serviço Futebol Integrado
 // Football-Data.org v4
 // Neon PostgreSQL
+//
+// CORREÇÕES V15:
+// - Busca SOMENTE jogos da data atual
+// - Fuso horário America/Sao_Paulo
+// - Filtro de data no servidor da API
+// - Segunda validação local obrigatória
+// - Bloqueia jogos de ontem
+// - Bloqueia jogos de amanhã
+// - Mantém compatibilidade com IA
+// - Mantém compatibilidade com versões anteriores
+// - Não cria jogos fictícios
 // ==========================================
 
 import dotenv from "dotenv";
@@ -16,21 +27,221 @@ dotenv.config();
 // CONFIGURAÇÃO
 // ==========================================
 
+// Chave oficial do Football-Data.org
+//
+// Mantemos API_FOOTBALL_KEY como fallback
+// para não quebrar seu .env atual.
+//
+
 const API_KEY =
-    process.env.API_FOOTBALL_KEY ||
     process.env.FOOTBALL_DATA_KEY ||
+    process.env.API_FOOTBALL_KEY ||
     "";
 
+
+// URL oficial Football-Data.org v4
+//
+
 const API_URL =
+    process.env.FOOTBALL_DATA_URL ||
     process.env.API_FOOTBALL_URL ||
     "https://api.football-data.org/v4";
+
+
+// ==========================================
+// CONFIGURAÇÃO DE DATA
+// ==========================================
+
+const TIMEZONE =
+    "America/Sao_Paulo";
 
 
 // ==========================================
 // TIMEOUT DA API
 // ==========================================
 
-const API_TIMEOUT = 15000;
+const API_TIMEOUT =
+    15000;
+
+
+// ==========================================
+// OBTER DATA ATUAL DO BRASIL
+// ==========================================
+//
+// Retorna:
+// YYYY-MM-DD
+//
+// Exemplo:
+// 2026-08-11
+//
+
+function obterDataHojeBrasil() {
+
+    try {
+
+        const agora =
+            new Date();
+
+        const formatter =
+            new Intl.DateTimeFormat(
+                "en-CA",
+                {
+                    timeZone:
+                        TIMEZONE,
+
+                    year:
+                        "numeric",
+
+                    month:
+                        "2-digit",
+
+                    day:
+                        "2-digit"
+                }
+            );
+
+        const data =
+            formatter.format(agora);
+
+        return data;
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "❌ Erro ao obter data do Brasil:",
+            error.message
+        );
+
+        return null;
+
+    }
+
+}
+
+
+// ==========================================
+// VALIDAR DATA YYYY-MM-DD
+// ==========================================
+
+function dataValida(data) {
+
+    if (
+        typeof data !==
+        "string"
+    ) {
+
+        return false;
+
+    }
+
+
+    return /^\d{4}-\d{2}-\d{2}$/
+        .test(data);
+
+}
+
+
+// ==========================================
+// OBTER DATA DO JOGO
+// ==========================================
+//
+// Converte utcDate da API para a data
+// no fuso America/Sao_Paulo.
+//
+// IMPORTANTE:
+// O jogo pode estar em UTC em um dia
+// e no Brasil em outro.
+//
+
+function obterDataJogoBrasil(
+    utcDate
+) {
+
+    try {
+
+        if (!utcDate) {
+
+            return null;
+
+        }
+
+
+        const data =
+            new Date(utcDate);
+
+
+        if (
+            Number.isNaN(
+                data.getTime()
+            )
+        ) {
+
+            return null;
+
+        }
+
+
+        const formatter =
+            new Intl.DateTimeFormat(
+                "en-CA",
+                {
+                    timeZone:
+                        TIMEZONE,
+
+                    year:
+                        "numeric",
+
+                    month:
+                        "2-digit",
+
+                    day:
+                        "2-digit"
+                }
+            );
+
+
+        return formatter.format(
+            data
+        );
+
+    }
+
+    catch {
+
+        return null;
+
+    }
+
+}
+
+
+// ==========================================
+// VALIDAR HORÁRIO DO JOGO
+// ==========================================
+
+function validarHorario(
+    horario
+) {
+
+    if (!horario) {
+
+        return false;
+
+    }
+
+
+    const timestamp =
+        new Date(horario)
+            .getTime();
+
+
+    return Number.isFinite(
+        timestamp
+    );
+
+}
 
 
 // ==========================================
@@ -42,21 +253,57 @@ export async function buscarJogosDia() {
     try {
 
         console.log(
-            "================================"
+            "=========================================="
         );
 
         console.log(
-            "⚽ BUSCANDO JOGOS DO DIA"
+            "⚽ BETVISION AI"
         );
 
         console.log(
-            "================================"
+            "⚽ BUSCANDO JOGOS DE HOJE"
+        );
+
+        console.log(
+            "=========================================="
         );
 
 
-        // ==========================================
+        // ======================================
+        // DATA ATUAL
+        // ======================================
+
+        const hoje =
+            obterDataHojeBrasil();
+
+
+        if (
+            !dataValida(
+                hoje
+            )
+        ) {
+
+            console.error(
+                "❌ Não foi possível determinar a data atual"
+            );
+
+            return [];
+
+        }
+
+
+        console.log(
+            `📅 Data considerada: ${hoje}`
+        );
+
+        console.log(
+            `🌎 Fuso horário: ${TIMEZONE}`
+        );
+
+
+        // ======================================
         // VALIDAR API KEY
-        // ==========================================
+        // ======================================
 
         if (!API_KEY) {
 
@@ -65,7 +312,7 @@ export async function buscarJogosDia() {
             );
 
             console.warn(
-                "⚠️ API_FOOTBALL_KEY não configurada"
+                "⚠️ Configure FOOTBALL_DATA_KEY no .env"
             );
 
             console.warn(
@@ -77,69 +324,124 @@ export async function buscarJogosDia() {
         }
 
 
-        // ==========================================
+        // ======================================
+        // MONTAR URL
+        // ======================================
+        //
+        // O dateTo é o dia seguinte porque
+        // a API trata dateTo como limite exclusivo.
+        //
+
+        const dataSeguinte =
+            obterDataSeguinte(
+                hoje
+            );
+
+
+        if (
+            !dataValida(
+                dataSeguinte
+            )
+        ) {
+
+            console.error(
+                "❌ Não foi possível calcular a data seguinte"
+            );
+
+            return [];
+
+        }
+
+
+        const url =
+            `${API_URL}/matches` +
+            `?dateFrom=${encodeURIComponent(hoje)}` +
+            `&dateTo=${encodeURIComponent(dataSeguinte)}`;
+
+
+        console.log(
+            "🌐 Football-Data URL:"
+        );
+
+        console.log(
+            url
+        );
+
+
+        // ======================================
         // ABORT CONTROLLER
-        // ==========================================
+        // ======================================
 
         const controller =
             new AbortController();
 
+
         const timeout =
             setTimeout(
-                () => controller.abort(),
+                () => {
+
+                    controller.abort();
+
+                },
                 API_TIMEOUT
             );
 
 
-        // ==========================================
+        // ======================================
         // CONSULTAR FOOTBALL-DATA
-        // ==========================================
+        // ======================================
 
         let resposta;
 
+
         try {
 
-            resposta = await fetch(
+            resposta =
+                await fetch(
+                    url,
+                    {
 
-                `${API_URL}/matches`,
+                        method:
+                            "GET",
 
-                {
+                        headers:
+                            {
 
-                    method: "GET",
+                                "X-Auth-Token":
+                                    API_KEY,
 
-                    headers: {
+                                "Accept":
+                                    "application/json"
 
-                        "X-Auth-Token":
-                            API_KEY,
+                            },
 
-                        "Accept":
-                            "application/json"
+                        signal:
+                            controller.signal
 
-                    },
-
-                    signal:
-                        controller.signal
-
-                }
-
-            );
+                    }
+                );
 
         }
 
         finally {
 
-            clearTimeout(timeout);
+            clearTimeout(
+                timeout
+            );
 
         }
 
 
-        // ==========================================
-        // TRATAMENTO DE ERRO DA API
-        // ==========================================
+        // ======================================
+        // TRATAMENTO DE ERRO
+        // ======================================
 
-        if (!resposta.ok) {
+        if (
+            !resposta.ok
+        ) {
 
-            let erro = {};
+            let erro =
+                {};
 
             try {
 
@@ -150,7 +452,8 @@ export async function buscarJogosDia() {
 
             catch {
 
-                erro = {};
+                erro =
+                    {};
 
             }
 
@@ -162,7 +465,30 @@ export async function buscarJogosDia() {
             );
 
 
-            if (resposta.status === 401) {
+            // ==================================
+            // ERRO 400
+            // ==================================
+
+            if (
+                resposta.status ===
+                400
+            ) {
+
+                console.error(
+                    "⚠️ Requisição inválida para Football-Data"
+                );
+
+            }
+
+
+            // ==================================
+            // ERRO 401
+            // ==================================
+
+            if (
+                resposta.status ===
+                401
+            ) {
 
                 console.error(
                     "🔑 API KEY inválida ou não autorizada"
@@ -171,7 +497,14 @@ export async function buscarJogosDia() {
             }
 
 
-            if (resposta.status === 403) {
+            // ==================================
+            // ERRO 403
+            // ==================================
+
+            if (
+                resposta.status ===
+                403
+            ) {
 
                 console.error(
                     "🚫 Acesso negado pela Football-Data.org"
@@ -180,7 +513,35 @@ export async function buscarJogosDia() {
             }
 
 
-            if (resposta.status === 429) {
+            // ==================================
+            // ERRO 404
+            // ==================================
+
+            if (
+                resposta.status ===
+                404
+            ) {
+
+                console.error(
+                    "❌ Endpoint Football-Data não encontrado"
+                );
+
+                console.error(
+                    "🌐 URL:",
+                    url
+                );
+
+            }
+
+
+            // ==================================
+            // ERRO 429
+            // ==================================
+
+            if (
+                resposta.status ===
+                429
+            ) {
 
                 console.error(
                     "⏳ Limite da API atingido"
@@ -194,13 +555,17 @@ export async function buscarJogosDia() {
         }
 
 
-        // ==========================================
+        // ======================================
         // LER RESPOSTA
-        // ==========================================
+        // ======================================
 
         const dados =
             await resposta.json();
 
+
+        // ======================================
+        // VALIDAR ARRAY
+        // ======================================
 
         const partidas =
             Array.isArray(
@@ -215,14 +580,16 @@ export async function buscarJogosDia() {
         );
 
 
-        // ==========================================
+        // ======================================
         // NENHUM JOGO
-        // ==========================================
+        // ======================================
 
-        if (!partidas.length) {
+        if (
+            !partidas.length
+        ) {
 
             console.log(
-                "⚽ 0 jogos encontrados"
+                `ℹ️ Nenhum jogo encontrado para ${hoje}`
             );
 
             return [];
@@ -230,231 +597,351 @@ export async function buscarJogosDia() {
         }
 
 
-        // ==========================================
+        // ======================================
         // NORMALIZAR JOGOS
-        // ==========================================
+        // ======================================
 
-        const jogos = partidas
+        const jogos =
+            partidas
 
-            .map((partida) => {
+                .map(
+                    (partida) => {
 
-                // ==================================
-                // API ID
-                // ==================================
+                        // ======================
+                        // API ID
+                        // ======================
 
-                const apiId =
-                    Number(
-                        partida?.id
-                    );
+                        const apiId =
+                            Number(
+                                partida?.id
+                            );
 
 
-                // ==================================
-                // TIMES
-                // ==================================
+                        // ======================
+                        // TIMES
+                        // ======================
 
-                const timeCasa =
-                    partida?.homeTeam?.name ||
-                    null;
+                        const timeCasa =
+                            partida
+                                ?.homeTeam
+                                ?.name ||
+                            null;
 
 
-                const timeFora =
-                    partida?.awayTeam?.name ||
-                    null;
+                        const timeFora =
+                            partida
+                                ?.awayTeam
+                                ?.name ||
+                            null;
 
 
-                // ==================================
-                // CAMPEONATO
-                // ==================================
+                        // ======================
+                        // CAMPEONATO
+                        // ======================
 
-                const campeonato =
-                    partida?.competition?.name ||
-                    "Futebol";
+                        const campeonato =
+                            partida
+                                ?.competition
+                                ?.name ||
+                            "Futebol";
 
 
-                // ==================================
-                // DATA
-                // ==================================
+                        // ======================
+                        // CÓDIGO CAMPEONATO
+                        // ======================
 
-                const horario =
-                    partida?.utcDate ||
-                    null;
+                        const codigoCampeonato =
+                            partida
+                                ?.competition
+                                ?.code ||
+                            null;
 
 
-                // ==================================
-                // STATUS
-                // ==================================
+                        // ======================
+                        // ID CAMPEONATO
+                        // ======================
 
-                const status =
-                    partida?.status ||
-                    "SCHEDULED";
+                        const campeonatoId =
+                            Number(
+                                partida
+                                    ?.competition
+                                    ?.id
+                            ) ||
+                            null;
 
 
-                // ==================================
-                // ESTÁDIO
-                // ==================================
+                        // ======================
+                        // DATA UTC
+                        // ======================
 
-                const estadio =
-                    partida?.venue ||
-                    null;
+                        const horario =
+                            partida
+                                ?.utcDate ||
+                            null;
 
 
-                // ==================================
-                // VALIDAR API ID
-                // ==================================
+                        // ======================
+                        // STATUS
+                        // ======================
 
-                if (
-                    !Number.isInteger(apiId) ||
-                    apiId <= 0
-                ) {
+                        const status =
+                            partida
+                                ?.status ||
+                            "SCHEDULED";
 
-                    console.warn(
-                        "⚠️ Jogo ignorado: api_id inválido"
-                    );
 
-                    return null;
+                        // ======================
+                        // ESTÁDIO
+                        // ======================
 
-                }
+                        const estadio =
+                            partida
+                                ?.venue ||
+                            null;
 
 
-                // ==================================
-                // VALIDAR TIMES
-                // ==================================
+                        // ======================
+                        // DATA NO BRASIL
+                        // ======================
 
-                if (
-                    !timeCasa ||
-                    !timeFora
-                ) {
+                        const dataJogoBrasil =
+                            obterDataJogoBrasil(
+                                horario
+                            );
 
-                    console.warn(
-                        `⚠️ Jogo ${apiId} ignorado: times inválidos`
-                    );
 
-                    return null;
+                        // ======================
+                        // VALIDAR API ID
+                        // ======================
 
-                }
+                        if (
+                            !Number.isInteger(
+                                apiId
+                            ) ||
+                            apiId <= 0
+                        ) {
 
+                            console.warn(
+                                "⚠️ Jogo ignorado: api_id inválido"
+                            );
 
-                // ==================================
-                // VALIDAR DATA
-                // ==================================
+                            return null;
 
-                if (!horario) {
+                        }
 
-                    console.warn(
-                        `⚠️ Jogo ${apiId} ignorado: data inválida`
-                    );
 
-                    return null;
+                        // ======================
+                        // VALIDAR TIMES
+                        // ======================
 
-                }
+                        if (
+                            !timeCasa ||
+                            !timeFora
+                        ) {
 
+                            console.warn(
+                                `⚠️ Jogo ${apiId} ignorado: times inválidos`
+                            );
 
-                // ==================================
-                // OBJETO PADRONIZADO
-                // ==================================
+                            return null;
 
-                return {
+                        }
 
-                    // ID da Football-Data
-                    api_id:
-                        apiId,
 
+                        // ======================
+                        // VALIDAR DATA
+                        // ======================
 
-                    // Compatibilidade
-                    id:
-                        apiId,
+                        if (
+                            !validarHorario(
+                                horario
+                            )
+                        ) {
 
+                            console.warn(
+                                `⚠️ Jogo ${apiId} ignorado: data inválida`
+                            );
 
-                    // Campeonato
-                    campeonato:
-                        campeonato,
+                            return null;
 
+                        }
 
-                    // Time mandante
-                    time_casa:
-                        timeCasa,
 
+                        // ======================
+                        // PROTEÇÃO CONTRA
+                        // JOGOS DE OUTRO DIA
+                        // ======================
 
-                    // Time visitante
-                    time_fora:
-                        timeFora,
+                        if (
+                            dataJogoBrasil !==
+                            hoje
+                        ) {
 
+                            console.warn(
+                                `🚫 Jogo ${apiId} descartado: data ${dataJogoBrasil} diferente de hoje ${hoje}`
+                            );
 
-                    // Compatibilidade com IA
-                    casa:
-                        timeCasa,
+                            return null;
 
+                        }
 
-                    fora:
-                        timeFora,
 
+                        // ======================
+                        // OBJETO PADRONIZADO
+                        // ======================
 
-                    // Data oficial UTC
-                    data_jogo:
-                        horario,
+                        return {
 
+                            // ID Football-Data
+                            api_id:
+                                apiId,
 
-                    // Compatibilidade
-                    horario:
-                        horario,
 
+                            // Compatibilidade
+                            id:
+                                apiId,
 
-                    // Estádio
-                    estadio:
-                        estadio,
 
+                            // Campeonato
+                            campeonato:
+                                campeonato,
 
-                    // Status Football-Data
-                    status:
-                        status
 
-                };
+                            // Código campeonato
+                            campeonato_codigo:
+                                codigoCampeonato,
 
-            })
 
-            .filter(Boolean);
+                            // ID campeonato
+                            campeonato_id:
+                                campeonatoId,
 
 
-        // ==========================================
+                            // Mandante
+                            time_casa:
+                                timeCasa,
+
+
+                            // Visitante
+                            time_fora:
+                                timeFora,
+
+
+                            // Compatibilidade IA
+                            casa:
+                                timeCasa,
+
+
+                            fora:
+                                timeFora,
+
+
+                            // Data oficial UTC
+                            data_jogo:
+                                horario,
+
+
+                            // Compatibilidade
+                            horario:
+                                horario,
+
+
+                            // Data no Brasil
+                            data_jogo_brasil:
+                                dataJogoBrasil,
+
+
+                            // Estádio
+                            estadio:
+                                estadio,
+
+
+                            // Status
+                            status:
+                                status
+
+                        };
+
+                    }
+                )
+
+                .filter(Boolean);
+
+
+        // ======================================
         // RESULTADO
-        // ==========================================
+        // ======================================
 
         console.log(
-            `⚽ ${jogos.length} jogos válidos carregados`
+            `⚽ ${jogos.length} jogos válidos para ${hoje}`
         );
 
 
-        if (!jogos.length) {
+        // ======================================
+        // NENHUM JOGO APÓS FILTRO
+        // ======================================
+
+        if (
+            !jogos.length
+        ) {
 
             console.log(
-                "⚠️ Nenhum jogo válido após normalização"
+                "⚠️ Nenhum jogo válido após filtro de data"
             );
+
+            return [];
 
         }
 
 
-        // ==========================================
-        // MOSTRAR PRIMEIRO JOGO NO LOG
-        // ==========================================
+        // ======================================
+        // MOSTRAR JOGOS
+        // ======================================
 
-        if (jogos.length > 0) {
+        jogos.forEach(
+            (
+                jogo,
+                indice
+            ) => {
 
-            const primeiro =
-                jogos[0];
+                console.log(
+                    `⚽ ${indice + 1}. ` +
+                    `${jogo.time_casa} x ` +
+                    `${jogo.time_fora} | ` +
+                    `${jogo.campeonato} | ` +
+                    `${jogo.data_jogo}`
+                );
 
-            console.log(
-                `⚽ Exemplo: ${primeiro.time_casa} x ${primeiro.time_fora}`
-            );
+            }
+        );
 
-        }
 
+        // ======================================
+        // PRIMEIRO JOGO
+        // ======================================
+
+        const primeiro =
+            jogos[0];
+
+
+        console.log(
+            `⚽ Exemplo: ${primeiro.time_casa} x ${primeiro.time_fora}`
+        );
+
+
+        // ======================================
+        // RETORNAR
+        // ======================================
 
         return jogos;
-
 
     }
 
     catch (error) {
+
+        // ======================================
+        // TIMEOUT
+        // ======================================
 
         if (
             error?.name ===
@@ -468,17 +955,134 @@ export async function buscarJogosDia() {
 
         }
 
+        // ======================================
+        // ERRO GERAL
+        // ======================================
+
         else {
 
             console.error(
                 "❌ Erro futebolService:",
-                error.message
+                error?.message ||
+                error
             );
 
         }
 
 
         return [];
+
+    }
+
+}
+
+
+// ==========================================
+// OBTER DATA SEGUINTE
+// ==========================================
+//
+// Entrada:
+// YYYY-MM-DD
+//
+// Saída:
+// YYYY-MM-DD
+//
+
+function obterDataSeguinte(
+    data
+) {
+
+    try {
+
+        if (
+            !dataValida(
+                data
+            )
+        ) {
+
+            return null;
+
+        }
+
+
+        const partes =
+            data.split("-");
+
+
+        const ano =
+            Number(
+                partes[0]
+            );
+
+
+        const mes =
+            Number(
+                partes[1]
+            );
+
+
+        const dia =
+            Number(
+                partes[2]
+            );
+
+
+        const dataObj =
+            new Date(
+                Date.UTC(
+                    ano,
+                    mes - 1,
+                    dia
+                )
+            );
+
+
+        dataObj.setUTCDate(
+            dataObj.getUTCDate() + 1
+        );
+
+
+        const novoAno =
+            dataObj
+                .getUTCFullYear()
+                .toString()
+                .padStart(
+                    4,
+                    "0"
+                );
+
+
+        const novoMes =
+            (
+                dataObj
+                    .getUTCMonth() + 1
+            )
+                .toString()
+                .padStart(
+                    2,
+                    "0"
+                );
+
+
+        const novoDia =
+            dataObj
+                .getUTCDate()
+                .toString()
+                .padStart(
+                    2,
+                    "0"
+                );
+
+
+        return (
+            `${novoAno}-${novoMes}-${novoDia}`
+        );
+
+    }
+
+    catch {
+
+        return null;
 
     }
 
