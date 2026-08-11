@@ -2,7 +2,7 @@
 // BETVISION AI
 // services/inteligenciaService.js
 //
-// Motor de Inteligência Estatística v8.0
+// Motor de Inteligência Estatística v8.1
 // PostgreSQL + NeonDB
 //
 // CORREÇÕES:
@@ -11,10 +11,13 @@
 // - Não cria análise duplicada para o mesmo jogo
 // - Reutiliza análise existente pelo api_id
 // - Compatibilidade com análises antigas sem api_id
-// - Busca por nome somente quando api_id não existir
+// - Busca por nome somente como compatibilidade
 // - Não cria jogos fictícios
 // - Probabilidades sempre normalizadas em 100%
-// - Compatível com bancoService.js v6.0
+// - Trava contra processamento simultâneo por api_id
+// - Trava liberada sempre no finally
+// - Nova análise salva sempre com api_id
+// - Compatível com bancoService.js
 // - Compatível com jogoBancoService.js
 // ==================================================
 
@@ -28,6 +31,30 @@ import {
 import {
     query
 } from "../database/database.js";
+
+
+// ==================================================
+// TRAVA DE PROCESSAMENTO
+//
+// Impede que duas chamadas simultâneas processem
+// o mesmo api_id ao mesmo tempo.
+//
+// Exemplo:
+//
+// chamada 1 -> 564455 -> processando
+// chamada 2 -> 564455 -> bloqueada
+// chamada 3 -> 564455 -> bloqueada
+//
+// Jogos diferentes continuam podendo processar
+// simultaneamente:
+//
+// 564455 -> processando
+// 567257 -> processando
+// 567260 -> processando
+// ==================================================
+
+const analisesEmProcessamento =
+    new Set();
 
 
 // ==================================================
@@ -809,11 +836,10 @@ function validarJogo(
 // PRIORIDADE:
 //
 // 1. api_id
-// 2. nome somente para análise antiga
+// 2. nome para compatibilidade
 // ==================================================
 
 async function buscarAnaliseExistente(
-    jogo,
     nomeJogo,
     apiId
 ) {
@@ -862,8 +888,7 @@ async function buscarAnaliseExistente(
     // ==========================================
     // SEGUNDO: NOME
     //
-    // Somente compatibilidade com registros
-    // antigos que possuem api_id NULL.
+    // Compatibilidade com análises antigas.
     // ==========================================
 
     if (
@@ -998,266 +1023,387 @@ export async function gerarAnaliseIA(
     }
 
 
-    // ==========================================
-    // VERIFICAR ANÁLISE EXISTENTE
-    // ==========================================
-
-    const existente =
-        await buscarAnaliseExistente(
-
-            jogo,
-
-            nomeJogo,
-
-            apiId
-
-        );
-
+    // ==================================================
+    // TRAVA POR API ID
+    //
+    // A trava é colocada ANTES da segunda consulta
+    // ao banco.
+    //
+    // Isso é importante porque duas requisições
+    // simultâneas poderiam fazer:
+    //
+    // chamada A -> busca banco -> não encontra
+    // chamada B -> busca banco -> não encontra
+    // chamada A -> salva
+    // chamada B -> salva duplicado
+    //
+    // Agora:
+    //
+    // chamada A -> trava 564455
+    // chamada B -> detecta 564455 ocupado
+    // ==================================================
 
     if (
-        existente
+        analisesEmProcessamento.has(
+            apiId
+        )
     ) {
 
         console.log(
 
-            `♻️ Análise já existente: ${nomeJogo}`
+            `⏳ Análise já está sendo processada para API ${apiId}: ${nomeJogo}`
 
         );
 
 
-        console.log(
-
-            `♻️ API ID: ${apiId}`
-
-        );
-
-
-        console.log(
-
-            `♻️ ID da análise: ${existente.id}`
-
-        );
-
-
-        // ======================================
-        // IMPORTANTE:
+        // Enquanto outra chamada está processando,
+        // fazemos uma última tentativa de encontrar
+        // uma análise já salva.
         //
-        // Se a análise antiga não possuir api_id,
-        // tentamos vinculá-la ao jogo atual.
-        // ======================================
+        // Isso evita simplesmente retornar null
+        // quando a primeira chamada terminar rapidamente.
 
-        if (
-            existente.api_id === null ||
-            existente.api_id === undefined
-        ) {
+        try {
 
-            try {
-
-                const vinculada =
-                    await query(
-
-                        `
-                        UPDATE analises
-
-                        SET api_id = $1
-
-                        WHERE id = $2
-
-                          AND api_id IS NULL
-
-                        RETURNING *
-                        `,
-
-                        [
-
-                            apiId,
-
-                            existente.id
-
-                        ]
-
-                    );
+            const existenteDuranteProcessamento =
+                await buscarAnalisePorApiId(
+                    apiId
+                );
 
 
-                if (
-                    vinculada.rows[0]
-                ) {
+            if (
+                existenteDuranteProcessamento
+            ) {
 
-                    console.log(
+                console.log(
 
-                        `🔗 Análise antiga ${existente.id} vinculada à API ${apiId}`
-
-                    );
-
-
-                    return vinculada.rows[0];
-
-                }
-
-            }
-
-            catch (erro) {
-
-                console.error(
-
-                    "⚠️ Não foi possível vincular análise antiga:",
-
-                    erro.message
+                    `♻️ Análise encontrada durante processamento: API ${apiId}`
 
                 );
+
+
+                return existenteDuranteProcessamento;
 
             }
 
         }
 
+        catch (erro) {
 
-        return existente;
+            console.error(
 
-    }
+                "⚠️ Erro verificando análise durante trava:",
 
+                erro.message
 
-    // ==========================================
-    // CALCULAR PROBABILIDADES
-    // ==========================================
+            );
 
-    const probabilidades =
-        calcularProbabilidades(
-            dados
-        );
+        }
 
 
-    // ==========================================
-    // CALCULAR PLACAR
-    // ==========================================
-
-    const placar =
-        calcularPlacar(
-            dados
-        );
-
-
-    // ==========================================
-    // GOLS ESPERADOS
-    // ==========================================
-
-    const mediaCasa =
-        numeroSeguro(
-            dados.mediaGolsCasa,
-            1
-        );
-
-
-    const mediaFora =
-        numeroSeguro(
-            dados.mediaGolsFora,
-            1
-        );
-
-
-    const golsEsperados =
-        Number(
-
-            (
-                mediaCasa +
-                mediaFora
-            )
-            .toFixed(2)
-
-        );
-
-
-    // ==========================================
-    // CONFIANÇA
-    // ==========================================
-
-    const confianca =
-        calcularConfianca(
-            probabilidades
-        );
-
-
-    // ==========================================
-    // OBJETO DA ANÁLISE
-    // ==========================================
-
-    const analise = {
-
-        api_id:
-            apiId,
-
-        jogo:
-            nomeJogo,
-
-        probabilidade_casa:
-            probabilidades.casa,
-
-        probabilidade_empate:
-            probabilidades.empate,
-
-        probabilidade_fora:
-            probabilidades.fora,
-
-        gols_esperados:
-            golsEsperados,
-
-        placar_previsto:
-            `${placar.casa}x${placar.fora}`,
-
-        value_bet:
-            false,
-
-        confianca:
-            confianca,
-
-        algoritmo:
-            "BetVision Statistical AI v8.0"
-
-    };
-
-
-    console.log(
-
-        `🤖 Criando nova análise IA: ${nomeCasa} x ${nomeFora}`
-
-    );
-
-
-    console.log(
-
-        `🤖 API ID associado: ${apiId}`
-
-    );
-
-
-    // ==========================================
-    // SALVAR
-    // ==========================================
-
-    const salva =
-        await salvarAnalise(
-            analise
-        );
-
-
-    if (
-        !salva
-    ) {
-
-        throw new Error(
-            "Não foi possível salvar a análise"
-        );
+        return null;
 
     }
 
 
+    // ==================================================
+    // ATIVAR TRAVA
+    // ==================================================
+
+    analisesEmProcessamento.add(
+        apiId
+    );
+
+
     console.log(
 
-        `✅ Análise salva: ${nomeJogo} | API ${apiId} | ID ${salva.id}`
+        `🔒 Trava de análise ativada: API ${apiId}`
 
     );
 
 
-    return salva;
+    try {
+
+        // ==========================================
+        // VERIFICAR ANÁLISE EXISTENTE
+        // ==========================================
+
+        const existente =
+            await buscarAnaliseExistente(
+
+                nomeJogo,
+
+                apiId
+
+            );
+
+
+        if (
+            existente
+        ) {
+
+            console.log(
+
+                `♻️ Análise já existente: ${nomeJogo}`
+
+            );
+
+
+            console.log(
+
+                `♻️ API ID: ${apiId}`
+
+            );
+
+
+            console.log(
+
+                `♻️ ID da análise: ${existente.id}`
+
+            );
+
+
+            // ======================================
+            // ANÁLISE ANTIGA SEM API ID
+            // ======================================
+
+            if (
+                existente.api_id === null ||
+                existente.api_id === undefined
+            ) {
+
+                try {
+
+                    const vinculada =
+                        await query(
+
+                            `
+                            UPDATE analises
+
+                            SET api_id = $1
+
+                            WHERE id = $2
+
+                              AND api_id IS NULL
+
+                            RETURNING *
+                            `,
+
+                            [
+
+                                apiId,
+
+                                existente.id
+
+                            ]
+
+                        );
+
+
+                    if (
+                        vinculada.rows[0]
+                    ) {
+
+                        console.log(
+
+                            `🔗 Análise antiga ${existente.id} vinculada à API ${apiId}`
+
+                        );
+
+
+                        return vinculada.rows[0];
+
+                    }
+
+                }
+
+                catch (erro) {
+
+                    console.error(
+
+                        "⚠️ Não foi possível vincular análise antiga:",
+
+                        erro.message
+
+                    );
+
+                }
+
+            }
+
+
+            return existente;
+
+        }
+
+
+        // ==========================================
+        // CALCULAR PROBABILIDADES
+        // ==========================================
+
+        const probabilidades =
+            calcularProbabilidades(
+                dados
+            );
+
+
+        // ==========================================
+        // CALCULAR PLACAR
+        // ==========================================
+
+        const placar =
+            calcularPlacar(
+                dados
+            );
+
+
+        // ==========================================
+        // GOLS ESPERADOS
+        // ==========================================
+
+        const mediaCasa =
+            numeroSeguro(
+                dados.mediaGolsCasa,
+                1
+            );
+
+
+        const mediaFora =
+            numeroSeguro(
+                dados.mediaGolsFora,
+                1
+            );
+
+
+        const golsEsperados =
+            Number(
+
+                (
+                    mediaCasa +
+                    mediaFora
+                )
+                .toFixed(2)
+
+            );
+
+
+        // ==========================================
+        // CONFIANÇA
+        // ==========================================
+
+        const confianca =
+            calcularConfianca(
+                probabilidades
+            );
+
+
+        // ==========================================
+        // OBJETO DA ANÁLISE
+        // ==========================================
+
+        const analise = {
+
+            api_id:
+                apiId,
+
+            jogo:
+                nomeJogo,
+
+            probabilidade_casa:
+                probabilidades.casa,
+
+            probabilidade_empate:
+                probabilidades.empate,
+
+            probabilidade_fora:
+                probabilidades.fora,
+
+            gols_esperados:
+                golsEsperados,
+
+            placar_previsto:
+                `${placar.casa}x${placar.fora}`,
+
+            value_bet:
+                false,
+
+            confianca:
+                confianca,
+
+            algoritmo:
+                "BetVision Statistical AI v8.1"
+
+        };
+
+
+        console.log(
+
+            `🤖 Criando nova análise IA: ${nomeCasa} x ${nomeFora}`
+
+        );
+
+
+        console.log(
+
+            `🤖 API ID associado: ${apiId}`
+
+        );
+
+
+        // ==========================================
+        // SALVAR
+        // ==========================================
+
+        const salva =
+            await salvarAnalise(
+                analise
+            );
+
+
+        if (
+            !salva
+        ) {
+
+            throw new Error(
+                "Não foi possível salvar a análise"
+            );
+
+        }
+
+
+        console.log(
+
+            `✅ Análise salva: ${nomeJogo} | API ${apiId} | ID ${salva.id}`
+
+        );
+
+
+        return salva;
+
+    }
+
+    finally {
+
+        // ==================================================
+        // LIBERAR TRAVA
+        //
+        // O finally garante que a trava será removida
+        // mesmo se ocorrer erro no PostgreSQL, na IA,
+        // no cálculo ou no salvarAnalise().
+        // ==================================================
+
+        analisesEmProcessamento.delete(
+            apiId
+        );
+
+
+        console.log(
+
+            `🔓 Trava de análise liberada: API ${apiId}`
+
+        );
+
+    }
 
 }
 
