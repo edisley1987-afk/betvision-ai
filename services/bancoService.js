@@ -2,10 +2,10 @@
 // BETVISION AI
 // services/bancoService.js
 //
-// Serviço central PostgreSQL v7.0
+// Serviço central PostgreSQL v7.1
 // Compatível com NeonDB
 //
-// CORREÇÕES V7:
+// CORREÇÕES V7.1:
 //
 // - api_id sempre convertido para INTEGER
 // - Proteção explícita INTEGER = INTEGER
@@ -16,7 +16,8 @@
 // - Não duplica análise por api_id
 // - Compatibilidade com análises antigas
 // - Listagem de jogos usando America/Sao_Paulo
-// - Listagem de análises somente dos jogos de hoje
+// - Listagem de análises dos jogos de hoje
+// - Última análise ordenada por criado_em
 // - Compatibilidade com bancoService anterior
 // - Não cria dados fictícios
 // - PostgreSQL / NeonDB
@@ -26,14 +27,12 @@ import {
     query
 } from "../database/database.js";
 
-
 // ==================================================
 // CONFIGURAÇÃO
 // ==================================================
 
 const TIMEZONE =
     "America/Sao_Paulo";
-
 
 // ==================================================
 // DATA ATUAL DO BRASIL
@@ -83,7 +82,6 @@ function obterDataHojeBrasil() {
 
 }
 
-
 // ==================================================
 // NORMALIZAR API ID
 // ==================================================
@@ -93,47 +91,35 @@ function normalizarApiId(
 ) {
 
     if (
-
         valor === undefined ||
-
         valor === null ||
-
         valor === ""
-
     ) {
 
         return null;
 
     }
-
 
     const numero =
         Number(
             valor
         );
 
-
     if (
-
         !Number.isInteger(
             numero
         )
-
         ||
-
         numero <= 0
-
     ) {
 
         return null;
 
     }
 
-
     return numero;
 
 }
-
 
 // ==================================================
 // CAMPEONATOS
@@ -154,7 +140,6 @@ export async function listarCampeonatos() {
 
             `);
 
-
         return resultado.rows;
 
     }
@@ -172,7 +157,6 @@ export async function listarCampeonatos() {
 
 }
 
-
 // ==================================================
 // INSERIR / ATUALIZAR CAMPEONATO
 // ==================================================
@@ -189,9 +173,7 @@ export async function inserirCampeonato(
 
     }
 
-
     const {
-
         id,
         nome,
         pais,
@@ -200,32 +182,24 @@ export async function inserirCampeonato(
         api_id,
         logo,
         ativo
-
     } = campeonato;
-
 
     const campeonatoId =
         Number(
             id
         );
 
-
     const apiId =
         normalizarApiId(
             api_id ?? id
         );
 
-
     if (
-
         !Number.isInteger(
             campeonatoId
         )
-
         ||
-
         campeonatoId <= 0
-
     ) {
 
         throw new Error(
@@ -233,7 +207,6 @@ export async function inserirCampeonato(
         );
 
     }
-
 
     const resultado =
         await query(
@@ -296,32 +269,21 @@ export async function inserirCampeonato(
             `,
 
             [
-
                 campeonatoId,
-
                 nome ?? null,
-
                 pais ?? null,
-
                 continente ?? null,
-
                 temporada ?? null,
-
                 apiId,
-
                 logo ?? null,
-
                 ativo ?? true
-
             ]
 
         );
 
-
     return resultado.rows[0] || null;
 
 }
-
 
 // ==================================================
 // TIMES
@@ -342,7 +304,6 @@ export async function listarTimes() {
 
             `);
 
-
         return resultado.rows;
 
     }
@@ -360,7 +321,6 @@ export async function listarTimes() {
 
 }
 
-
 // ==================================================
 // INSERIR / ATUALIZAR TIME
 // ==================================================
@@ -377,22 +337,17 @@ export async function inserirTime(
 
     }
 
-
     const {
-
         id,
         campeonato_id,
         nome,
         pais
-
     } = time;
-
 
     const timeId =
         Number(
             id
         );
-
 
     const campeonatoId =
         campeonato_id === null ||
@@ -403,17 +358,12 @@ export async function inserirTime(
                 campeonato_id
             );
 
-
     if (
-
         !Number.isInteger(
             timeId
         )
-
         ||
-
         timeId <= 0
-
     ) {
 
         throw new Error(
@@ -421,7 +371,6 @@ export async function inserirTime(
         );
 
     }
-
 
     const resultado =
         await query(
@@ -464,24 +413,17 @@ export async function inserirTime(
             `,
 
             [
-
                 timeId,
-
                 campeonatoId,
-
                 nome ?? null,
-
                 pais ?? null
-
             ]
 
         );
 
-
     return resultado.rows[0] || null;
 
 }
-
 
 // ==================================================
 // JOGOS DE HOJE
@@ -519,7 +461,8 @@ export async function listarJogosHoje() {
 
                     DATE(
                         data_jogo
-                        AT TIME ZONE 'America/Sao_Paulo'
+                        AT TIME ZONE
+                        'America/Sao_Paulo'
                     )
 
                     =
@@ -533,7 +476,6 @@ export async function listarJogosHoje() {
                 `
 
             );
-
 
         return resultado.rows;
 
@@ -552,7 +494,6 @@ export async function listarJogosHoje() {
 
 }
 
-
 // ==================================================
 // BUSCAR JOGO POR API ID
 // ==================================================
@@ -566,13 +507,11 @@ export async function buscarJogoPorApiId(
             api_id
         );
 
-
     if (!apiIdNumero) {
 
         return null;
 
     }
-
 
     try {
 
@@ -595,13 +534,10 @@ export async function buscarJogoPorApiId(
                 `,
 
                 [
-
                     apiIdNumero
-
                 ]
 
             );
-
 
         return (
             resultado.rows[0] ||
@@ -626,7 +562,6 @@ export async function buscarJogoPorApiId(
 
 }
 
-
 // ==================================================
 // BUSCAR ANÁLISE POR API ID
 // ==================================================
@@ -640,13 +575,11 @@ export async function buscarAnalisePorApiId(
             api_id
         );
 
-
     if (!apiIdNumero) {
 
         return null;
 
     }
-
 
     try {
 
@@ -675,20 +608,14 @@ export async function buscarAnalisePorApiId(
                 `,
 
                 [
-
                     apiIdNumero
-
                 ]
 
             );
 
-
         return (
-
             resultado.rows[0] ||
-
             null
-
         );
 
     }
@@ -709,7 +636,6 @@ export async function buscarAnalisePorApiId(
 
 }
 
-
 // ==================================================
 // BUSCAR ANÁLISE PELO NOME
 //
@@ -721,17 +647,13 @@ export async function buscarAnalisePorNome(
 ) {
 
     if (
-
         !jogo ||
-
         typeof jogo !== "string"
-
     ) {
 
         return null;
 
     }
-
 
     try {
 
@@ -771,20 +693,14 @@ export async function buscarAnalisePorNome(
                 `,
 
                 [
-
                     jogo
-
                 ]
 
             );
 
-
         return (
-
             resultado.rows[0] ||
-
             null
-
         );
 
     }
@@ -804,7 +720,6 @@ export async function buscarAnalisePorNome(
     }
 
 }
-
 
 // ==================================================
 // SALVAR ANÁLISE
@@ -830,11 +745,8 @@ export async function salvarAnalise(
 ) {
 
     if (
-
         !analise ||
-
         typeof analise !== "object"
-
     ) {
 
         throw new Error(
@@ -843,9 +755,7 @@ export async function salvarAnalise(
 
     }
 
-
     const {
-
         api_id,
         jogo,
 
@@ -859,15 +769,12 @@ export async function salvarAnalise(
         value_bet,
         confianca,
         algoritmo
-
     } = analise;
-
 
     const apiIdNumero =
         normalizarApiId(
             api_id
         );
-
 
     // ==================================================
     // SEM API ID
@@ -929,7 +836,6 @@ export async function salvarAnalise(
                 `,
 
                 [
-
                     jogo ?? null,
 
                     probabilidade_casa ?? null,
@@ -948,11 +854,9 @@ export async function salvarAnalise(
 
                     algoritmo ??
                         "BetVision Statistical AI"
-
                 ]
 
             );
-
 
         return (
             resultado.rows[0] ||
@@ -961,21 +865,14 @@ export async function salvarAnalise(
 
     }
 
-
     // ==================================================
     // COM API ID
-    // ==================================================
-    //
-    // Primeiramente verificamos se já existe.
-    //
-    // A busca usa INTEGER explicitamente.
     // ==================================================
 
     const existente =
         await buscarAnalisePorApiId(
             apiIdNumero
         );
-
 
     if (
         existente
@@ -988,16 +885,12 @@ export async function salvarAnalise(
 
         );
 
-
         return existente;
 
     }
 
-
     // ==================================================
     // INSERIR NOVA ANÁLISE
-    //
-    // api_id explicitamente INTEGER.
     // ==================================================
 
     try {
@@ -1065,7 +958,6 @@ export async function salvarAnalise(
                 `,
 
                 [
-
                     jogo ?? null,
 
                     probabilidade_casa ?? null,
@@ -1086,11 +978,9 @@ export async function salvarAnalise(
                         "BetVision Statistical AI",
 
                     apiIdNumero
-
                 ]
 
             );
-
 
         if (
             resultado.rows[0]
@@ -1104,11 +994,9 @@ export async function salvarAnalise(
 
             );
 
-
             return resultado.rows[0];
 
         }
-
 
         // ==================================================
         // OUTRA REQUISIÇÃO PODE TER INSERIDO
@@ -1119,7 +1007,6 @@ export async function salvarAnalise(
                 apiIdNumero
             );
 
-
         if (
             depois
         ) {
@@ -1127,16 +1014,13 @@ export async function salvarAnalise(
             console.log(
 
                 `♻️ Análise recuperada para API ` +
-                `${apiIdNumero} - ID ` +
-                `${depois.id}`
+                `${apiIdNumero} - ID ${depois.id}`
 
             );
-
 
             return depois;
 
         }
-
 
         throw new Error(
 
@@ -1162,7 +1046,6 @@ export async function salvarAnalise(
                     apiIdNumero
                 );
 
-
             if (
                 recuperada
             ) {
@@ -1173,7 +1056,6 @@ export async function salvarAnalise(
 
         }
 
-
         console.error(
 
             `❌ Erro salvando análise API ` +
@@ -1183,16 +1065,24 @@ export async function salvarAnalise(
 
         );
 
-
         throw erro;
 
     }
 
 }
 
-
 // ==================================================
 // LISTAR ANÁLISES
+//
+// IMPORTANTE:
+//
+// Mantém a função genérica.
+//
+// Retorna todas as análises.
+//
+// Para o Dashboard de hoje, usar:
+//
+// listarAnalisesHoje()
 // ==================================================
 
 export async function listarAnalises() {
@@ -1218,7 +1108,6 @@ export async function listarAnalises() {
 
             );
 
-
         return resultado.rows;
 
     }
@@ -1236,11 +1125,20 @@ export async function listarAnalises() {
 
 }
 
-
 // ==================================================
 // LISTAR ANÁLISES DOS JOGOS DE HOJE
 //
 // Usa a data do jogo e não criado_em.
+//
+// Fuso:
+// America/Sao_Paulo
+//
+// Em 12/08/2026:
+//
+// retorna somente jogos de 12/08/2026.
+//
+// A ordenação usa criado_em DESC para que
+// a análise mais recente apareça primeiro.
 // ==================================================
 
 export async function listarAnalisesHoje() {
@@ -1289,19 +1187,21 @@ export async function listarAnalisesHoje() {
 
                     =
 
-                    CURRENT_DATE AT TIME ZONE
-                    'America/Sao_Paulo'
+                    (
+                        CURRENT_TIMESTAMP
+                        AT TIME ZONE
+                        'America/Sao_Paulo'
+                    )::date
 
                 ORDER BY
 
-                    j.data_jogo ASC,
+                    a.criado_em DESC,
 
                     a.id DESC
 
                 `
 
             );
-
 
         return resultado.rows;
 
@@ -1323,7 +1223,6 @@ export async function listarAnalisesHoje() {
 
 }
 
-
 // ==================================================
 // VALUE BETS
 // ==================================================
@@ -1338,18 +1237,14 @@ export async function salvarValueBet(
 
     }
 
-
     const {
-
         jogo_id,
         mercado,
         odd_mercado,
         probabilidade_real,
         valor_esperado,
         confianca
-
     } = valueBet;
-
 
     const jogoIdNumero =
 
@@ -1363,25 +1258,16 @@ export async function salvarValueBet(
                 jogo_id
             );
 
-
     if (
-
         jogoIdNumero !== null
-
         &&
-
         (
-
             !Number.isInteger(
                 jogoIdNumero
             )
-
             ||
-
             jogoIdNumero <= 0
-
         )
-
     ) {
 
         throw new Error(
@@ -1389,7 +1275,6 @@ export async function salvarValueBet(
         );
 
     }
-
 
     const resultado =
         await query(
@@ -1423,7 +1308,6 @@ export async function salvarValueBet(
             `,
 
             [
-
                 jogoIdNumero,
 
                 mercado ??
@@ -1440,11 +1324,9 @@ export async function salvarValueBet(
 
                 confianca ??
                     null
-
             ]
 
         );
-
 
     return (
         resultado.rows[0] ||
@@ -1452,7 +1334,6 @@ export async function salvarValueBet(
     );
 
 }
-
 
 // ==================================================
 // DASHBOARD
@@ -1475,13 +1356,9 @@ export async function buscarDashboard() {
 
             );
 
-
         return (
-
             resultado.rows[0] ||
-
             null
-
         );
 
     }
@@ -1501,7 +1378,6 @@ export async function buscarDashboard() {
     }
 
 }
-
 
 // ==================================================
 // EXPORT FINAL
