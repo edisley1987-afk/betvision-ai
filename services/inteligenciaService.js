@@ -2,37 +2,34 @@
 // BETVISION AI
 // services/inteligenciaService.js
 //
-// MOTOR DE INTELIGÊNCIA ESTATÍSTICA v9.0
+// MOTOR DE INTELIGÊNCIA ESTATÍSTICA v10.0
 //
-// CORREÇÕES PRINCIPAIS:
+// CORREÇÕES:
 //
-// - Probabilidades realmente diferentes por jogo
-// - Não reutiliza cegamente análise antiga
-// - Recalcula análise dos jogos atuais
-// - Atualiza análise existente pelo api_id
-// - Mantém proteção contra concorrência
-// - Mantém compatibilidade com PostgreSQL / NeonDB
-// - Histórico real
-// - Forma recente
-// - Gols marcados e sofridos
+// - Histórico real utilizado na análise
+// - Forma recente utilizada corretamente
+// - Gols marcados utilizados corretamente
+// - Gols sofridos utilizados corretamente
+// - H2H interpretado corretamente
+// - Compatibilidade com vários formatos de histórico
+// - Probabilidades diferentes por jogo
+// - XG individual por equipe
 // - Mando de campo
-// - H2H
-// - XG individual
-// - Probabilidades normalizadas
-// - Placar previsto
+// - Poisson
 // - Confiança
 // - Value Bet
-// - Somente jogos de hoje na listagem
-// - Sem jogos fictícios
+// - Atualização pelo api_id
+// - Proteção contra concorrência
+// - Compatibilidade PostgreSQL / NeonDB
+// - Somente análises de jogos de hoje
+// - Sem reaproveitar análise antiga como resultado
 // ==================================================
 
 import {
-
     salvarAnalise,
     salvarValueBet,
     buscarAnalisePorApiId,
     buscarAnalisePorNome
-
 } from "./bancoService.js";
 
 import {
@@ -53,12 +50,46 @@ const analisesEmProcessamento = new Set();
 
 function numeroSeguro(valor, padrao = 0) {
 
+    if (
+        valor === undefined ||
+        valor === null ||
+        valor === ""
+    ) {
+        return padrao;
+    }
+
     const numero = Number(valor);
 
     return Number.isFinite(numero)
         ? numero
         : padrao;
+}
 
+
+// ==================================================
+// PRIMEIRO NÚMERO VÁLIDO
+// ==================================================
+
+function primeiroNumero(...valores) {
+
+    for (const valor of valores) {
+
+        if (
+            valor === undefined ||
+            valor === null ||
+            valor === ""
+        ) {
+            continue;
+        }
+
+        const numero = Number(valor);
+
+        if (Number.isFinite(numero)) {
+            return numero;
+        }
+    }
+
+    return null;
 }
 
 
@@ -75,16 +106,16 @@ function limitar(
     const numero = Number(valor);
 
     if (!Number.isFinite(numero)) {
-
         return minimo;
-
     }
 
     return Math.max(
         minimo,
-        Math.min(maximo, numero)
+        Math.min(
+            maximo,
+            numero
+        )
     );
-
 }
 
 
@@ -100,7 +131,6 @@ function arredondar(
     return Number(
         Number(valor || 0).toFixed(casas)
     );
-
 }
 
 
@@ -115,9 +145,7 @@ function normalizarApiId(valor) {
         valor === null ||
         valor === ""
     ) {
-
         return null;
-
     }
 
     const numero = Number(valor);
@@ -126,13 +154,10 @@ function normalizarApiId(valor) {
         !Number.isInteger(numero) ||
         numero <= 0
     ) {
-
         return null;
-
     }
 
     return numero;
-
 }
 
 
@@ -146,9 +171,7 @@ function obterApiId(jogo) {
         !jogo ||
         typeof jogo !== "object"
     ) {
-
         return null;
-
     }
 
     return normalizarApiId(
@@ -158,10 +181,10 @@ function obterApiId(jogo) {
         jogo.fixture_id ??
         jogo.fixtureId ??
         jogo.id_api ??
-        jogo.external_id
+        jogo.external_id ??
+        jogo.externalId
 
     );
-
 }
 
 
@@ -176,9 +199,11 @@ function obterNomeJogo(jogo) {
         jogo?.time_casa ??
         jogo?.timeCasa ??
         jogo?.casa ??
+        jogo?.home_team ??
         jogo?.homeTeam?.name ??
         jogo?.home_team?.name ??
         jogo?.home?.name ??
+        jogo?.teams?.home?.name ??
         null;
 
 
@@ -187,9 +212,11 @@ function obterNomeJogo(jogo) {
         jogo?.time_fora ??
         jogo?.timeFora ??
         jogo?.fora ??
+        jogo?.away_team ??
         jogo?.awayTeam?.name ??
         jogo?.away_team?.name ??
         jogo?.away?.name ??
+        jogo?.teams?.away?.name ??
         null;
 
 
@@ -205,14 +232,12 @@ function obterNomeJogo(jogo) {
     }
 
 
-    const casa = String(
-        nomeCasa
-    ).trim();
+    const casa =
+        String(nomeCasa).trim();
 
 
-    const fora = String(
-        nomeFora
-    ).trim();
+    const fora =
+        String(nomeFora).trim();
 
 
     if (
@@ -237,7 +262,6 @@ function obterNomeJogo(jogo) {
             `${casa} x ${fora}`
 
     };
-
 }
 
 
@@ -250,12 +274,8 @@ function validarJogo(jogo) {
     if (!jogo) {
 
         return {
-
             valido: false,
-
-            erro:
-                "Jogo não informado"
-
+            erro: "Jogo não informado"
         };
 
     }
@@ -268,19 +288,14 @@ function validarJogo(jogo) {
     if (!apiId) {
 
         return {
-
             valido: false,
-
-            erro:
-                "api_id inválido ou ausente"
-
+            erro: "api_id inválido ou ausente"
         };
 
     }
 
 
     let nomes;
-
 
     try {
 
@@ -292,12 +307,8 @@ function validarJogo(jogo) {
     catch (erro) {
 
         return {
-
             valido: false,
-
-            erro:
-                erro.message
-
+            erro: erro.message
         };
 
     }
@@ -321,6 +332,8 @@ function validarJogo(jogo) {
         "fora",
         "time a",
         "time b",
+        "time 1",
+        "time 2",
         "home",
         "away",
         "home team",
@@ -332,245 +345,589 @@ function validarJogo(jogo) {
 
 
     if (
-
         nomesInvalidos.includes(casa) ||
         nomesInvalidos.includes(fora)
-
     ) {
 
         return {
-
             valido: false,
-
-            erro:
-                "Times fictícios ou de fallback"
-
+            erro: "Times fictícios ou de fallback"
         };
 
     }
 
 
-    if (
-        casa === fora
-    ) {
+    if (casa === fora) {
 
         return {
-
             valido: false,
-
-            erro:
-                "Time da casa e visitante são iguais"
-
+            erro: "Time da casa e visitante são iguais"
         };
 
     }
 
 
     return {
-
         valido: true,
-
         erro: null
-
     };
+}
 
+
+// ==================================================
+// CONVERTER FORMA
+//
+// Aceita:
+// 0-1
+// 0-100
+// percentual
+// pontos
+// ==================================================
+
+function normalizarForma(valor, padrao = 50) {
+
+    const numero =
+        Number(valor);
+
+
+    if (
+        !Number.isFinite(numero)
+    ) {
+
+        return padrao;
+
+    }
+
+
+    // Forma em escala 0-1
+    if (
+        numero >= 0 &&
+        numero <= 1
+    ) {
+
+        return numero * 100;
+
+    }
+
+
+    return limitar(
+        numero,
+        0,
+        100
+    );
 }
 
 
 // ==================================================
 // EXTRAIR ESTATÍSTICAS
 //
-// Aceita diversos nomes de campos para manter
-// compatibilidade com o restante do projeto.
+// Esta é a parte principal da correção.
+//
+// Aceita diferentes estruturas:
+//
+// dados.formaCasa
+// dados.forma.casa
+// dados.casa.forma
+// dados.historicoCasa
+// dados.historico.casa
+// dados.historicoCasa.jogos
+// dados.timeCasa.jogos
+// etc.
 // ==================================================
 
 function extrairEstatisticas(dados = {}) {
 
-    const ataqueCasa = numeroSeguro(
+    const casa =
+        dados.casa ||
+        dados.timeCasa ||
+        dados.home ||
+        dados.homeTeam ||
+        dados.historico?.casa ||
+        dados.historicoCasa ||
+        {};
 
-        dados.ataqueCasa ??
-        dados.forcaAtaqueCasa ??
-        dados.mediaAtaqueCasa ??
-        dados.golsCasa ??
-        dados.mediaGolsCasa,
 
-        1
+    const fora =
+        dados.fora ||
+        dados.timeFora ||
+        dados.away ||
+        dados.awayTeam ||
+        dados.historico?.fora ||
+        dados.historicoFora ||
+        {};
 
-    );
 
+    // ==================================================
+    // JOGOS
+    // ==================================================
 
-    const ataqueFora = numeroSeguro(
+    const jogosCasa =
+        primeiroNumero(
 
-        dados.ataqueFora ??
-        dados.forcaAtaqueFora ??
-        dados.mediaAtaqueFora ??
-        dados.golsFora ??
-        dados.mediaGolsFora,
+            dados.jogosCasa,
+            dados.totalJogosCasa,
 
-        1
+            dados.historicoCasa?.jogos,
+            dados.historicoCasa?.totalJogos,
 
-    );
+            dados.historico?.casa?.jogos,
+            dados.historico?.casa?.totalJogos,
 
+            dados.formaCasa?.jogos,
 
-    const defesaCasa = numeroSeguro(
+            casa.jogos,
+            casa.totalJogos,
+            casa.partidas,
+            casa.total
 
-        dados.defesaCasa ??
-        dados.forcaDefesaCasa ??
-        dados.mediaDefesaCasa ??
-        dados.golsSofridosCasa ??
-        dados.mediaGolsSofridosCasa,
+        );
 
-        1
 
-    );
+    const jogosFora =
+        primeiroNumero(
 
+            dados.jogosFora,
+            dados.totalJogosFora,
 
-    const defesaFora = numeroSeguro(
+            dados.historicoFora?.jogos,
+            dados.historicoFora?.totalJogos,
 
-        dados.defesaFora ??
-        dados.forcaDefesaFora ??
-        dados.mediaDefesaFora ??
-        dados.golsSofridosFora ??
-        dados.mediaGolsSofridosFora,
+            dados.historico?.fora?.jogos,
+            dados.historico?.fora?.totalJogos,
 
-        1
+            dados.formaFora?.jogos,
 
-    );
+            fora.jogos,
+            fora.totalJogos,
+            fora.partidas,
+            fora.total
 
+        );
 
-    const formaCasa = numeroSeguro(
 
-        dados.formaCasa ??
-        dados.percentualFormaCasa ??
-        dados.formaCasaPercentual,
+    // ==================================================
+    // GOLS MARCADOS
+    // ==================================================
 
-        50
+    const golsCasa =
+        primeiroNumero(
 
-    );
+            dados.golsCasa,
+            dados.golsMarcadosCasa,
+            dados.totalGolsCasa,
 
+            dados.historicoCasa?.gols,
+            dados.historicoCasa?.golsMarcados,
+            dados.historicoCasa?.totalGols,
 
-    const formaFora = numeroSeguro(
+            dados.historico?.casa?.gols,
+            dados.historico?.casa?.golsMarcados,
 
-        dados.formaFora ??
-        dados.percentualFormaFora ??
-        dados.formaForaPercentual,
+            casa.gols,
+            casa.golsMarcados,
+            casa.golsFeitos,
+            casa.totalGols
 
-        50
+        );
 
-    );
 
+    const golsFora =
+        primeiroNumero(
 
-    const mediaGolsCasa = numeroSeguro(
+            dados.golsFora,
+            dados.golsMarcadosFora,
+            dados.totalGolsFora,
 
-        dados.mediaGolsCasa ??
-        dados.golsCasa ??
-        dados.mediaCasa,
+            dados.historicoFora?.gols,
+            dados.historicoFora?.golsMarcados,
+            dados.historicoFora?.totalGols,
 
-        1
+            dados.historico?.fora?.gols,
+            dados.historico?.fora?.golsMarcados,
 
-    );
+            fora.gols,
+            fora.golsMarcados,
+            fora.golsFeitos,
+            fora.totalGols
 
+        );
 
-    const mediaGolsFora = numeroSeguro(
 
-        dados.mediaGolsFora ??
-        dados.golsFora ??
-        dados.mediaFora,
+    // ==================================================
+    // GOLS SOFRIDOS
+    // ==================================================
 
-        1
+    const golsSofridosCasa =
+        primeiroNumero(
 
-    );
+            dados.golsSofridosCasa,
+            dados.golsContraCasa,
 
+            dados.historicoCasa?.golsSofridos,
+            dados.historicoCasa?.golsContra,
 
-    const mediaSofridosCasa = numeroSeguro(
+            dados.historico?.casa?.golsSofridos,
+            dados.historico?.casa?.golsContra,
 
-        dados.mediaGolsSofridosCasa ??
-        dados.golsSofridosCasa ??
-        dados.mediaSofridosCasa,
+            casa.golsSofridos,
+            casa.golsContra,
+            casa.golsRecebidos
 
-        1
+        );
 
-    );
 
+    const golsSofridosFora =
+        primeiroNumero(
 
-    const mediaSofridosFora = numeroSeguro(
+            dados.golsSofridosFora,
+            dados.golsContraFora,
 
-        dados.mediaGolsSofridosFora ??
-        dados.golsSofridosFora ??
-        dados.mediaSofridosFora,
+            dados.historicoFora?.golsSofridos,
+            dados.historicoFora?.golsContra,
 
-        1
+            dados.historico?.fora?.golsSofridos,
+            dados.historico?.fora?.golsContra,
 
-    );
+            fora.golsSofridos,
+            fora.golsContra,
+            fora.golsRecebidos
 
+        );
 
-    const jogosCasa = numeroSeguro(
 
-        dados.jogosCasa ??
-        dados.historicoCasa ??
-        dados.totalJogosCasa ??
-        dados.historico?.casa,
+    // ==================================================
+    // MÉDIA DE GOLS
+    // ==================================================
 
-        0
+    let mediaGolsCasa =
+        primeiroNumero(
 
-    );
+            dados.mediaGolsCasa,
+            dados.mediaCasa,
 
+            dados.historicoCasa?.mediaGols,
+            dados.historicoCasa?.mediaGolsMarcados,
 
-    const jogosFora = numeroSeguro(
+            dados.historico?.casa?.mediaGols,
 
-        dados.jogosFora ??
-        dados.historicoFora ??
-        dados.totalJogosFora ??
-        dados.historico?.fora,
+            casa.mediaGols,
+            casa.mediaGolsMarcados
 
-        0
+        );
 
-    );
 
+    let mediaGolsFora =
+        primeiroNumero(
 
-    const h2h = numeroSeguro(
+            dados.mediaGolsFora,
+            dados.mediaFora,
 
-        dados.h2h ??
-        dados.totalH2H ??
-        dados.confrontosH2H ??
-        dados.historicoH2H,
+            dados.historicoFora?.mediaGols,
+            dados.historicoFora?.mediaGolsMarcados,
 
-        0
+            dados.historico?.fora?.mediaGols,
 
-    );
+            fora.mediaGols,
+            fora.mediaGolsMarcados
 
+        );
 
-    const vitoriasCasaH2H = numeroSeguro(
 
-        dados.vitoriasCasaH2H ??
-        dados.h2hCasa ??
-        dados.h2h?.casa,
+    // ==================================================
+    // CALCULAR MÉDIA A PARTIR DOS GOLS
+    // ==================================================
 
-        0
+    if (
+        mediaGolsCasa === null &&
+        golsCasa !== null &&
+        jogosCasa > 0
+    ) {
 
-    );
+        mediaGolsCasa =
+            golsCasa / jogosCasa;
 
+    }
 
-    const empatesH2H = numeroSeguro(
 
-        dados.empatesH2H ??
-        dados.h2hEmpates ??
-        dados.h2h?.empates,
+    if (
+        mediaGolsFora === null &&
+        golsFora !== null &&
+        jogosFora > 0
+    ) {
 
-        0
+        mediaGolsFora =
+            golsFora / jogosFora;
 
-    );
+    }
 
 
-    const vitoriasForaH2H = numeroSeguro(
+    // ==================================================
+    // MÉDIA DE GOLS SOFRIDOS
+    // ==================================================
 
-        dados.vitoriasForaH2H ??
-        dados.h2hFora ??
-        dados.h2h?.fora,
+    let mediaSofridosCasa =
+        primeiroNumero(
 
-        0
+            dados.mediaGolsSofridosCasa,
+            dados.mediaSofridosCasa,
 
-    );
+            dados.historicoCasa?.mediaGolsSofridos,
+
+            dados.historico?.casa?.mediaGolsSofridos,
+
+            casa.mediaGolsSofridos
+
+        );
+
+
+    let mediaSofridosFora =
+        primeiroNumero(
+
+            dados.mediaGolsSofridosFora,
+            dados.mediaSofridosFora,
+
+            dados.historicoFora?.mediaGolsSofridos,
+
+            dados.historico?.fora?.mediaGolsSofridos,
+
+            fora.mediaGolsSofridos
+
+        );
+
+
+    if (
+        mediaSofridosCasa === null &&
+        golsSofridosCasa !== null &&
+        jogosCasa > 0
+    ) {
+
+        mediaSofridosCasa =
+            golsSofridosCasa / jogosCasa;
+
+    }
+
+
+    if (
+        mediaSofridosFora === null &&
+        golsSofridosFora !== null &&
+        jogosFora > 0
+    ) {
+
+        mediaSofridosFora =
+            golsSofridosFora / jogosFora;
+
+    }
+
+
+    // ==================================================
+    // FORMA
+    // ==================================================
+
+    const formaCasaValor =
+        primeiroNumero(
+
+            dados.formaCasa,
+            dados.percentualFormaCasa,
+            dados.formaCasaPercentual,
+
+            dados.historicoCasa?.forma,
+            dados.historicoCasa?.percentualForma,
+
+            dados.historico?.casa?.forma,
+            dados.historico?.casa?.percentualForma,
+
+            casa.forma,
+            casa.percentualForma
+
+        );
+
+
+    const formaForaValor =
+        primeiroNumero(
+
+            dados.formaFora,
+            dados.percentualFormaFora,
+            dados.formaForaPercentual,
+
+            dados.historicoFora?.forma,
+            dados.historicoFora?.percentualForma,
+
+            dados.historico?.fora?.forma,
+            dados.historico?.fora?.percentualForma,
+
+            fora.forma,
+            fora.percentualForma
+
+        );
+
+
+    const formaCasa =
+        normalizarForma(
+            formaCasaValor,
+            jogosCasa > 0 ? 0 : 50
+        );
+
+
+    const formaFora =
+        normalizarForma(
+            formaForaValor,
+            jogosFora > 0 ? 0 : 50
+        );
+
+
+    // ==================================================
+    // H2H
+    // ==================================================
+
+    let h2h =
+        primeiroNumero(
+
+            dados.h2h,
+            dados.totalH2H,
+            dados.confrontosH2H,
+            dados.historicoH2H?.total,
+            dados.historicoH2H?.jogos,
+            dados.h2h?.total,
+            dados.h2h?.jogos
+
+        );
+
+
+    let vitoriasCasaH2H =
+        primeiroNumero(
+
+            dados.vitoriasCasaH2H,
+            dados.h2hCasa,
+            dados.h2h?.casa?.vitorias,
+            dados.h2h?.casa,
+            dados.historicoH2H?.casa?.vitorias
+
+        );
+
+
+    let empatesH2H =
+        primeiroNumero(
+
+            dados.empatesH2H,
+            dados.h2hEmpates,
+            dados.h2h?.empates,
+            dados.historicoH2H?.empates
+
+        );
+
+
+    let vitoriasForaH2H =
+        primeiroNumero(
+
+            dados.vitoriasForaH2H,
+            dados.h2hFora,
+            dados.h2h?.fora?.vitorias,
+            dados.h2h?.fora,
+            dados.historicoH2H?.fora?.vitorias
+
+        );
+
+
+    vitoriasCasaH2H =
+        vitoriasCasaH2H ?? 0;
+
+
+    empatesH2H =
+        empatesH2H ?? 0;
+
+
+    vitoriasForaH2H =
+        vitoriasForaH2H ?? 0;
+
+
+    const totalH2HCalculado =
+
+        vitoriasCasaH2H +
+        empatesH2H +
+        vitoriasForaH2H;
+
+
+    if (
+        h2h === null &&
+        totalH2HCalculado > 0
+    ) {
+
+        h2h =
+            totalH2HCalculado;
+
+    }
+
+
+    h2h =
+        h2h ?? 0;
+
+
+    // ==================================================
+    // ATAQUE
+    // ==================================================
+
+    const ataqueCasa =
+        primeiroNumero(
+
+            dados.ataqueCasa,
+            dados.forcaAtaqueCasa,
+            dados.mediaAtaqueCasa,
+
+            casa.ataque,
+            casa.forcaAtaque,
+
+            mediaGolsCasa
+
+        ) ?? 1;
+
+
+    const ataqueFora =
+        primeiroNumero(
+
+            dados.ataqueFora,
+            dados.forcaAtaqueFora,
+            dados.mediaAtaqueFora,
+
+            fora.ataque,
+            fora.forcaAtaque,
+
+            mediaGolsFora
+
+        ) ?? 1;
+
+
+    // ==================================================
+    // DEFESA
+    // ==================================================
+
+    const defesaCasa =
+        primeiroNumero(
+
+            dados.defesaCasa,
+            dados.forcaDefesaCasa,
+            dados.mediaDefesaCasa,
+
+            casa.defesa,
+            casa.forcaDefesa,
+
+            mediaSofridosCasa
+
+        ) ?? 1;
+
+
+    const defesaFora =
+        primeiroNumero(
+
+            dados.defesaFora,
+            dados.forcaDefesaFora,
+            dados.mediaDefesaFora,
+
+            fora.defesa,
+            fora.forcaDefesa,
+
+            mediaSofridosFora
+
+        ) ?? 1;
 
 
     return {
@@ -584,49 +941,61 @@ function extrairEstatisticas(dados = {}) {
         formaCasa,
         formaFora,
 
-        mediaGolsCasa,
-        mediaGolsFora,
+        mediaGolsCasa:
+            mediaGolsCasa ?? 1,
 
-        mediaSofridosCasa,
-        mediaSofridosFora,
+        mediaGolsFora:
+            mediaGolsFora ?? 1,
 
-        jogosCasa,
-        jogosFora,
+        mediaSofridosCasa:
+            mediaSofridosCasa ?? 1,
+
+        mediaSofridosFora:
+            mediaSofridosFora ?? 1,
+
+        jogosCasa:
+            jogosCasa ?? 0,
+
+        jogosFora:
+            jogosFora ?? 0,
+
+        golsCasa:
+            golsCasa ?? 0,
+
+        golsFora:
+            golsFora ?? 0,
+
+        golsSofridosCasa:
+            golsSofridosCasa ?? 0,
+
+        golsSofridosFora:
+            golsSofridosFora ?? 0,
 
         h2h,
 
         vitoriasCasaH2H,
+
         empatesH2H,
+
         vitoriasForaH2H
 
     };
-
 }
 
 
 // ==================================================
 // XG
-//
-// Modelo:
-//
-// ataque próprio
-// +
-// defesa adversária
-// +
-// forma
-// +
-// mando
-// +
-// ajuste de amostra
 // ==================================================
 
 export function calcularXG(dados = {}) {
 
     const estatisticas =
-        extrairEstatisticas(dados);
+        extrairEstatisticas(
+            dados
+        );
 
 
-    const {
+    let {
 
         ataqueCasa,
         ataqueFora,
@@ -646,177 +1015,157 @@ export function calcularXG(dados = {}) {
     } = estatisticas;
 
 
-    // ----------------------------------------------
-    // BASE CASA
-    // ----------------------------------------------
-
-    const baseCasa =
-
-        (
-            mediaGolsCasa * 0.40
-        )
-
-        +
-
-        (
-            ataqueCasa * 0.20
-        )
-
-        +
-
-        (
-            mediaSofridosFora * 0.20
-        )
-
-        +
-
-        (
-            defesaFora * 0.20
-        );
-
-
-    // ----------------------------------------------
-    // BASE FORA
-    // ----------------------------------------------
-
-    const baseFora =
-
-        (
-            mediaGolsFora * 0.40
-        )
-
-        +
-
-        (
-            ataqueFora * 0.20
-        )
-
-        +
-
-        (
-            mediaSofridosCasa * 0.20
-        )
-
-        +
-
-        (
-            defesaCasa * 0.20
-        );
-
-
-    // ----------------------------------------------
-    // NORMALIZAÇÃO DOS INDICADORES
-    //
-    // ataque/defesa podem estar em escala 0-100
-    // ou escala próxima de gols.
-    // ----------------------------------------------
-
-    let xgCasa =
-        baseCasa;
-
-
-    let xgFora =
-        baseFora;
-
+    // ==================================================
+    // PROTEÇÃO CONTRA ESCALA 0-100
+    // ==================================================
 
     if (
-        ataqueCasa > 10 ||
-        ataqueFora > 10 ||
-        defesaCasa > 10 ||
-        defesaFora > 10
+        ataqueCasa > 10
     ) {
 
-        xgCasa =
-
-            (
-                ataqueCasa * 0.010
-            )
-
-            +
-
-            (
-                defesaFora * 0.006
-            )
-
-            +
-
-            (
-                mediaGolsCasa * 0.35
-            );
-
-
-        xgFora =
-
-            (
-                ataqueFora * 0.010
-            )
-
-            +
-
-            (
-                defesaCasa * 0.006
-            )
-
-            +
-
-            (
-                mediaGolsFora * 0.35
-            );
+        ataqueCasa =
+            ataqueCasa / 100;
 
     }
 
 
-    // ----------------------------------------------
+    if (
+        ataqueFora > 10
+    ) {
+
+        ataqueFora =
+            ataqueFora / 100;
+
+    }
+
+
+    if (
+        defesaCasa > 10
+    ) {
+
+        defesaCasa =
+            defesaCasa / 100;
+
+    }
+
+
+    if (
+        defesaFora > 10
+    ) {
+
+        defesaFora =
+            defesaFora / 100;
+
+    }
+
+
+    // ==================================================
+    // BASE ESTATÍSTICA
+    // ==================================================
+
+    let xgCasa =
+
+        (
+            mediaGolsCasa *
+            0.45
+        )
+
+        +
+
+        (
+            ataqueCasa *
+            0.20
+        )
+
+        +
+
+        (
+            mediaSofridosFora *
+            0.20
+        )
+
+        +
+
+        (
+            defesaFora *
+            0.15
+        );
+
+
+    let xgFora =
+
+        (
+            mediaGolsFora *
+            0.45
+        )
+
+        +
+
+        (
+            ataqueFora *
+            0.20
+        )
+
+        +
+
+        (
+            mediaSofridosCasa *
+            0.20
+        )
+
+        +
+
+        (
+            defesaCasa *
+            0.15
+        );
+
+
+    // ==================================================
     // FORMA
-    // ----------------------------------------------
+    // ==================================================
 
     xgCasa *=
 
-        0.85
+        0.90
         +
+
         (
-            limitar(
-                formaCasa,
-                0,
-                100
-            )
-            / 100
-            * 0.30
+            formaCasa /
+            100 *
+            0.25
         );
 
 
     xgFora *=
 
-        0.85
+        0.90
         +
+
         (
-            limitar(
-                formaFora,
-                0,
-                100
-            )
-            / 100
-            * 0.30
+            formaFora /
+            100 *
+            0.25
         );
 
 
-    // ----------------------------------------------
-    // MANDO DE CAMPO
-    // ----------------------------------------------
+    // ==================================================
+    // MANDO
+    // ==================================================
 
-    xgCasa *= 1.08;
+    xgCasa *= 1.10;
 
-    xgFora *= 0.94;
+    xgFora *= 0.95;
 
 
-    // ----------------------------------------------
+    // ==================================================
     // LIMITES
-    // ----------------------------------------------
+    // ==================================================
 
     xgCasa =
         limitar(
             xgCasa,
-            0.20,
+            0.15,
             4.50
         );
 
@@ -824,7 +1173,7 @@ export function calcularXG(dados = {}) {
     xgFora =
         limitar(
             xgFora,
-            0.20,
+            0.15,
             4.50
         );
 
@@ -844,20 +1193,19 @@ export function calcularXG(dados = {}) {
             )
 
     };
-
 }
 
 
 // ==================================================
-// PROBABILIDADE DE POISSON
+// FATORIAL
 // ==================================================
 
 function fatorial(numero) {
 
-    if (numero <= 1) {
-
+    if (
+        numero <= 1
+    ) {
         return 1;
-
     }
 
 
@@ -876,9 +1224,12 @@ function fatorial(numero) {
 
 
     return resultado;
-
 }
 
+
+// ==================================================
+// POISSON
+// ==================================================
 
 function poisson(
     gols,
@@ -888,9 +1239,7 @@ function poisson(
     if (
         lambda <= 0
     ) {
-
         return 0;
-
     }
 
 
@@ -908,7 +1257,6 @@ function poisson(
         fatorial(gols)
 
     );
-
 }
 
 
@@ -922,23 +1270,21 @@ function probabilidadesPorXG(
 ) {
 
     let probCasa = 0;
+
     let probEmpate = 0;
+
     let probFora = 0;
 
 
-    // ----------------------------------------------
-    // 0x0 até 8x8
-    // ----------------------------------------------
-
     for (
         let golsCasa = 0;
-        golsCasa <= 8;
+        golsCasa <= 10;
         golsCasa++
     ) {
 
         for (
             let golsFora = 0;
-            golsFora <= 8;
+            golsFora <= 10;
             golsFora++
         ) {
 
@@ -958,7 +1304,8 @@ function probabilidadesPorXG(
 
 
             if (
-                golsCasa > golsFora
+                golsCasa >
+                golsFora
             ) {
 
                 probCasa += prob;
@@ -966,7 +1313,8 @@ function probabilidadesPorXG(
             }
 
             else if (
-                golsCasa === golsFora
+                golsCasa ===
+                golsFora
             ) {
 
                 probEmpate += prob;
@@ -1027,21 +1375,11 @@ function probabilidadesPorXG(
             ) * 100
 
     };
-
 }
 
 
 // ==================================================
 // PROBABILIDADES
-//
-// Combina:
-//
-// 1. XG
-// 2. Forma
-// 3. H2H
-// 4. Mando
-//
-// H2H recebe peso baixo para não distorcer.
 // ==================================================
 
 export function calcularProbabilidades(
@@ -1067,9 +1405,9 @@ export function calcularProbabilidades(
         );
 
 
-    // ----------------------------------------------
+    // ==================================================
     // FORMA
-    // ----------------------------------------------
+    // ==================================================
 
     const formaCasa =
         limitar(
@@ -1087,78 +1425,17 @@ export function calcularProbabilidades(
         );
 
 
-    let formaCasaScore =
-        formaCasa;
-
-
-    let formaForaScore =
-        formaFora;
-
-
-    // ----------------------------------------------
-    // H2H
-    // ----------------------------------------------
-
-    let h2hCasaScore = 33.33;
-    let h2hForaScore = 33.33;
-    let h2hEmpateScore = 33.34;
-
-
-    if (
-        estatisticas.h2h > 0
-    ) {
-
-        const totalH2H =
-
-            estatisticas.vitoriasCasaH2H +
-            estatisticas.empatesH2H +
-            estatisticas.vitoriasForaH2H;
-
-
-        if (
-            totalH2H > 0
-        ) {
-
-            h2hCasaScore =
-
-                (
-                    estatisticas.vitoriasCasaH2H /
-                    totalH2H
-                ) * 100;
-
-
-            h2hEmpateScore =
-
-                (
-                    estatisticas.empatesH2H /
-                    totalH2H
-                ) * 100;
-
-
-            h2hForaScore =
-
-                (
-                    estatisticas.vitoriasForaH2H /
-                    totalH2H
-                ) * 100;
-
-        }
-
-    }
-
-
-    // ----------------------------------------------
-    // FORMA → PROBABILIDADE
-    // ----------------------------------------------
-
     const formaTotal =
-
         formaCasa +
         formaFora;
 
 
-    let formaCasaProb = 33.33;
-    let formaForaProb = 33.33;
+    let formaCasaProb =
+        33.33;
+
+
+    let formaForaProb =
+        33.33;
 
 
     if (
@@ -1166,7 +1443,6 @@ export function calcularProbabilidades(
     ) {
 
         formaCasaProb =
-
             (
                 formaCasa /
                 formaTotal
@@ -1174,7 +1450,6 @@ export function calcularProbabilidades(
 
 
         formaForaProb =
-
             (
                 formaFora /
                 formaTotal
@@ -1183,9 +1458,62 @@ export function calcularProbabilidades(
     }
 
 
-    // ----------------------------------------------
+    // ==================================================
+    // H2H
+    // ==================================================
+
+    let h2hCasaScore =
+        33.33;
+
+
+    let h2hEmpateScore =
+        33.34;
+
+
+    let h2hForaScore =
+        33.33;
+
+
+    const totalH2H =
+
+        estatisticas.vitoriasCasaH2H +
+        estatisticas.empatesH2H +
+        estatisticas.vitoriasForaH2H;
+
+
+    if (
+        totalH2H > 0
+    ) {
+
+        h2hCasaScore =
+
+            (
+                estatisticas.vitoriasCasaH2H /
+                totalH2H
+            ) * 100;
+
+
+        h2hEmpateScore =
+
+            (
+                estatisticas.empatesH2H /
+                totalH2H
+            ) * 100;
+
+
+        h2hForaScore =
+
+            (
+                estatisticas.vitoriasForaH2H /
+                totalH2H
+            ) * 100;
+
+    }
+
+
+    // ==================================================
     // EMPATE BASE
-    // ----------------------------------------------
+    // ==================================================
 
     const diferencaForma =
 
@@ -1198,98 +1526,138 @@ export function calcularProbabilidades(
     const empateForma =
 
         limitar(
+
             32 -
             (
                 diferencaForma *
                 0.10
             ),
+
             20,
             34
+
         );
 
 
-    // ----------------------------------------------
-    // COMBINAÇÃO
+    // ==================================================
+    // PESOS DINÂMICOS
     //
-    // XG = 65%
-    // Forma = 25%
-    // H2H = 10%
-    // ----------------------------------------------
+    // Se não existe H2H real,
+    // não damos 10% para um H2H fictício.
+    // ==================================================
+
+    let pesoXG =
+        0.70;
+
+
+    let pesoForma =
+        0.30;
+
+
+    let pesoH2H =
+        0;
+
+
+    if (
+        totalH2H >= 2
+    ) {
+
+        pesoXG =
+            0.65;
+
+        pesoForma =
+            0.25;
+
+        pesoH2H =
+            0.10;
+
+    }
+
+
+    // ==================================================
+    // COMBINAÇÃO
+    // ==================================================
 
     let casa =
 
         (
-            poissonProb.casa * 0.65
+            poissonProb.casa *
+            pesoXG
         )
 
         +
 
         (
-            formaCasaProb * 0.25
+            formaCasaProb *
+            pesoForma
         )
 
         +
 
         (
-            h2hCasaScore * 0.10
+            h2hCasaScore *
+            pesoH2H
         );
 
 
     let fora =
 
         (
-            poissonProb.fora * 0.65
+            poissonProb.fora *
+            pesoXG
         )
 
         +
 
         (
-            formaForaProb * 0.25
+            formaForaProb *
+            pesoForma
         )
 
         +
 
         (
-            h2hForaScore * 0.10
+            h2hForaScore *
+            pesoH2H
         );
 
 
     let empate =
 
         (
-            poissonProb.empate * 0.65
+            poissonProb.empate *
+            pesoXG
         )
 
         +
 
         (
-            empateForma * 0.25
+            empateForma *
+            pesoForma
         )
 
         +
 
         (
-            h2hEmpateScore * 0.10
+            h2hEmpateScore *
+            pesoH2H
         );
 
 
-    // ----------------------------------------------
-    // MANDO DE CAMPO
-    //
-    // Pequeno ajuste.
-    // ----------------------------------------------
+    // ==================================================
+    // MANDO
+    // ==================================================
 
     casa *= 1.05;
 
     fora *= 0.97;
 
 
-    // ----------------------------------------------
-    // NORMALIZAÇÃO
-    // ----------------------------------------------
+    // ==================================================
+    // NORMALIZAR
+    // ==================================================
 
     const total =
-
         casa +
         empate +
         fora;
@@ -1302,11 +1670,16 @@ export function calcularProbabilidades(
         return {
 
             casa: 33.33,
+
             empate: 33.34,
+
             fora: 33.33,
 
-            xgCasa: xg.casa,
-            xgFora: xg.fora
+            xgCasa:
+                xg.casa,
+
+            xgFora:
+                xg.fora
 
         };
 
@@ -1314,7 +1687,6 @@ export function calcularProbabilidades(
 
 
     let casaFinal =
-
         (
             casa /
             total
@@ -1322,7 +1694,6 @@ export function calcularProbabilidades(
 
 
     let empateFinal =
-
         (
             empate /
             total
@@ -1330,18 +1701,15 @@ export function calcularProbabilidades(
 
 
     let foraFinal =
-
         (
             fora /
             total
         ) * 100;
 
 
-    // ----------------------------------------------
+    // ==================================================
     // LIMITES
-    //
-    // Evita resultados absurdos.
-    // ----------------------------------------------
+    // ==================================================
 
     casaFinal =
         limitar(
@@ -1367,9 +1735,9 @@ export function calcularProbabilidades(
         );
 
 
-    // ----------------------------------------------
-    // NORMALIZA NOVAMENTE
-    // ----------------------------------------------
+    // ==================================================
+    // NORMALIZAR NOVAMENTE
+    // ==================================================
 
     const somaLimitada =
 
@@ -1379,7 +1747,6 @@ export function calcularProbabilidades(
 
 
     casaFinal =
-
         (
             casaFinal /
             somaLimitada
@@ -1387,7 +1754,6 @@ export function calcularProbabilidades(
 
 
     empateFinal =
-
         (
             empateFinal /
             somaLimitada
@@ -1395,16 +1761,15 @@ export function calcularProbabilidades(
 
 
     foraFinal =
-
         (
             foraFinal /
             somaLimitada
         ) * 100;
 
 
-    // ----------------------------------------------
+    // ==================================================
     // ARREDONDAMENTO
-    // ----------------------------------------------
+    // ==================================================
 
     casaFinal =
         arredondar(
@@ -1427,9 +1792,9 @@ export function calcularProbabilidades(
         );
 
 
-    // ----------------------------------------------
+    // ==================================================
     // GARANTIR 100%
-    // ----------------------------------------------
+    // ==================================================
 
     const soma =
 
@@ -1447,12 +1812,15 @@ export function calcularProbabilidades(
 
 
     foraFinal =
-
         arredondar(
             foraFinal + ajuste,
             2
         );
 
+
+    // ==================================================
+    // LOG
+    // ==================================================
 
     console.log(
         "📊 MODELO ESTATÍSTICO"
@@ -1495,17 +1863,30 @@ export function calcularProbabilidades(
 
 
     console.log(
+        `   Gols Casa: ${estatisticas.golsCasa}`
+    );
+
+
+    console.log(
+        `   Gols Fora: ${estatisticas.golsFora}`
+    );
+
+
+    console.log(
         `   H2H: ${estatisticas.h2h}`
     );
 
 
     return {
 
-        casa: casaFinal,
+        casa:
+            casaFinal,
 
-        empate: empateFinal,
+        empate:
+            empateFinal,
 
-        fora: foraFinal,
+        fora:
+            foraFinal,
 
         xgCasa:
             xg.casa,
@@ -1514,7 +1895,6 @@ export function calcularProbabilidades(
             xg.fora
 
     };
-
 }
 
 
@@ -1535,7 +1915,6 @@ export function calcularPlacar(
     return {
 
         casa:
-
             Math.max(
                 0,
                 Math.round(
@@ -1544,7 +1923,6 @@ export function calcularPlacar(
             ),
 
         fora:
-
             Math.max(
                 0,
                 Math.round(
@@ -1553,7 +1931,6 @@ export function calcularPlacar(
             )
 
     };
-
 }
 
 
@@ -1570,18 +1947,15 @@ export function calcularConfianca(
         Math.max(
 
             Number(
-                probabilidades.casa ||
-                0
+                probabilidades.casa || 0
             ),
 
             Number(
-                probabilidades.empate ||
-                0
+                probabilidades.empate || 0
             ),
 
             Number(
-                probabilidades.fora ||
-                0
+                probabilidades.fora || 0
             )
 
         );
@@ -1606,7 +1980,6 @@ export function calcularConfianca(
 
 
     return "BAIXA";
-
 }
 
 
@@ -1619,7 +1992,9 @@ async function buscarAnaliseExistente(
     apiId
 ) {
 
-    if (apiId) {
+    if (
+        apiId
+    ) {
 
         try {
 
@@ -1643,10 +2018,8 @@ async function buscarAnaliseExistente(
         catch (erro) {
 
             console.error(
-
                 "⚠️ Erro buscando análise por API ID:",
                 erro.message
-
             );
 
         }
@@ -1654,11 +2027,13 @@ async function buscarAnaliseExistente(
     }
 
 
-    // ------------------------------------------------
-    // SOMENTE análise antiga SEM api_id
-    // ------------------------------------------------
+    // ==================================================
+    // SOMENTE ANÁLISES ANTIGAS SEM API_ID
+    // ==================================================
 
-    if (nomeJogo) {
+    if (
+        nomeJogo
+    ) {
 
         try {
 
@@ -1682,10 +2057,8 @@ async function buscarAnaliseExistente(
         catch (erro) {
 
             console.error(
-
                 "⚠️ Erro buscando análise antiga:",
                 erro.message
-
             );
 
         }
@@ -1694,26 +2067,11 @@ async function buscarAnaliseExistente(
 
 
     return null;
-
 }
 
 
 // ==================================================
 // ATUALIZAR ANÁLISE EXISTENTE
-//
-// IMPORTANTE:
-//
-// Antes o sistema encontrava a análise e fazia:
-//
-// return existente;
-//
-// Isso fazia a IA nunca recalcular.
-//
-// Agora:
-//
-// UPDATE analises
-// SET ...
-// WHERE api_id = $1
 // ==================================================
 
 async function atualizarAnaliseExistente(
@@ -1730,106 +2088,84 @@ async function atualizarAnaliseExistente(
     }
 
 
-    try {
+    const resultado =
 
-        const resultado =
+        await query(
 
-            await query(
+            `
 
-                `
+            UPDATE analises
 
-                UPDATE analises
+            SET
 
-                SET
+                jogo =
+                    $2,
 
-                    jogo =
-                        $2,
+                probabilidade_casa =
+                    $3,
 
-                    probabilidade_casa =
-                        $3,
+                probabilidade_empate =
+                    $4,
 
-                    probabilidade_empate =
-                        $4,
+                probabilidade_fora =
+                    $5,
 
-                    probabilidade_fora =
-                        $5,
+                gols_esperados =
+                    $6,
 
-                    gols_esperados =
-                        $6,
+                placar_previsto =
+                    $7,
 
-                    placar_previsto =
-                        $7,
+                value_bet =
+                    $8,
 
-                    value_bet =
-                        $8,
+                confianca =
+                    $9,
 
-                    confianca =
-                        $9,
+                algoritmo =
+                    $10,
 
-                    algoritmo =
-                        $10,
+                criado_em =
+                    CURRENT_TIMESTAMP
 
-                    criado_em =
-                        CURRENT_TIMESTAMP
+            WHERE
+                api_id = $1
 
-                WHERE
+            RETURNING *
 
-                    api_id = $1
+            `,
 
-                RETURNING *
+            [
 
-                `,
+                apiId,
 
-                [
+                analise.jogo,
 
-                    apiId,
+                analise.probabilidade_casa,
 
-                    analise.jogo,
+                analise.probabilidade_empate,
 
-                    analise.probabilidade_casa,
+                analise.probabilidade_fora,
 
-                    analise.probabilidade_empate,
+                analise.gols_esperados,
 
-                    analise.probabilidade_fora,
+                analise.placar_previsto,
 
-                    analise.gols_esperados,
+                analise.value_bet ?? false,
 
-                    analise.placar_previsto,
+                analise.confianca,
 
-                    analise.value_bet ?? false,
+                analise.algoritmo
 
-                    analise.confianca,
-
-                    analise.algoritmo
-
-                ]
-
-            );
-
-
-        return (
-
-            resultado.rows[0] ||
-            null
-
-        );
-
-    }
-
-    catch (erro) {
-
-        console.error(
-
-            `❌ Erro atualizando análise API ${apiId}:`,
-            erro.message
+            ]
 
         );
 
 
-        throw erro;
-
-    }
-
+    return (
+        resultado.rows[0] ||
+        null
+    );
 }
 
 
@@ -1852,9 +2188,7 @@ export async function gerarAnaliseIA(
 
 
     const apiId =
-        obterApiId(
-            jogo
-        );
+        obterApiId(jogo);
 
 
     if (!apiId) {
@@ -1872,17 +2206,11 @@ export async function gerarAnaliseIA(
         nomeFora,
         nomeJogo
 
-    } =
-
-        obterNomeJogo(
-            jogo
-        );
+    } = obterNomeJogo(jogo);
 
 
     const validacao =
-        validarJogo(
-            jogo
-        );
+        validarJogo(jogo);
 
 
     if (
@@ -1890,10 +2218,7 @@ export async function gerarAnaliseIA(
     ) {
 
         throw new Error(
-
-            `Jogo inválido para análise: ` +
-            `${validacao.erro}`
-
+            `Jogo inválido para análise: ${validacao.erro}`
         );
 
     }
@@ -1914,26 +2239,19 @@ export async function gerarAnaliseIA(
     // ==================================================
 
     if (
-        analisesEmProcessamento.has(
-            apiId
-        )
+        analisesEmProcessamento.has(apiId)
     ) {
 
         console.log(
-
             `⏳ API ${apiId} já está em processamento`
-
         );
-
 
         return null;
 
     }
 
 
-    analisesEmProcessamento.add(
-        apiId
-    );
+    analisesEmProcessamento.add(apiId);
 
 
     console.log(
@@ -1943,9 +2261,9 @@ export async function gerarAnaliseIA(
 
     try {
 
-        // ==============================================
+        // ==================================================
         // ESTATÍSTICAS
-        // ==============================================
+        // ==================================================
 
         const estatisticas =
             extrairEstatisticas(
@@ -1959,22 +2277,22 @@ export async function gerarAnaliseIA(
 
 
         console.log(
-            `   Forma Casa: ${estatisticas.formaCasa}%`
+            `   Forma Casa: ${estatisticas.formaCasa.toFixed(2)}%`
         );
 
 
         console.log(
-            `   Forma Fora: ${estatisticas.formaFora}%`
+            `   Forma Fora: ${estatisticas.formaFora.toFixed(2)}%`
         );
 
 
         console.log(
-            `   Gols Casa: ${estatisticas.mediaGolsCasa}`
+            `   Gols Casa: ${estatisticas.golsCasa}`
         );
 
 
         console.log(
-            `   Gols Fora: ${estatisticas.mediaGolsFora}`
+            `   Gols Fora: ${estatisticas.golsFora}`
         );
 
 
@@ -1993,9 +2311,24 @@ export async function gerarAnaliseIA(
         );
 
 
-        // ==============================================
+        console.log(
+            `   H2H Casa: ${estatisticas.vitoriasCasaH2H}`
+        );
+
+
+        console.log(
+            `   H2H Empates: ${estatisticas.empatesH2H}`
+        );
+
+
+        console.log(
+            `   H2H Fora: ${estatisticas.vitoriasForaH2H}`
+        );
+
+
+        // ==================================================
         // XG
-        // ==============================================
+        // ==================================================
 
         const xg =
             calcularXG(
@@ -2003,34 +2336,31 @@ export async function gerarAnaliseIA(
             );
 
 
-        // ==============================================
+        // ==================================================
         // PROBABILIDADES
-        // ==============================================
+        // ==================================================
 
         const probabilidades =
-
             calcularProbabilidades(
                 dados
             );
 
 
-        // ==============================================
+        // ==================================================
         // PLACAR
-        // ==============================================
+        // ==================================================
 
         const placar =
-
             calcularPlacar(
                 dados
             );
 
 
-        // ==============================================
+        // ==================================================
         // GOLS ESPERADOS
-        // ==============================================
+        // ==================================================
 
         const golsEsperados =
-
             arredondar(
 
                 xg.casa +
@@ -2041,12 +2371,11 @@ export async function gerarAnaliseIA(
             );
 
 
-        // ==============================================
+        // ==================================================
         // CONFIANÇA
-        // ==============================================
+        // ==================================================
 
         const confianca =
-
             calcularConfianca(
                 probabilidades
             );
@@ -2093,8 +2422,8 @@ export async function gerarAnaliseIA(
                     estatisticas.jogosCasa > 0 ||
                     estatisticas.jogosFora > 0
                 )
-                ? "SIM"
-                : "NÃO"
+                    ? "SIM"
+                    : "NÃO"
             }`
         );
 
@@ -2118,9 +2447,9 @@ export async function gerarAnaliseIA(
         );
 
 
-        // ==============================================
+        // ==================================================
         // OBJETO DA ANÁLISE
-        // ==============================================
+        // ==================================================
 
         const analise = {
 
@@ -2152,14 +2481,14 @@ export async function gerarAnaliseIA(
                 confianca,
 
             algoritmo:
-                "BetVision Statistical AI v9.0"
+                "BetVision Statistical AI v10.0"
 
         };
 
 
-        // ==============================================
-        // VERIFICAR SE EXISTE
-        // ==============================================
+        // ==================================================
+        // VERIFICAR EXISTENTE
+        // ==================================================
 
         const existente =
 
@@ -2169,27 +2498,20 @@ export async function gerarAnaliseIA(
             );
 
 
-        // ==============================================
-        // SE EXISTE COM MESMO API ID
+        // ==================================================
+        // EXISTE PELO API_ID
         //
-        // AGORA ATUALIZA.
-        // NÃO RETORNA A ANTIGA.
-        // ==============================================
+        // SEMPRE RECALCULA E ATUALIZA
+        // ==================================================
 
         if (
             existente &&
-            Number(
-                existente.api_id
-            ) === Number(
-                apiId
-            )
+            Number(existente.api_id) ===
+            Number(apiId)
         ) {
 
             console.log(
-
-                `🔄 Atualizando análise existente: ` +
-                `${nomeJogo}`
-
+                `🔄 Atualizando análise existente: ${nomeJogo}`
             );
 
 
@@ -2206,10 +2528,7 @@ export async function gerarAnaliseIA(
             ) {
 
                 console.log(
-
-                    `✅ Análise atualizada: API ${apiId} ` +
-                    `| ID ${atualizada.id}`
-
+                    `✅ Análise atualizada: API ${apiId} | ID ${atualizada.id}`
                 );
 
 
@@ -2220,11 +2539,11 @@ export async function gerarAnaliseIA(
         }
 
 
-        // ==============================================
-        // ANÁLISE ANTIGA SEM API ID
+        // ==================================================
+        // ANÁLISE ANTIGA SEM API_ID
         //
-        // Vincula somente se for realmente antiga.
-        // ==============================================
+        // Só vincula se realmente não possui API_ID.
+        // ==================================================
 
         if (
 
@@ -2249,29 +2568,44 @@ export async function gerarAnaliseIA(
 
                         SET
 
-                            api_id = $1,
+                            api_id =
+                                $1,
 
-                            probabilidade_casa = $2,
+                            jogo =
+                                $2,
 
-                            probabilidade_empate = $3,
+                            probabilidade_casa =
+                                $3,
 
-                            probabilidade_fora = $4,
+                            probabilidade_empate =
+                                $4,
 
-                            gols_esperados = $5,
+                            probabilidade_fora =
+                                $5,
 
-                            placar_previsto = $6,
+                            gols_esperados =
+                                $6,
 
-                            value_bet = $7,
+                            placar_previsto =
+                                $7,
 
-                            confianca = $8,
+                            value_bet =
+                                $8,
 
-                            algoritmo = $9,
+                            confianca =
+                                $9,
 
-                            criado_em = CURRENT_TIMESTAMP
+                            algoritmo =
+                                $10,
+
+                            criado_em =
+                                CURRENT_TIMESTAMP
 
                         WHERE
+                            id = $11
 
-                            id = $10
+                        AND
+                            api_id IS NULL
 
                         RETURNING *
 
@@ -2280,6 +2614,8 @@ export async function gerarAnaliseIA(
                         [
 
                             apiId,
+
+                            analise.jogo,
 
                             analise.probabilidade_casa,
 
@@ -2309,10 +2645,7 @@ export async function gerarAnaliseIA(
                 ) {
 
                     console.log(
-
-                        `🔗 Análise antiga vinculada ` +
-                        `à API ${apiId}`
-
+                        `🔗 Análise antiga vinculada à API ${apiId}`
                     );
 
 
@@ -2325,10 +2658,8 @@ export async function gerarAnaliseIA(
             catch (erro) {
 
                 console.error(
-
                     "⚠️ Erro vinculando análise antiga:",
                     erro.message
-
                 );
 
             }
@@ -2336,19 +2667,16 @@ export async function gerarAnaliseIA(
         }
 
 
-        // ==============================================
+        // ==================================================
         // CRIAR NOVA
-        // ==============================================
+        // ==================================================
 
         console.log(
-
             `💾 Criando nova análise: ${nomeJogo}`
-
         );
 
 
         const salva =
-
             await salvarAnalise(
                 analise
             );
@@ -2364,10 +2692,7 @@ export async function gerarAnaliseIA(
 
 
         console.log(
-
-            `✅ Análise salva: ${nomeJogo} | ` +
-            `API ${apiId} | ID ${salva.id}`
-
+            `✅ Análise salva: ${nomeJogo} | API ${apiId} | ID ${salva.id}`
         );
 
 
@@ -2378,10 +2703,8 @@ export async function gerarAnaliseIA(
     catch (erro) {
 
         console.error(
-
             `❌ Erro gerar análise API ${apiId}:`,
             erro.message
-
         );
 
 
@@ -2401,7 +2724,6 @@ export async function gerarAnaliseIA(
         );
 
     }
-
 }
 
 
@@ -2415,7 +2737,6 @@ export async function analisarMercado(
 ) {
 
     const resultado =
-
         await gerarAnaliseIA(
             jogo,
             dados
@@ -2431,21 +2752,11 @@ export async function analisarMercado(
             resultado
 
     };
-
 }
 
 
 // ==================================================
 // LISTAR ANÁLISES DE HOJE
-//
-// Usa data do jogo e não criado_em.
-//
-// IMPORTANTE:
-// PostgreSQL interpreta CURRENT_DATE no timezone
-// configurado na conexão.
-//
-// Como seu projeto usa America/Sao_Paulo,
-// também fazemos conversão explícita.
 // ==================================================
 
 export async function listarAnalises() {
@@ -2504,18 +2815,24 @@ export async function listarAnalises() {
 
                     j.data_jogo IS NOT NULL
 
-                    AND
+                AND
 
                     (
-                        j.data_jogo AT TIME ZONE
+
+                        j.data_jogo
+                        AT TIME ZONE
                         'America/Sao_Paulo'
+
                     )::date
 
                     =
 
                     (
-                        CURRENT_TIMESTAMP AT TIME ZONE
+
+                        CURRENT_TIMESTAMP
+                        AT TIME ZONE
                         'America/Sao_Paulo'
+
                     )::date
 
                 ORDER BY
@@ -2542,17 +2859,14 @@ export async function listarAnalises() {
     catch (erro) {
 
         console.error(
-
             "❌ Erro listar análises:",
             erro.message
-
         );
 
 
         return [];
 
     }
-
 }
 
 
@@ -2630,19 +2944,15 @@ export function calcularValueBet(
     return {
 
         valor:
-
             arredondar(
                 valorEsperado,
                 3
             ),
 
         possui:
-
-            valorEsperado >
-            0.05
+            valorEsperado > 0.05
 
     };
-
 }
 
 
@@ -2657,7 +2967,9 @@ export async function gerarValueBet(
     probabilidade
 ) {
 
-    if (!jogo) {
+    if (
+        !jogo
+    ) {
 
         return null;
 
@@ -2665,9 +2977,7 @@ export async function gerarValueBet(
 
 
     const apiId =
-        obterApiId(
-            jogo
-        );
+        obterApiId(jogo);
 
 
     const resultado =
@@ -2709,9 +3019,7 @@ export async function gerarValueBet(
 
                     FROM jogos
 
-                    WHERE
-
-                        api_id = $1
+                    WHERE api_id = $1
 
                     LIMIT 1
 
@@ -2737,10 +3045,8 @@ export async function gerarValueBet(
         catch (erro) {
 
             console.error(
-
                 "⚠️ Erro buscando jogo para Value Bet:",
                 erro.message
-
             );
 
         }
@@ -2753,10 +3059,7 @@ export async function gerarValueBet(
     ) {
 
         console.warn(
-
-            `⚠️ Value Bet ignorada: ` +
-            `jogo ${apiId} não encontrado`
-
+            `⚠️ Value Bet ignorada: jogo ${apiId} não encontrado`
         );
 
 
@@ -2791,7 +3094,6 @@ export async function gerarValueBet(
             "ALTA"
 
     });
-
 }
 
 
@@ -2815,18 +3117,26 @@ export async function estatisticasAnalises() {
                         AS total,
 
                     COUNT(
+
                         CASE
+
                             WHEN api_id IS NOT NULL
                             THEN 1
+
                         END
+
                     )::integer
                         AS com_api_id,
 
                     COUNT(
+
                         CASE
+
                             WHEN api_id IS NULL
                             THEN 1
+
                         END
+
                     )::integer
                         AS sem_api_id
 
@@ -2863,10 +3173,8 @@ export async function estatisticasAnalises() {
     catch (erro) {
 
         console.error(
-
             "❌ Erro estatísticas análises:",
             erro.message
-
         );
 
 
@@ -2884,7 +3192,6 @@ export async function estatisticasAnalises() {
         };
 
     }
-
 }
 
 
