@@ -423,276 +423,201 @@ function extrairEstatisticas(dados = {}) {
 
     const ataqueCasa =
         numeroSeguro(
-
             dados.ataqueCasa ??
             dados.forcaAtaqueCasa ??
             dados.mediaAtaqueCasa ??
             dados.mediaGolsCasa,
-
             1
-
         );
-
 
     const ataqueFora =
         numeroSeguro(
-
             dados.ataqueFora ??
             dados.forcaAtaqueFora ??
             dados.mediaAtaqueFora ??
             dados.mediaGolsFora,
-
             1
-
         );
-
 
     const defesaCasa =
         numeroSeguro(
-
             dados.defesaCasa ??
             dados.forcaDefesaCasa ??
             dados.mediaDefesaCasa ??
             dados.mediaGolsSofridosCasa,
-
             1
-
         );
-
 
     const defesaFora =
         numeroSeguro(
-
             dados.defesaFora ??
             dados.forcaDefesaFora ??
             dados.mediaGolsSofridosFora ??
             dados.mediaSofridosFora,
-
             1
-
         );
-
 
     const formaCasa =
         limitar(
-
             numeroSeguro(
-
                 dados.formaCasa ??
                 dados.percentualFormaCasa ??
                 dados.formaCasaPercentual,
-
                 50
-
             ),
-
             0,
             100
-
         );
-
 
     const formaFora =
         limitar(
-
             numeroSeguro(
-
                 dados.formaFora ??
                 dados.percentualFormaFora ??
                 dados.formaForaPercentual,
-
                 50
-
             ),
-
             0,
             100
-
         );
-
 
     const mediaGolsCasa =
         Math.max(
-
             0,
-
             numeroSeguro(
-
                 dados.mediaGolsCasa ??
                 dados.golsCasa ??
                 dados.mediaCasa,
-
                 0
-
             )
-
         );
-
 
     const mediaGolsFora =
         Math.max(
-
             0,
-
             numeroSeguro(
-
                 dados.mediaGolsFora ??
                 dados.golsFora ??
                 dados.mediaFora,
-
                 0
-
             )
-
         );
-
 
     const mediaSofridosCasa =
         Math.max(
-
             0,
-
             numeroSeguro(
-
                 dados.mediaGolsSofridosCasa ??
                 dados.golsSofridosCasa ??
                 dados.mediaSofridosCasa,
-
                 0
-
             )
-
         );
-
 
     const mediaSofridosFora =
         Math.max(
-
             0,
-
             numeroSeguro(
-
                 dados.mediaGolsSofridosFora ??
                 dados.golsSofridosFora ??
                 dados.mediaSofridosFora,
-
                 0
-
             )
-
         );
-
 
     const jogosCasa =
         Math.max(
-
             0,
-
             numeroSeguro(
-
                 dados.jogosCasa ??
                 dados.historicoCasa ??
                 dados.totalJogosCasa ??
+                dados.historico?.casa?.jogos ??
+                dados.historico?.casa?.totalJogos ??
+                dados.historico?.casa?.total ??
                 dados.historico?.casa,
-
                 0
-
             )
-
         );
-
 
     const jogosFora =
         Math.max(
-
             0,
-
             numeroSeguro(
-
                 dados.jogosFora ??
                 dados.historicoFora ??
                 dados.totalJogosFora ??
+                dados.historico?.fora?.jogos ??
+                dados.historico?.fora?.totalJogos ??
+                dados.historico?.fora?.total ??
                 dados.historico?.fora,
-
                 0
-
             )
-
         );
 
-
+    /*
+     * H2H:
+     *
+     * Aceita:
+     * dados.h2h = 2
+     *
+     * ou:
+     * dados.h2h.total = 2
+     *
+     * ou:
+     * dados.h2h.totalConfrontos = 2
+     *
+     * ou os formatos antigos.
+     */
     const h2h =
         Math.max(
-
             0,
-
             numeroSeguro(
-
+                dados.h2h?.total ??
+                dados.h2h?.totalConfrontos ??
                 dados.h2h ??
                 dados.totalH2H ??
                 dados.confrontosH2H ??
                 dados.historicoH2H,
-
                 0
-
             )
-
         );
-
 
     const vitoriasCasaH2H =
         Math.max(
-
             0,
-
             numeroSeguro(
-
                 dados.vitoriasCasaH2H ??
                 dados.h2hCasa ??
+                dados.h2h?.vitoriasCasa ??
                 dados.h2h?.casa,
-
                 0
-
             )
-
         );
-
 
     const empatesH2H =
         Math.max(
-
             0,
-
             numeroSeguro(
-
                 dados.empatesH2H ??
                 dados.h2hEmpates ??
-                dados.h2h?.empates,
-
+                dados.h2h?.empates ??
+                dados.h2h?.draws,
                 0
-
             )
-
         );
-
 
     const vitoriasForaH2H =
         Math.max(
-
             0,
-
             numeroSeguro(
-
                 dados.vitoriasForaH2H ??
                 dados.h2hFora ??
+                dados.h2h?.vitoriasFora ??
                 dados.h2h?.fora,
-
                 0
-
             )
-
         );
-
 
     return {
 
@@ -1390,55 +1315,92 @@ export function calcularProbabilidades(
 
 
     // ==============================================
-    // H2H
-    // ==============================================
+// H2H
+// ==============================================
+//
+// O total de confrontos vem de estatisticas.h2h.
+//
+// O somatório:
+// vitórias casa + empates + vitórias fora
+//
+// é usado como proteção caso a coleta tenha
+// informado os resultados, mas não tenha informado
+// corretamente o total.
+//
+// Assim:
+// H2H = 2
+// Casa = 0
+// Empates = 2
+// Fora = 0
+//
+// Resultado:
+// totalConfrontos = 2
+// peso H2H = 2%
+//
+// ==============================================
 
-    let h2hCasa =
-        33.33;
+let h2hCasa = 33.33;
 
-    let h2hEmpate =
-        33.34;
+let h2hEmpate = 33.34;
 
-    let h2hFora =
-        33.33;
-
-
-    const totalConfrontos =
-
-        estatisticas.vitoriasCasaH2H +
-        estatisticas.empatesH2H +
-        estatisticas.vitoriasForaH2H;
-
-
-    if (
-        totalConfrontos > 0
-    ) {
-
-        h2hCasa =
-
-            (
-                estatisticas.vitoriasCasaH2H /
-                totalConfrontos
-            ) * 100;
-
-
-        h2hEmpate =
-
-            (
-                estatisticas.empatesH2H /
-                totalConfrontos
-            ) * 100;
+let h2hFora = 33.33;
 
 
-        h2hFora =
+const totalResultadosH2H =
+    estatisticas.vitoriasCasaH2H +
+    estatisticas.empatesH2H +
+    estatisticas.vitoriasForaH2H;
 
-            (
-                estatisticas.vitoriasForaH2H /
-                totalConfrontos
-            ) * 100;
 
+const totalConfrontos =
+    Math.max(
+        estatisticas.h2h,
+        totalResultadosH2H
+    );
+
+
+if (
+    totalConfrontos > 0
+) {
+
+    h2hCasa =
+        (
+            estatisticas.vitoriasCasaH2H /
+            totalConfrontos
+        ) * 100;
+
+
+    h2hEmpate =
+        (
+            estatisticas.empatesH2H /
+            totalConfrontos
+        ) * 100;
+
+
+    h2hFora =
+        (
+            estatisticas.vitoriasForaH2H /
+            totalConfrontos
+        ) * 100;
+
+}
+
+
+// ==============================================
+// DEBUG H2H
+// ==============================================
+
+console.log(
+    "🔍 H2H NORMALIZADO:",
+    {
+        totalInformado: estatisticas.h2h,
+        vitoriasCasa: estatisticas.vitoriasCasaH2H,
+        empates: estatisticas.empatesH2H,
+        vitoriasFora: estatisticas.vitoriasForaH2H,
+        totalResultados: totalResultadosH2H,
+        totalUsado: totalConfrontos
     }
-
+);
 
     // ==============================================
     // PESOS
