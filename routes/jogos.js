@@ -2,26 +2,43 @@
 // BETVISION AI
 // routes/jogos.js
 //
-// Versão 16.1
+// VERSÃO 17.0
 // API DE JOGOS
 // PostgreSQL / NeonDB
 //
 // REGRAS:
 //
-// - /api/jogos mostra SOMENTE jogos de hoje
-// - /api/jogos/hoje mostra SOMENTE jogos de hoje
-// - /api/jogos/banco mostra todo o histórico
-// - /api/jogos/proximos mostra somente próximos jogos
-// - Jogos antigos continuam no banco
-// - Histórico não é apagado
+// /api/jogos
+//     SOMENTE JOGOS DE HOJE
+//
+// /api/jogos/hoje
+//     SOMENTE JOGOS DE HOJE
+//
+// /api/jogos/banco
+//     TODO O HISTÓRICO
+//
+// /api/jogos/proximos
+//     RESTANTE DE HOJE + AMANHÃ
+//
+// /api/jogos/estatisticas
+//     CONTADORES DO BANCO
+//
+// HISTÓRICO:
+//
+// - Nunca apagar automaticamente
 // - IA continua usando histórico real
-// - api_id é o identificador principal externo
-// - Não cria jogos fictícios
-// - Não duplica jogos
-// - Normaliza api_id antes de salvar
+//
+// IDENTIFICAÇÃO:
+//
+// - api_id = identificador externo principal
 // - Não depende de jogo_id para análise
-// - Compatível com PostgreSQL / NeonDB
-// - Fuso oficial: America/Sao_Paulo
+//
+// DATA:
+//
+// - America/Sao_Paulo
+// - Jogos antigos permanecem no banco
+// - Dashboard principal não mostra jogos antigos
+//
 // ==========================================
 
 import express from "express";
@@ -41,7 +58,9 @@ import {
     buscarHistoricoJogo
 } from "../services/historicoService.js";
 
-const router = express.Router();
+
+const router =
+    express.Router();
 
 
 // ==========================================
@@ -53,7 +72,7 @@ const TIMEZONE =
 
 
 // ==========================================
-// DATA DE HOJE NO BRASIL
+// DATA HOJE BRASIL
 // ==========================================
 
 function obterDataHojeBrasil() {
@@ -63,25 +82,22 @@ function obterDataHojeBrasil() {
         const agora =
             new Date();
 
-        const formatter =
-            new Intl.DateTimeFormat(
-                "en-CA",
-                {
-                    timeZone:
-                        TIMEZONE,
+        return new Intl.DateTimeFormat(
+            "en-CA",
+            {
+                timeZone:
+                    TIMEZONE,
 
-                    year:
-                        "numeric",
+                year:
+                    "numeric",
 
-                    month:
-                        "2-digit",
+                month:
+                    "2-digit",
 
-                    day:
-                        "2-digit"
-                }
-            );
-
-        return formatter.format(
+                day:
+                    "2-digit"
+            }
+        ).format(
             agora
         );
 
@@ -90,7 +106,7 @@ function obterDataHojeBrasil() {
     catch (erro) {
 
         console.error(
-            "❌ Erro obtendo data Brasil:",
+            "❌ Erro data Brasil:",
             erro.message
         );
 
@@ -162,8 +178,7 @@ function normalizarJogo(
             jogo.api_id ??
             jogo.apiId ??
             jogo.fixture?.id ??
-            jogo.id ??
-            null
+            jogo.id
 
         );
 
@@ -174,6 +189,7 @@ function normalizarJogo(
         jogo.competicao ??
         jogo.competition?.name ??
         jogo.league?.name ??
+        jogo.fixture?.league?.name ??
         "Futebol";
 
 
@@ -185,6 +201,7 @@ function normalizarJogo(
         jogo.homeTeam?.name ??
         jogo.home_team?.name ??
         jogo.teams?.home?.name ??
+        jogo.fixture?.teams?.home?.name ??
         null;
 
 
@@ -196,6 +213,7 @@ function normalizarJogo(
         jogo.awayTeam?.name ??
         jogo.away_team?.name ??
         jogo.teams?.away?.name ??
+        jogo.fixture?.teams?.away?.name ??
         null;
 
 
@@ -203,19 +221,39 @@ function normalizarJogo(
 
         jogo.data_jogo ??
         jogo.dataJogo ??
+        jogo.utcDate ??
         jogo.horario ??
         jogo.data ??
-        jogo.utcDate ??
         jogo.fixture?.date ??
         null;
 
 
-    const status =
+    let status =
+        jogo.status;
 
-        jogo.status?.short ??
-        jogo.status?.type ??
-        jogo.status ??
-        "SCHEDULED";
+
+    if (
+        typeof status === "object"
+        &&
+        status !== null
+    ) {
+
+        status =
+
+            status.short ??
+            status.type ??
+            status.name ??
+            "SCHEDULED";
+
+    }
+
+
+    if (!status) {
+
+        status =
+            "SCHEDULED";
+
+    }
 
 
     return {
@@ -226,19 +264,33 @@ function normalizarJogo(
             apiId,
 
         campeonato:
-            campeonato,
+            campeonato
+                ? String(
+                    campeonato
+                ).trim()
+                : "Futebol",
 
         time_casa:
-            timeCasa,
+            timeCasa
+                ? String(
+                    timeCasa
+                ).trim()
+                : null,
 
         time_fora:
-            timeFora,
+            timeFora
+                ? String(
+                    timeFora
+                ).trim()
+                : null,
 
         data_jogo:
             dataJogo,
 
         status:
-            status
+            String(
+                status
+            ).trim()
 
     };
 
@@ -260,32 +312,9 @@ function jogoValido(
     }
 
 
-    const casa =
-
-        String(
-            jogo.time_casa ??
-            jogo.casa ??
-            ""
-        )
-        .trim();
-
-
-    const fora =
-
-        String(
-            jogo.time_fora ??
-            jogo.fora ??
-            ""
-        )
-        .trim();
-
-
     const apiId =
-
         normalizarApiId(
-            jogo.api_id ??
-            jogo.apiId ??
-            jogo.id
+            jogo.api_id
         );
 
 
@@ -296,31 +325,52 @@ function jogoValido(
     }
 
 
-    if (!casa || !fora) {
+    const casa =
+        String(
+            jogo.time_casa ??
+            ""
+        )
+        .trim();
+
+
+    const fora =
+        String(
+            jogo.time_fora ??
+            ""
+        )
+        .trim();
+
+
+    if (
+        !casa ||
+        !fora
+    ) {
 
         return false;
 
     }
 
 
-    const casaNormalizada =
-        casa.toLowerCase();
+    if (
+        casa.toLowerCase() ===
+        fora.toLowerCase()
+    ) {
 
+        return false;
 
-    const foraNormalizada =
-        fora.toLowerCase();
+    }
 
 
     const nomesInvalidos = [
 
         "casa",
         "fora",
-        "time a",
-        "time b",
         "home",
         "away",
         "home team",
-        "away team"
+        "away team",
+        "time a",
+        "time b"
 
     ];
 
@@ -328,13 +378,13 @@ function jogoValido(
     if (
 
         nomesInvalidos.includes(
-            casaNormalizada
+            casa.toLowerCase()
         )
 
         ||
 
         nomesInvalidos.includes(
-            foraNormalizada
+            fora.toLowerCase()
         )
 
     ) {
@@ -345,10 +395,24 @@ function jogoValido(
 
 
     if (
+        !jogo.data_jogo
+    ) {
 
-        casaNormalizada ===
-        foraNormalizada
+        return false;
 
+    }
+
+
+    const data =
+        new Date(
+            jogo.data_jogo
+        );
+
+
+    if (
+        Number.isNaN(
+            data.getTime()
+        )
     ) {
 
         return false;
@@ -362,7 +426,303 @@ function jogoValido(
 
 
 // ==========================================
-// CONVERTER NÚMERO
+// JOGO É DE HOJE?
+//
+// A comparação é feita usando
+// America/Sao_Paulo.
+//
+// Isso evita que um jogo UTC
+// seja classificado no dia errado.
+// ==========================================
+
+function jogoEhHoje(
+    jogo
+) {
+
+    if (
+        !jogo?.data_jogo
+    ) {
+
+        return false;
+
+    }
+
+
+    const hoje =
+        obterDataHojeBrasil();
+
+
+    if (!hoje) {
+
+        return false;
+
+    }
+
+
+    try {
+
+        const data =
+            new Date(
+                jogo.data_jogo
+            );
+
+
+        if (
+            Number.isNaN(
+                data.getTime()
+            )
+        ) {
+
+            return false;
+
+        }
+
+
+        const dataLocal =
+            new Intl.DateTimeFormat(
+                "en-CA",
+                {
+                    timeZone:
+                        TIMEZONE,
+
+                    year:
+                        "numeric",
+
+                    month:
+                        "2-digit",
+
+                    day:
+                        "2-digit"
+                }
+            ).format(
+                data
+            );
+
+
+        return (
+            dataLocal ===
+            hoje
+        );
+
+    }
+
+    catch (erro) {
+
+        console.error(
+
+            "⚠️ Erro verificar data jogo:",
+            erro.message
+
+        );
+
+        return false;
+
+    }
+
+}
+
+
+// ==========================================
+// REMOVER DUPLICADOS
+//
+// api_id é a chave externa.
+// ==========================================
+
+function removerDuplicados(
+    jogos = []
+) {
+
+    if (
+        !Array.isArray(
+            jogos
+        )
+    ) {
+
+        return [];
+
+    }
+
+
+    const mapa =
+        new Map();
+
+
+    for (
+        const jogo of jogos
+    ) {
+
+        const apiId =
+            normalizarApiId(
+                jogo?.api_id
+            );
+
+
+        if (!apiId) {
+
+            continue;
+
+        }
+
+
+        if (
+            !mapa.has(
+                apiId
+            )
+        ) {
+
+            mapa.set(
+                apiId,
+                jogo
+            );
+
+        }
+
+    }
+
+
+    return Array.from(
+        mapa.values()
+    );
+
+}
+
+
+// ==========================================
+// FORMATAR JOGO PARA API
+// ==========================================
+
+function formatarJogo(
+    jogo
+) {
+
+    if (!jogo) {
+
+        return null;
+
+    }
+
+
+    const apiId =
+        normalizarApiId(
+            jogo.api_id ??
+            jogo.apiId ??
+            jogo.id
+        );
+
+
+    return {
+
+        id:
+            jogo.id ??
+            null,
+
+        api_id:
+            apiId,
+
+        campeonato:
+            jogo.campeonato ??
+            "Futebol",
+
+        time_casa:
+            jogo.time_casa ??
+            null,
+
+        time_fora:
+            jogo.time_fora ??
+            null,
+
+        casa:
+            jogo.time_casa ??
+            null,
+
+        fora:
+            jogo.time_fora ??
+            null,
+
+        data_jogo:
+            jogo.data_jogo ??
+            null,
+
+        horario:
+            jogo.data_jogo ??
+            null,
+
+        estadio:
+            jogo.estadio ??
+            null,
+
+        status:
+            jogo.status ??
+            "SCHEDULED"
+
+    };
+
+}
+
+
+// ==========================================
+// OBTER HORÁRIO BRASIL
+// ==========================================
+
+function obterHorarioBrasil(
+    dataJogo
+) {
+
+    if (!dataJogo) {
+
+        return "N/A";
+
+    }
+
+
+    try {
+
+        const data =
+            new Date(
+                dataJogo
+            );
+
+
+        if (
+            Number.isNaN(
+                data.getTime()
+            )
+        ) {
+
+            return "N/A";
+
+        }
+
+
+        return new Intl.DateTimeFormat(
+            "pt-BR",
+            {
+                timeZone:
+                    TIMEZONE,
+
+                hour:
+                    "2-digit",
+
+                minute:
+                    "2-digit"
+            }
+        ).format(
+            data
+        );
+
+    }
+
+    catch {
+
+        return "N/A";
+
+    }
+
+}
+
+
+// ==========================================
+// OBTER NÚMERO SEGURO
 // ==========================================
 
 function numeroSeguro(
@@ -386,7 +746,7 @@ function numeroSeguro(
 
 
 // ==========================================
-// OBTER GOLS DE UM JOGO
+// OBTER GOLS
 // ==========================================
 
 function obterGols(
@@ -394,7 +754,6 @@ function obterGols(
 ) {
 
     const golsCasa =
-
         numeroSeguro(
 
             jogo.gols_casa ??
@@ -408,7 +767,6 @@ function obterGols(
 
 
     const golsFora =
-
         numeroSeguro(
 
             jogo.gols_fora ??
@@ -435,7 +793,7 @@ function obterGols(
 
 
 // ==========================================
-// CALCULAR ESTATÍSTICAS DO TIME
+// ESTATÍSTICAS DO TIME
 // ==========================================
 
 function calcularEstatisticasTime(
@@ -443,43 +801,62 @@ function calcularEstatisticasTime(
     nomeTime
 ) {
 
+    const padrao = {
+
+        jogos: 0,
+
+        vitorias: 0,
+
+        empates: 0,
+
+        derrotas: 0,
+
+        pontos: 0,
+
+        forma: 50,
+
+        golsMarcados: 0,
+
+        golsSofridos: 0,
+
+        mediaGolsMarcados: 1,
+
+        mediaGolsSofridos: 1,
+
+        ataque: 50,
+
+        defesa: 50
+
+    };
+
+
     if (
 
-        !Array.isArray(jogos) ||
-        jogos.length === 0 ||
+        !Array.isArray(
+            jogos
+        )
+
+        ||
+
+        jogos.length === 0
+
+        ||
+
         !nomeTime
 
     ) {
 
-        return {
-
-            jogos: 0,
-
-            vitorias: 0,
-
-            empates: 0,
-
-            derrotas: 0,
-
-            pontos: 0,
-
-            forma: 50,
-
-            golsMarcados: 0,
-
-            golsSofridos: 0,
-
-            mediaGolsMarcados: 1,
-
-            mediaGolsSofridos: 1,
-
-            ataque: 50,
-
-            defesa: 50
-
-        };
+        return padrao;
 
     }
+
+
+    const nome =
+        String(
+            nomeTime
+        )
+        .trim()
+        .toLowerCase();
 
 
     let vitorias = 0;
@@ -494,7 +871,7 @@ function calcularEstatisticasTime(
 
     let golsSofridos = 0;
 
-    let jogosProcessados = 0;
+    let processados = 0;
 
 
     for (
@@ -502,29 +879,38 @@ function calcularEstatisticasTime(
     ) {
 
         const casa =
-
             String(
-                jogo.time_casa ??
-                jogo.casa ??
+                jogo?.time_casa ??
+                jogo?.casa ??
                 ""
             )
             .trim();
 
 
         const fora =
-
             String(
-                jogo.time_fora ??
-                jogo.fora ??
+                jogo?.time_fora ??
+                jogo?.fora ??
                 ""
             )
             .trim();
 
 
+        const casaNormalizada =
+            casa.toLowerCase();
+
+
+        const foraNormalizada =
+            fora.toLowerCase();
+
+
         if (
 
-            casa !== nomeTime &&
-            fora !== nomeTime
+            casaNormalizada !== nome
+
+            &&
+
+            foraNormalizada !== nome
 
         ) {
 
@@ -540,18 +926,16 @@ function calcularEstatisticasTime(
 
 
         const emCasa =
-            casa === nomeTime;
+            casaNormalizada === nome;
 
 
         const golsTime =
-
             emCasa
                 ? gols.casa
                 : gols.fora;
 
 
         const golsAdversario =
-
             emCasa
                 ? gols.fora
                 : gols.casa;
@@ -565,7 +949,7 @@ function calcularEstatisticasTime(
             golsAdversario;
 
 
-        jogosProcessados++;
+        processados++;
 
 
         if (
@@ -586,7 +970,7 @@ function calcularEstatisticasTime(
 
             empates++;
 
-            pontos += 1;
+            pontos++;
 
         }
 
@@ -600,46 +984,19 @@ function calcularEstatisticasTime(
 
 
     if (
-        jogosProcessados === 0
+        processados === 0
     ) {
 
-        return {
-
-            jogos: 0,
-
-            vitorias: 0,
-
-            empates: 0,
-
-            derrotas: 0,
-
-            pontos: 0,
-
-            forma: 50,
-
-            golsMarcados: 0,
-
-            golsSofridos: 0,
-
-            mediaGolsMarcados: 1,
-
-            mediaGolsSofridos: 1,
-
-            ataque: 50,
-
-            defesa: 50
-
-        };
+        return padrao;
 
     }
 
 
     const forma =
-
         (
             pontos /
             (
-                jogosProcessados *
+                processados *
                 3
             )
         ) *
@@ -647,19 +1004,16 @@ function calcularEstatisticasTime(
 
 
     const mediaGolsMarcados =
-
         golsMarcados /
-        jogosProcessados;
+        processados;
 
 
     const mediaGolsSofridos =
-
         golsSofridos /
-        jogosProcessados;
+        processados;
 
 
     const ataque =
-
         Math.max(
             0,
             Math.min(
@@ -671,7 +1025,6 @@ function calcularEstatisticasTime(
 
 
     const defesa =
-
         Math.max(
             0,
             Math.min(
@@ -688,7 +1041,7 @@ function calcularEstatisticasTime(
     return {
 
         jogos:
-            jogosProcessados,
+            processados,
 
         vitorias,
 
@@ -733,7 +1086,7 @@ function calcularEstatisticasTime(
 
 
 // ==========================================
-// CALCULAR CONFRONTO DIRETO
+// H2H
 // ==========================================
 
 function calcularConfrontoDireto(
@@ -742,44 +1095,58 @@ function calcularConfrontoDireto(
     timeFora
 ) {
 
+    const resultado = {
+
+        jogos: 0,
+
+        vitoriasCasa: 0,
+
+        empates: 0,
+
+        vitoriasFora: 0,
+
+        golsCasa: 0,
+
+        golsFora: 0
+
+    };
+
+
     if (
 
-        !Array.isArray(jogos) ||
-        !timeCasa ||
+        !Array.isArray(
+            jogos
+        )
+
+        ||
+
+        !timeCasa
+
+        ||
+
         !timeFora
 
     ) {
 
-        return {
-
-            jogos: 0,
-
-            vitoriasCasa: 0,
-
-            empates: 0,
-
-            vitoriasFora: 0,
-
-            golsCasa: 0,
-
-            golsFora: 0
-
-        };
+        return resultado;
 
     }
 
 
-    let vitoriasCasa = 0;
+    const casaNome =
+        String(
+            timeCasa
+        )
+        .trim()
+        .toLowerCase();
 
-    let empates = 0;
 
-    let vitoriasFora = 0;
-
-    let golsCasa = 0;
-
-    let golsFora = 0;
-
-    let total = 0;
+    const foraNome =
+        String(
+            timeFora
+        )
+        .trim()
+        .toLowerCase();
 
 
     for (
@@ -787,42 +1154,38 @@ function calcularConfrontoDireto(
     ) {
 
         const casa =
-
             String(
-                jogo.time_casa ??
-                jogo.casa ??
+                jogo?.time_casa ??
+                jogo?.casa ??
                 ""
             )
-            .trim();
+            .trim()
+            .toLowerCase();
 
 
         const fora =
-
             String(
-                jogo.time_fora ??
-                jogo.fora ??
+                jogo?.time_fora ??
+                jogo?.fora ??
                 ""
             )
-            .trim();
+            .trim()
+            .toLowerCase();
 
 
-        const confrontoNormal =
+        const normal =
+            casa === casaNome &&
+            fora === foraNome;
 
-            casa === timeCasa &&
-            fora === timeFora;
 
-
-        const confrontoInvertido =
-
-            casa === timeFora &&
-            fora === timeCasa;
+        const invertido =
+            casa === foraNome &&
+            fora === casaNome;
 
 
         if (
-
-            !confrontoNormal &&
-            !confrontoInvertido
-
+            !normal &&
+            !invertido
         ) {
 
             continue;
@@ -836,17 +1199,15 @@ function calcularConfrontoDireto(
             );
 
 
-        total++;
+        resultado.jogos++;
 
 
-        if (
-            confrontoNormal
-        ) {
+        if (normal) {
 
-            golsCasa +=
+            resultado.golsCasa +=
                 gols.casa;
 
-            golsFora +=
+            resultado.golsFora +=
                 gols.fora;
 
 
@@ -855,7 +1216,7 @@ function calcularConfrontoDireto(
                 gols.fora
             ) {
 
-                vitoriasCasa++;
+                resultado.vitoriasCasa++;
 
             }
 
@@ -864,13 +1225,13 @@ function calcularConfrontoDireto(
                 gols.fora
             ) {
 
-                empates++;
+                resultado.empates++;
 
             }
 
             else {
 
-                vitoriasFora++;
+                resultado.vitoriasFora++;
 
             }
 
@@ -878,10 +1239,10 @@ function calcularConfrontoDireto(
 
         else {
 
-            golsCasa +=
+            resultado.golsCasa +=
                 gols.fora;
 
-            golsFora +=
+            resultado.golsFora +=
                 gols.casa;
 
 
@@ -890,7 +1251,7 @@ function calcularConfrontoDireto(
                 gols.casa
             ) {
 
-                vitoriasCasa++;
+                resultado.vitoriasCasa++;
 
             }
 
@@ -899,13 +1260,13 @@ function calcularConfrontoDireto(
                 gols.casa
             ) {
 
-                empates++;
+                resultado.empates++;
 
             }
 
             else {
 
-                vitoriasFora++;
+                resultado.vitoriasFora++;
 
             }
 
@@ -914,22 +1275,7 @@ function calcularConfrontoDireto(
     }
 
 
-    return {
-
-        jogos:
-            total,
-
-        vitoriasCasa,
-
-        empates,
-
-        vitoriasFora,
-
-        golsCasa,
-
-        golsFora
-
-    };
+    return resultado;
 
 }
 
@@ -974,11 +1320,13 @@ async function gerarDadosEstatisticos(
 
     }
 
-    catch (error) {
+    catch (erro) {
 
         console.error(
+
             "⚠️ Erro buscando histórico:",
-            error.message
+            erro.message
+
         );
 
     }
@@ -989,7 +1337,9 @@ async function gerarDadosEstatisticos(
         Array.isArray(
             historico?.historicoCasa
         )
+
             ? historico.historicoCasa
+
             : [];
 
 
@@ -998,12 +1348,13 @@ async function gerarDadosEstatisticos(
         Array.isArray(
             historico?.historicoFora
         )
+
             ? historico.historicoFora
+
             : [];
 
 
     const estatisticasCasa =
-
         calcularEstatisticasTime(
             historicoCasa,
             timeCasa
@@ -1011,7 +1362,6 @@ async function gerarDadosEstatisticos(
 
 
     const estatisticasFora =
-
         calcularEstatisticasTime(
             historicoFora,
             timeFora
@@ -1028,7 +1378,6 @@ async function gerarDadosEstatisticos(
 
 
     const h2h =
-
         calcularConfrontoDireto(
             confrontos,
             timeCasa,
@@ -1118,7 +1467,8 @@ async function gerarDadosEstatisticos(
         possuiHistorico:
 
             (
-                estatisticasCasa.jogos > 0 ||
+                estatisticasCasa.jogos > 0
+                ||
                 estatisticasFora.jogos > 0
             ),
 
@@ -1139,12 +1489,13 @@ async function analisarJogo(
 ) {
 
     if (
-        !jogoValido(jogo)
+        !jogoValido(
+            jogo
+        )
     ) {
 
         console.log(
-            "⚠️ Jogo inválido ignorado:",
-            jogo
+            "⚠️ Jogo inválido ignorado"
         );
 
         return null;
@@ -1181,14 +1532,12 @@ async function analisarJogo(
     try {
 
         const dados =
-
             await gerarDadosEstatisticos(
                 jogoNormalizado
             );
 
 
         const resultado =
-
             await gerarAnaliseIA(
                 jogoNormalizado,
                 dados
@@ -1199,192 +1548,18 @@ async function analisarJogo(
 
     }
 
-    catch (error) {
+    catch (erro) {
 
         console.error(
 
             `❌ Erro análise ${nomeJogo}:`,
-            error.message
+            erro.message
 
         );
-
 
         return null;
 
     }
-
-}
-
-
-// ==========================================
-// FILTRAR SOMENTE HOJE
-//
-// Proteção adicional no route.
-//
-// Mesmo que a API externa devolva uma
-// janela de vários dias, somente jogos
-// cuja data local seja HOJE continuam.
-// ==========================================
-
-function jogoEhHoje(
-    jogo
-) {
-
-    if (
-        !jogo?.data_jogo
-    ) {
-
-        return false;
-
-    }
-
-
-    const dataHoje =
-        obterDataHojeBrasil();
-
-
-    if (
-        !dataHoje
-    ) {
-
-        return false;
-
-    }
-
-
-    try {
-
-        const data =
-            new Date(
-                jogo.data_jogo
-            );
-
-
-        if (
-            Number.isNaN(
-                data.getTime()
-            )
-        ) {
-
-            return false;
-
-        }
-
-
-        const dataLocal =
-            new Intl.DateTimeFormat(
-                "en-CA",
-                {
-                    timeZone:
-                        TIMEZONE,
-
-                    year:
-                        "numeric",
-
-                    month:
-                        "2-digit",
-
-                    day:
-                        "2-digit"
-                }
-            ).format(
-                data
-            );
-
-
-        return (
-            dataLocal ===
-            dataHoje
-        );
-
-    }
-
-    catch (error) {
-
-        console.error(
-            "⚠️ Erro filtrando data do jogo:",
-            error.message
-        );
-
-        return false;
-
-    }
-
-}
-
-
-// ==========================================
-// FORMATAR JOGO PARA API
-// ==========================================
-
-function formatarJogo(
-    jogo
-) {
-
-    if (
-        !jogo
-    ) {
-
-        return null;
-
-    }
-
-
-    const apiId =
-        normalizarApiId(
-            jogo.api_id ??
-            jogo.apiId ??
-            jogo.id
-        );
-
-
-    return {
-
-        id:
-            jogo.id ??
-            null,
-
-        api_id:
-            apiId,
-
-        campeonato:
-            jogo.campeonato ??
-            jogo.competicao ??
-            "Futebol",
-
-        time_casa:
-            jogo.time_casa ??
-            null,
-
-        time_fora:
-            jogo.time_fora ??
-            null,
-
-        casa:
-            jogo.time_casa ??
-            null,
-
-        fora:
-            jogo.time_fora ??
-            null,
-
-        data_jogo:
-            jogo.data_jogo ??
-            null,
-
-        horario:
-            jogo.data_jogo ??
-            null,
-
-        estadio:
-            jogo.estadio ??
-            null,
-
-        status:
-            jogo.status ??
-            "SCHEDULED"
-
-    };
 
 }
 
@@ -1392,7 +1567,12 @@ function formatarJogo(
 // ==========================================
 // GET /api/jogos
 //
-// SOMENTE JOGOS DE HOJE
+// REGRA:
+//
+// SOMENTE JOGOS DE HOJE.
+//
+// A API externa pode retornar vários dias.
+// O filtro local é obrigatório.
 // ==========================================
 
 router.get(
@@ -1404,16 +1584,20 @@ router.get(
 
         try {
 
+            const hoje =
+                obterDataHojeBrasil();
+
+
             console.log(
                 "=========================================="
             );
 
             console.log(
-                "⚽ API JOGOS"
+                "⚽ BETVISION AI - API JOGOS"
             );
 
             console.log(
-                "📅 SOMENTE JOGOS DE HOJE"
+                `📅 SOMENTE HOJE: ${hoje}`
             );
 
             console.log(
@@ -1421,17 +1605,13 @@ router.get(
             );
 
             console.log(
-                `📅 Data: ${obterDataHojeBrasil()}`
-            );
-
-            console.log(
                 "=========================================="
             );
 
 
-            // ==================================
+            // ======================================
             // BUSCAR API EXTERNA
-            // ==================================
+            // ======================================
 
             let jogosAPI = [];
 
@@ -1443,11 +1623,13 @@ router.get(
 
             }
 
-            catch (error) {
+            catch (erro) {
 
                 console.error(
+
                     "❌ Erro API futebol:",
-                    error.message
+                    erro.message
+
                 );
 
                 jogosAPI = [];
@@ -1466,11 +1648,19 @@ router.get(
             }
 
 
-            // ==================================
-            // NORMALIZAR
-            // ==================================
+            console.log(
 
-            const jogosNormalizados =
+                `📡 API externa retornou ` +
+                `${jogosAPI.length} registros`
+
+            );
+
+
+            // ======================================
+            // NORMALIZAR
+            // ======================================
+
+            const normalizados =
 
                 jogosAPI
 
@@ -1480,113 +1670,76 @@ router.get(
 
                     .filter(
                         jogo =>
-                            jogoValido(jogo)
+                            jogoValido(
+                                jogo
+                            )
                     );
 
 
-            // ==================================
-            // FILTRAR DATA
-            // ==================================
+            // ======================================
+            // FILTRAR HOJE
+            // ======================================
 
-            const jogosValidos =
+            const jogosHoje =
 
-                jogosNormalizados
+                normalizados
 
                     .filter(
                         jogo =>
-                            jogoEhHoje(jogo)
+                            jogoEhHoje(
+                                jogo
+                            )
                     );
+
+
+            // ======================================
+            // REMOVER DUPLICADOS
+            // ======================================
+
+            const jogosValidos =
+                removerDuplicados(
+                    jogosHoje
+                );
 
 
             console.log(
 
-                `⚽ ${jogosValidos.length} jogos ` +
-                `válidos para ${obterDataHojeBrasil()}`
+                `⚽ ${jogosValidos.length} ` +
+                `jogos válidos para ${hoje}`
 
             );
 
 
-            // ==================================
-            // LISTAR EXEMPLO
-            // ==================================
+            // ======================================
+            // MOSTRAR LOG DOS JOGOS
+            // ======================================
 
-            if (
-                jogosValidos.length > 0
-            ) {
+            jogosValidos.forEach(
 
-                jogosValidos.forEach(
-                    (
-                        jogo,
-                        indice
-                    ) => {
+                (
+                    jogo,
+                    indice
+                ) => {
 
-                        let horario =
-                            "N/A";
+                    console.log(
 
+                        `⚽ ${indice + 1}. ` +
+                        `${jogo.time_casa} x ` +
+                        `${jogo.time_fora} | ` +
+                        `${jogo.campeonato} | ` +
+                        `${obterHorarioBrasil(jogo.data_jogo)} | ` +
+                        `API ${jogo.api_id}`
 
-                        try {
+                    );
 
-                            const data =
-                                new Date(
-                                    jogo.data_jogo
-                                );
+                }
 
-
-                            if (
-                                !Number.isNaN(
-                                    data.getTime()
-                                )
-                            ) {
-
-                                horario =
-                                    new Intl.DateTimeFormat(
-                                        "pt-BR",
-                                        {
-                                            timeZone:
-                                                TIMEZONE,
-
-                                            hour:
-                                                "2-digit",
-
-                                            minute:
-                                                "2-digit"
-                                        }
-                                    ).format(
-                                        data
-                                    );
-
-                            }
-
-                        }
-
-                        catch {
-
-                            horario =
-                                "N/A";
-
-                        }
+            );
 
 
-                        console.log(
-
-                            `⚽ ${indice + 1}. ` +
-                            `${jogo.time_casa} x ` +
-                            `${jogo.time_fora} | ` +
-                            `${jogo.campeonato} | ` +
-                            `${horario} | ` +
-                            `API ${jogo.api_id}`
-
-                        );
-
-                    }
-                );
-
-            }
-
-
-            // ==================================
-            // SALVAR / ATUALIZAR
-            // ==================================
+            // ======================================
+            // SALVAR NO BANCO
+            // ======================================
 
             let jogosSalvos = [];
 
@@ -1618,19 +1771,19 @@ router.get(
 
                     console.log(
 
-                        `💾 ${jogosSalvos.length} jogos ` +
-                        `salvos/atualizados no PostgreSQL`
+                        `💾 ${jogosSalvos.length} ` +
+                        `jogos salvos/atualizados no PostgreSQL`
 
                     );
 
                 }
 
-                catch (error) {
+                catch (erro) {
 
                     console.error(
 
                         "❌ Erro salvar jogos:",
-                        error.message
+                        erro.message
 
                     );
 
@@ -1639,11 +1792,14 @@ router.get(
             }
 
 
-            // ==================================
+            // ======================================
             // GERAR ANÁLISES
             //
-            // Somente jogos válidos de hoje.
-            // ==================================
+            // SOMENTE OS JOGOS DE HOJE.
+            //
+            // Histórico usado somente como
+            // fonte estatística.
+            // ======================================
 
             let analisesProcessadas = 0;
 
@@ -1657,7 +1813,6 @@ router.get(
                 try {
 
                     const resultado =
-
                         await analisarJogo(
                             jogo
                         );
@@ -1673,14 +1828,15 @@ router.get(
 
                 }
 
-                catch (error) {
+                catch (erro) {
 
                     errosAnalise++;
 
+
                     console.error(
 
-                        "❌ Erro processamento análise:",
-                        error.message
+                        `❌ Erro processamento análise:`,
+                        erro.message
 
                     );
 
@@ -1690,81 +1846,66 @@ router.get(
 
 
             console.log(
-                "🤖 Resultado análises:",
-                {
 
-                    total:
-                        jogosValidos.length,
+                `🤖 Análises: ` +
+                `${analisesProcessadas}/${jogosValidos.length}`
 
-                    processados:
-                        analisesProcessadas,
-
-                    erros:
-                        errosAnalise,
-
-                    sucesso:
-                        errosAnalise === 0
-
-                }
             );
 
 
-            // ==================================
-            // BUSCAR DO BANCO
+            // ======================================
+            // BUSCAR NOVAMENTE DO BANCO
             //
             // IMPORTANTE:
             //
-            // Não usar listarJogos(),
-            // pois contém histórico.
-            // ==================================
+            // NÃO usar listarJogos().
+            //
+            // listarJogos() contém histórico.
+            // ======================================
 
-            let banco = [];
+            let bancoHoje = [];
 
 
             try {
 
-                banco =
-
+                bancoHoje =
                     await jogoBancoService
                         .buscarJogosDoDia();
 
             }
 
-            catch (error) {
+            catch (erro) {
 
                 console.error(
 
-                    "❌ Erro buscando jogos do dia:",
-                    error.message
+                    "❌ Erro buscando jogos de hoje:",
+                    erro.message
 
                 );
 
-                banco = [];
+                bancoHoje = [];
 
             }
 
 
             if (
                 !Array.isArray(
-                    banco
+                    bancoHoje
                 )
             ) {
 
-                banco = [];
+                bancoHoje = [];
 
             }
 
 
-            // ==================================
-            // PROTEÇÃO FINAL DE DATA
-            //
-            // O banco também precisa devolver
-            // somente jogos de hoje.
-            // ==================================
+            // ======================================
+            // PROTEÇÃO FINAL
+            // ======================================
 
-            const jogosBanco =
+            const jogosBancoHoje =
 
-                banco
+                bancoHoje
 
                     .map(
                         normalizarJogo
@@ -1772,83 +1913,34 @@ router.get(
 
                     .filter(
                         jogo =>
-                            jogoValido(jogo)
+                            jogoValido(
+                                jogo
+                            )
                     )
 
                     .filter(
                         jogo =>
-                            jogoEhHoje(jogo)
+                            jogoEhHoje(
+                                jogo
+                            )
                     );
 
 
-            // ==================================
-            // FORMATAR RESPOSTA
-            // ==================================
-
             const resposta =
-
-                jogosBanco
-
+                removerDuplicados(
+                    jogosBancoHoje
+                )
                     .map(
                         formatarJogo
                     )
-
                     .filter(
                         Boolean
                     );
 
 
-            // ==================================
-            // REMOVER DUPLICADOS POR API ID
-            // ==================================
-
-            const mapa =
-                new Map();
-
-
-            for (
-                const jogo of resposta
-            ) {
-
-                if (
-                    !jogo.api_id
-                ) {
-
-                    continue;
-
-                }
-
-
-                if (
-                    !mapa.has(
-                        jogo.api_id
-                    )
-                ) {
-
-                    mapa.set(
-                        jogo.api_id,
-                        jogo
-                    );
-
-                }
-
-            }
-
-
-            const respostaFinal =
-                Array.from(
-                    mapa.values()
-                );
-
-
-            // ==================================
-            // LOG FINAL
-            // ==================================
-
             console.log(
 
-                `⚽ ${respostaFinal.length} jogos ` +
-                `de hoje retornados`
+                `⚽ ${resposta.length} jogos de hoje retornados`
 
             );
 
@@ -1859,26 +1951,28 @@ router.get(
                     true,
 
                 data:
-                    obterDataHojeBrasil(),
+                    hoje,
 
                 timezone:
                     TIMEZONE,
 
                 total:
-                    respostaFinal.length,
+                    resposta.length,
 
                 jogos:
-                    respostaFinal
+                    resposta
 
             });
 
         }
 
-        catch (error) {
+        catch (erro) {
 
             console.error(
-                "❌ Erro API jogos:",
-                error.message
+
+                "❌ Erro API /api/jogos:",
+                erro.message
+
             );
 
 
@@ -1890,7 +1984,16 @@ router.get(
                     false,
 
                 erro:
-                    error.message,
+                    erro.message,
+
+                data:
+                    obterDataHojeBrasil(),
+
+                timezone:
+                    TIMEZONE,
+
+                total:
+                    0,
 
                 jogos:
                     []
@@ -1906,9 +2009,10 @@ router.get(
 // ==========================================
 // GET /api/jogos/banco
 //
-// TODOS OS JOGOS DO BANCO
+// HISTÓRICO COMPLETO.
 //
-// Inclui histórico.
+// NÃO FILTRAR DATA.
+//
 // ==========================================
 
 router.get(
@@ -1921,9 +2025,16 @@ router.get(
         try {
 
             const jogos =
-
                 await jogoBancoService
                     .listarJogos();
+
+
+            const lista =
+                Array.isArray(
+                    jogos
+                )
+                    ? jogos
+                    : [];
 
 
             return res.json({
@@ -1932,25 +2043,21 @@ router.get(
                     true,
 
                 total:
-                    Array.isArray(jogos)
-                        ? jogos.length
-                        : 0,
+                    lista.length,
 
                 jogos:
-                    Array.isArray(jogos)
-                        ? jogos
-                        : []
+                    lista
 
             });
 
         }
 
-        catch (error) {
+        catch (erro) {
 
             console.error(
 
                 "❌ Erro banco jogos:",
-                error.message
+                erro.message
 
             );
 
@@ -1963,7 +2070,10 @@ router.get(
                     false,
 
                 erro:
-                    error.message,
+                    erro.message,
+
+                total:
+                    0,
 
                 jogos:
                     []
@@ -1979,10 +2089,10 @@ router.get(
 // ==========================================
 // GET /api/jogos/hoje
 //
-// SOMENTE JOGOS DE HOJE
+// SOMENTE BANCO.
 //
-// Não consulta API externa.
-// Consulta somente banco.
+// Não chama API externa.
+//
 // ==========================================
 
 router.get(
@@ -1995,15 +2105,16 @@ router.get(
         try {
 
             const jogos =
-
                 await jogoBancoService
                     .buscarJogosDoDia();
 
 
-            const jogosFiltrados =
+            const filtrados =
 
                 (
-                    Array.isArray(jogos)
+                    Array.isArray(
+                        jogos
+                    )
                         ? jogos
                         : []
                 )
@@ -2014,16 +2125,28 @@ router.get(
 
                     .filter(
                         jogo =>
-                            jogoValido(jogo)
+                            jogoValido(
+                                jogo
+                            )
                     )
 
                     .filter(
                         jogo =>
-                            jogoEhHoje(jogo)
-                    )
+                            jogoEhHoje(
+                                jogo
+                            )
+                    );
 
+
+            const resposta =
+                removerDuplicados(
+                    filtrados
+                )
                     .map(
                         formatarJogo
+                    )
+                    .filter(
+                        Boolean
                     );
 
 
@@ -2039,21 +2162,21 @@ router.get(
                     TIMEZONE,
 
                 total:
-                    jogosFiltrados.length,
+                    resposta.length,
 
                 jogos:
-                    jogosFiltrados
+                    resposta
 
             });
 
         }
 
-        catch (error) {
+        catch (erro) {
 
             console.error(
 
                 "❌ Erro jogos hoje:",
-                error.message
+                erro.message
 
             );
 
@@ -2066,7 +2189,16 @@ router.get(
                     false,
 
                 erro:
-                    error.message,
+                    erro.message,
+
+                data:
+                    obterDataHojeBrasil(),
+
+                timezone:
+                    TIMEZONE,
+
+                total:
+                    0,
 
                 jogos:
                     []
@@ -2081,6 +2213,9 @@ router.get(
 
 // ==========================================
 // GET /api/jogos/proximos
+//
+// RESTANTE DE HOJE + AMANHÃ.
+//
 // ==========================================
 
 router.get(
@@ -2093,10 +2228,20 @@ router.get(
         try {
 
             let limite =
-
                 Number(
                     req.query.limite
-                ) || 20;
+                );
+
+
+            if (
+                !Number.isInteger(
+                    limite
+                )
+            ) {
+
+                limite = 20;
+
+            }
 
 
             if (
@@ -2118,11 +2263,18 @@ router.get(
 
 
             const jogos =
-
                 await jogoBancoService
                     .buscarProximosJogos(
                         limite
                     );
+
+
+            const lista =
+                Array.isArray(
+                    jogos
+                )
+                    ? jogos
+                    : [];
 
 
             return res.json({
@@ -2130,29 +2282,28 @@ router.get(
                 sucesso:
                     true,
 
+                data:
+                    obterDataHojeBrasil(),
+
                 timezone:
                     TIMEZONE,
 
                 total:
-                    Array.isArray(jogos)
-                        ? jogos.length
-                        : 0,
+                    lista.length,
 
                 jogos:
-                    Array.isArray(jogos)
-                        ? jogos
-                        : []
+                    lista
 
             });
 
         }
 
-        catch (error) {
+        catch (erro) {
 
             console.error(
 
                 "❌ Erro próximos jogos:",
-                error.message
+                erro.message
 
             );
 
@@ -2165,7 +2316,10 @@ router.get(
                     false,
 
                 erro:
-                    error.message,
+                    erro.message,
+
+                total:
+                    0,
 
                 jogos:
                     []
@@ -2192,7 +2346,6 @@ router.get(
         try {
 
             const estatisticas =
-
                 await jogoBancoService
                     .estatisticasJogos();
 
@@ -2202,6 +2355,12 @@ router.get(
                 sucesso:
                     true,
 
+                data:
+                    obterDataHojeBrasil(),
+
+                timezone:
+                    TIMEZONE,
+
                 estatisticas:
                     estatisticas || {}
 
@@ -2209,12 +2368,12 @@ router.get(
 
         }
 
-        catch (error) {
+        catch (erro) {
 
             console.error(
 
-                "❌ Erro estatísticas jogos:",
-                error.message
+                "❌ Erro estatísticas:",
+                erro.message
 
             );
 
@@ -2227,7 +2386,7 @@ router.get(
                     false,
 
                 erro:
-                    error.message,
+                    erro.message,
 
                 estatisticas:
                     {}
