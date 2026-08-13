@@ -2,7 +2,7 @@
 // BETVISION AI
 // services/jogoBancoService.js
 //
-// Versão 8.0
+// Versão 9.0
 // Motor Estatístico v6
 // PostgreSQL / NeonDB
 //
@@ -19,22 +19,36 @@
 // - Compatível com NeonDB
 // - Timezone: America/Sao_Paulo
 //
-// REGRA PRINCIPAL:
+// CORREÇÃO PRINCIPAL:
 //
 // O banco mantém todo o histórico.
 //
-// A aplicação exibe somente:
+// A aplicação exibe:
 //
 // HOJE
 // +
 // AMANHÃ
+//
+// A consulta de data NÃO usa mais:
+//
+// data_jogo AT TIME ZONE America/Sao_Paulo
+//
+// diretamente sobre a coluna.
+//
+// Em vez disso, calculamos a janela UTC
+// correspondente ao calendário de São Paulo.
+//
+// Isso evita o problema:
+//
+// "1 jogo salvo"
+// +
+// "0 jogos de hoje retornados"
 //
 // ==================================================
 
 import {
     query
 } from "../database/database.js";
-
 
 // ==================================================
 // CONFIGURAÇÃO
@@ -154,6 +168,167 @@ function obterDataAmanhaBrasil() {
         return null;
 
     }
+
+}
+
+
+// ==================================================
+// CONVERTER DATA BRASIL PARA UTC
+//
+// America/Sao_Paulo em 2026:
+//
+// UTC-03:00
+//
+// Exemplo:
+//
+// 2026-08-13 00:00 Brasil
+// =
+// 2026-08-13 03:00 UTC
+//
+// ==================================================
+
+function dataBrasilParaUTC(
+    dataBrasil
+) {
+
+    if (!dataBrasil) {
+
+        return null;
+
+    }
+
+    try {
+
+        return new Date(
+            `${dataBrasil}T00:00:00-03:00`
+        );
+
+    }
+
+    catch (erro) {
+
+        console.error(
+            "❌ Erro converter data Brasil para UTC:",
+            erro.message
+        );
+
+        return null;
+
+    }
+
+}
+
+
+// ==================================================
+// OBTER JANELA DE UM DIA
+//
+// Retorna:
+//
+// início UTC
+// fim UTC
+//
+// Exemplo:
+//
+// Brasil:
+// 2026-08-13 00:00
+// até
+// 2026-08-14 00:00
+//
+// UTC:
+// 2026-08-13 03:00
+// até
+// 2026-08-14 03:00
+//
+// ==================================================
+
+function obterJanelaUTC(
+    dataBrasil
+) {
+
+    try {
+
+        const inicio =
+            dataBrasilParaUTC(
+                dataBrasil
+            );
+
+
+        if (!inicio) {
+
+            return null;
+
+        }
+
+
+        const fim =
+            new Date(
+                inicio.getTime()
+                +
+                (
+                    24 *
+                    60 *
+                    60 *
+                    1000
+                )
+            );
+
+
+        return {
+
+            inicio,
+
+            fim
+
+        };
+
+    }
+
+    catch (erro) {
+
+        console.error(
+            "❌ Erro janela UTC:",
+            erro.message
+        );
+
+        return null;
+
+    }
+
+}
+
+
+// ==================================================
+// FORMATAR DATA PARA POSTGRES
+//
+// Retorna uma string UTC sem ambiguidade.
+//
+// Exemplo:
+//
+// 2026-08-13T03:00:00.000Z
+//
+// ==================================================
+
+function formatarUTC(
+    data
+) {
+
+    if (!(data instanceof Date)) {
+
+        return null;
+
+    }
+
+    if (
+        Number.isNaN(
+            data.getTime()
+        )
+    ) {
+
+        return null;
+
+    }
+
+    return data.toISOString();
 
 }
 
@@ -484,18 +659,14 @@ export async function buscarJogoPorApiId(
             await query(
 
                 `
-
                 SELECT *
 
                 FROM jogos
 
                 WHERE
-
-                    api_id =
-                    $1::integer
+                    api_id = $1::integer
 
                 LIMIT 1
-
                 `,
 
                 [
@@ -531,7 +702,7 @@ export async function buscarJogoPorApiId(
 // ==================================================
 // SALVAR JOGO
 //
-// Se o jogo já existe:
+// Se já existe:
 // UPDATE
 //
 // Se não existe:
@@ -585,7 +756,6 @@ export async function salvarJogo(
                 await query(
 
                     `
-
                     UPDATE jogos
 
                     SET
@@ -609,12 +779,10 @@ export async function salvarJogo(
                             $6::text
 
                     WHERE
-
                         api_id =
                         $7::integer
 
                     RETURNING *
-
                     `,
 
                     [
@@ -636,6 +804,16 @@ export async function salvarJogo(
                     ]
 
                 );
+
+
+            console.log(
+
+                `🔄 Jogo atualizado: ` +
+                `${normalizado.time_casa} x ` +
+                `${normalizado.time_fora} ` +
+                `(API ${normalizado.api_id})`
+
+            );
 
 
             return (
@@ -673,49 +851,31 @@ export async function salvarJogo(
             await query(
 
                 `
-
                 INSERT INTO jogos
 
                 (
-
                     api_id,
-
                     campeonato,
-
                     time_casa,
-
                     time_fora,
-
                     data_jogo,
-
                     estadio,
-
                     status
-
                 )
 
                 VALUES
 
                 (
-
                     $1::integer,
-
                     $2::text,
-
                     $3::text,
-
                     $4::text,
-
                     $5,
-
                     $6::text,
-
                     $7::text
-
                 )
 
                 RETURNING *
-
                 `,
 
                 [
@@ -743,7 +903,8 @@ export async function salvarJogo(
 
             `💾 Jogo salvo: ` +
             `${normalizado.time_casa} x ` +
-            `${normalizado.time_fora}`
+            `${normalizado.time_fora} ` +
+            `(API ${normalizado.api_id})`
 
         );
 
@@ -873,6 +1034,18 @@ export async function salvarListaJogos(
 
 // ==================================================
 // BUSCAR JOGOS DE HOJE
+//
+// CORREÇÃO:
+//
+// Não usamos:
+//
+// data_jogo AT TIME ZONE $1
+//
+// A consulta usa uma janela UTC.
+//
+// Isso funciona corretamente quando a API
+// fornece utcDate e o banco armazena esse
+// instante em UTC.
 // ==================================================
 
 export async function buscarJogosDoDia() {
@@ -883,11 +1056,47 @@ export async function buscarJogosDoDia() {
             obterDataHojeBrasil();
 
 
+        const janela =
+            obterJanelaUTC(
+                dataHoje
+            );
+
+
+        if (
+            !janela
+        ) {
+
+            return [];
+
+        }
+
+
+        const inicio =
+            formatarUTC(
+                janela.inicio
+            );
+
+
+        const fim =
+            formatarUTC(
+                janela.fim
+            );
+
+
+        console.log(
+            `📅 Buscando jogos de hoje: ${dataHoje}`
+        );
+
+
+        console.log(
+            `🕐 Janela UTC: ${inicio} até ${fim}`
+        );
+
+
         const resultado =
             await query(
 
                 `
-
                 SELECT *
 
                 FROM jogos
@@ -898,33 +1107,33 @@ export async function buscarJogosDoDia() {
 
                     AND
 
-                    (
+                    data_jogo >= $1
 
-                        data_jogo
-                        AT TIME ZONE
-                        $1
+                    AND
 
-                    )::date
-
-                    =
-
-                    $2::date
+                    data_jogo < $2
 
                 ORDER BY
-
                     data_jogo ASC
-
                 `,
 
                 [
 
-                    TIMEZONE,
+                    inicio,
 
-                    dataHoje
+                    fim
 
                 ]
 
             );
+
+
+        console.log(
+
+            `⚽ ${resultado.rows.length} ` +
+            `jogos de hoje retornados`
+
+        );
 
 
         return resultado.rows;
@@ -960,11 +1169,42 @@ export async function buscarJogosAmanha() {
             obterDataAmanhaBrasil();
 
 
+        const janela =
+            obterJanelaUTC(
+                dataAmanha
+            );
+
+
+        if (
+            !janela
+        ) {
+
+            return [];
+
+        }
+
+
+        const inicio =
+            formatarUTC(
+                janela.inicio
+            );
+
+
+        const fim =
+            formatarUTC(
+                janela.fim
+            );
+
+
+        console.log(
+            `📅 Buscando jogos de amanhã: ${dataAmanha}`
+        );
+
+
         const resultado =
             await query(
 
                 `
-
                 SELECT *
 
                 FROM jogos
@@ -975,33 +1215,33 @@ export async function buscarJogosAmanha() {
 
                     AND
 
-                    (
+                    data_jogo >= $1
 
-                        data_jogo
-                        AT TIME ZONE
-                        $1
+                    AND
 
-                    )::date
-
-                    =
-
-                    $2::date
+                    data_jogo < $2
 
                 ORDER BY
-
                     data_jogo ASC
-
                 `,
 
                 [
 
-                    TIMEZONE,
+                    inicio,
 
-                    dataAmanha
+                    fim
 
                 ]
 
             );
+
+
+        console.log(
+
+            `⚽ ${resultado.rows.length} ` +
+            `jogos de amanhã retornados`
+
+        );
 
 
         return resultado.rows;
@@ -1028,7 +1268,7 @@ export async function buscarJogosAmanha() {
 // ==================================================
 // BUSCAR JOGOS HOJE + AMANHÃ
 //
-// ESTE É O PRINCIPAL MÉTODO PARA O FRONTEND.
+// PRINCIPAL MÉTODO PARA O FRONTEND
 // ==================================================
 
 export async function buscarJogosDisponiveis() {
@@ -1038,15 +1278,49 @@ export async function buscarJogosDisponiveis() {
         const hoje =
             obterDataHojeBrasil();
 
+
         const amanha =
             obterDataAmanhaBrasil();
+
+
+        const janelaHoje =
+            obterJanelaUTC(
+                hoje
+            );
+
+
+        const janelaAmanha =
+            obterJanelaUTC(
+                amanha
+            );
+
+
+        if (
+            !janelaHoje ||
+            !janelaAmanha
+        ) {
+
+            return [];
+
+        }
+
+
+        const inicio =
+            formatarUTC(
+                janelaHoje.inicio
+            );
+
+
+        const fim =
+            formatarUTC(
+                janelaAmanha.fim
+            );
 
 
         const resultado =
             await query(
 
                 `
-
                 SELECT *
 
                 FROM jogos
@@ -1057,35 +1331,21 @@ export async function buscarJogosDisponiveis() {
 
                     AND
 
-                    (
-
-                        data_jogo
-                        AT TIME ZONE
-                        $1
-
-                    )::date
-
-                    BETWEEN
-
-                    $2::date
+                    data_jogo >= $1
 
                     AND
 
-                    $3::date
+                    data_jogo < $2
 
                 ORDER BY
-
                     data_jogo ASC
-
                 `,
 
                 [
 
-                    TIMEZONE,
+                    inicio,
 
-                    hoje,
-
-                    amanha
+                    fim
 
                 ]
 
@@ -1137,11 +1397,9 @@ export async function buscarJogosHojeEAmanha() {
 // ==================================================
 // LISTAR TODOS OS JOGOS
 //
-// ATENÇÃO:
+// SOMENTE HISTÓRICO / ADMIN
 //
-// Este método é SOMENTE para histórico/admin.
-//
-// Não usar no dashboard principal.
+// NÃO usar no dashboard principal.
 // ==================================================
 
 export async function listarJogos() {
@@ -1152,7 +1410,6 @@ export async function listarJogos() {
             await query(
 
                 `
-
                 SELECT *
 
                 FROM jogos
@@ -1162,7 +1419,6 @@ export async function listarJogos() {
                     data_jogo DESC NULLS LAST,
 
                     id DESC
-
                 `
 
             );
@@ -1192,13 +1448,11 @@ export async function listarJogos() {
 // ==================================================
 // PRÓXIMOS JOGOS
 //
-// Agora "próximos" significa:
-//
-// restante de hoje
+// Restante de hoje
 // +
 // amanhã
 //
-// Não retorna jogos de datas futuras além de amanhã.
+// Não retorna datas além de amanhã.
 // ==================================================
 
 export async function buscarProximosJogos(
@@ -1238,15 +1492,53 @@ export async function buscarProximosJogos(
         const hoje =
             obterDataHojeBrasil();
 
+
         const amanha =
             obterDataAmanhaBrasil();
+
+
+        const janelaHoje =
+            obterJanelaUTC(
+                hoje
+            );
+
+
+        const janelaAmanha =
+            obterJanelaUTC(
+                amanha
+            );
+
+
+        if (
+            !janelaHoje ||
+            !janelaAmanha
+        ) {
+
+            return [];
+
+        }
+
+
+        const agoraUTC =
+            new Date();
+
+
+        const agora =
+            formatarUTC(
+                agoraUTC
+            );
+
+
+        const fim =
+            formatarUTC(
+                janelaAmanha.fim
+            );
 
 
         const resultado =
             await query(
 
                 `
-
                 SELECT *
 
                 FROM jogos
@@ -1257,42 +1549,23 @@ export async function buscarProximosJogos(
 
                     AND
 
-                    (
-
-                        data_jogo
-                        AT TIME ZONE
-                        $1
-
-                    )::date
-
-                    BETWEEN
-
-                    $2::date
+                    data_jogo >= $1
 
                     AND
 
-                    $3::date
-
-                    AND
-
-                    data_jogo >=
-                    CURRENT_TIMESTAMP
+                    data_jogo < $2
 
                 ORDER BY
-
                     data_jogo ASC
 
-                LIMIT $4::integer
-
+                LIMIT $3::integer
                 `,
 
                 [
 
-                    TIMEZONE,
+                    agora,
 
-                    hoje,
-
-                    amanha,
+                    fim,
 
                     quantidade
 
@@ -1333,15 +1606,71 @@ export async function estatisticasJogos() {
         const hoje =
             obterDataHojeBrasil();
 
+
         const amanha =
             obterDataAmanhaBrasil();
+
+
+        const janelaHoje =
+            obterJanelaUTC(
+                hoje
+            );
+
+
+        const janelaAmanha =
+            obterJanelaUTC(
+                amanha
+            );
+
+
+        if (
+            !janelaHoje ||
+            !janelaAmanha
+        ) {
+
+            return null;
+
+        }
+
+
+        const inicioHoje =
+            formatarUTC(
+                janelaHoje.inicio
+            );
+
+
+        const fimHoje =
+            formatarUTC(
+                janelaHoje.fim
+            );
+
+
+        const inicioAmanha =
+            formatarUTC(
+                janelaAmanha.inicio
+            );
+
+
+        const fimAmanha =
+            formatarUTC(
+                janelaAmanha.fim
+            );
+
+
+        const inicioDisponiveis =
+            inicioHoje;
+
+
+        const fimDisponiveis =
+            formatarUTC(
+                janelaAmanha.fim
+            );
 
 
         const resultado =
             await query(
 
                 `
-
                 SELECT
 
                     (
@@ -1365,17 +1694,11 @@ export async function estatisticasJogos() {
 
                             AND
 
-                            (
+                            data_jogo >= $1
 
-                                data_jogo
-                                AT TIME ZONE
-                                $1
+                            AND
 
-                            )::date
-
-                            =
-
-                            $2::date
+                            data_jogo < $2
 
                     ) AS hoje,
 
@@ -1392,17 +1715,11 @@ export async function estatisticasJogos() {
 
                             AND
 
-                            (
+                            data_jogo >= $3
 
-                                data_jogo
-                                AT TIME ZONE
-                                $1
+                            AND
 
-                            )::date
-
-                            =
-
-                            $3::date
+                            data_jogo < $4
 
                     ) AS amanha,
 
@@ -1419,21 +1736,11 @@ export async function estatisticasJogos() {
 
                             AND
 
-                            (
-
-                                data_jogo
-                                AT TIME ZONE
-                                $1
-
-                            )::date
-
-                            BETWEEN
-
-                            $2::date
+                            data_jogo >= $5
 
                             AND
 
-                            $3::date
+                            data_jogo < $6
 
                     ) AS disponiveis
 
@@ -1441,11 +1748,17 @@ export async function estatisticasJogos() {
 
                 [
 
-                    TIMEZONE,
+                    inicioHoje,
 
-                    hoje,
+                    fimHoje,
 
-                    amanha
+                    inicioAmanha,
+
+                    fimAmanha,
+
+                    inicioDisponiveis,
+
+                    fimDisponiveis
 
                 ]
 
@@ -1453,8 +1766,10 @@ export async function estatisticasJogos() {
 
 
         return (
+
             resultado.rows[0] ||
             null
+
         );
 
     }
@@ -1477,14 +1792,11 @@ export async function estatisticasJogos() {
 
 
 // ==================================================
-// REMOVER JOGOS FICTÍCIOS
+// ENCONTRAR JOGOS INVÁLIDOS
 //
-// NÃO APAGA histórico real.
+// NÃO APAGA AUTOMATICAMENTE.
 //
-// Esta função NÃO é executada automaticamente.
-//
-// Serve apenas para manutenção caso existam
-// registros obviamente inválidos.
+// Serve apenas para manutenção.
 // ==================================================
 
 export async function encontrarJogosInvalidos() {
@@ -1495,7 +1807,6 @@ export async function encontrarJogosInvalidos() {
             await query(
 
                 `
-
                 SELECT *
 
                 FROM jogos
@@ -1524,8 +1835,8 @@ export async function encontrarJogosInvalidos() {
                         time_fora
                     ) = ''
 
-                ORDER BY id DESC
-
+                ORDER BY
+                    id DESC
                 `
 
             );
