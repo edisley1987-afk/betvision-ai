@@ -8,14 +8,9 @@
 import pg from "pg";
 import dotenv from "dotenv";
 
-
 dotenv.config();
 
-
-
 const { Pool } = pg;
-
-
 
 // ==================================================
 // CONFIGURAÇÃO POOL POSTGRESQL
@@ -26,110 +21,122 @@ const pool = new Pool({
     connectionString:
         process.env.DATABASE_URL,
 
-
     ssl:
-
         process.env.NODE_ENV === "production"
-
             ? {
-
-                rejectUnauthorized:false
-
+                rejectUnauthorized: false
             }
-
             : false,
 
+    max: 10,
 
-    max:10,
+    idleTimeoutMillis: 30000,
 
-
-    idleTimeoutMillis:30000,
-
-
-    connectionTimeoutMillis:10000
-
+    connectionTimeoutMillis: 10000
 
 });
-
-
-
-
 
 // ==================================================
 // TESTE DE CONEXÃO
 // ==================================================
 
-export async function conectarBanco(){
-
+export async function conectarBanco() {
 
     const cliente =
         await pool.connect();
 
-
-    try{
-
+    try {
 
         const resultado =
             await cliente.query(
-
                 "SELECT NOW()"
-
             );
 
-
         console.log(
-
             "🟢 PostgreSQL OK:",
-
             resultado.rows[0].now
-
         );
 
+    }
 
+    catch (erro) {
+
+        console.error(
+            "🔴 Erro PostgreSQL:",
+            erro.message
+        );
+
+        throw erro;
 
     }
-    finally{
 
+    finally {
 
         cliente.release();
 
-
     }
 
-
 }
-
-
-
-
 
 // ==================================================
 // QUERY PADRÃO
 // ==================================================
 
 export async function query(
-
     texto,
-
-    parametros=[]
-
-){
-
+    parametros = []
+) {
 
     return await pool.query(
-
         texto,
-
         parametros
-
     );
-
 
 }
 
+// ==================================================
+// TESTE SIMPLES DO BANCO
+// ==================================================
 
+export async function testarBanco() {
 
+    try {
 
+        const resultado =
+            await pool.query(
+                "SELECT NOW() AS agora"
+            );
+
+        return {
+
+            conectado: true,
+
+            horario:
+                resultado.rows[0].agora
+
+        };
+
+    }
+
+    catch (erro) {
+
+        console.error(
+            "🔴 Falha no teste do banco:",
+            erro.message
+        );
+
+        return {
+
+            conectado: false,
+
+            erro:
+                erro.message
+
+        };
+
+    }
+
+}
 
 // ==================================================
 // EXPORTAR POOL
