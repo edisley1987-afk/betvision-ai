@@ -2,53 +2,48 @@
 // BETVISION AI
 // services/jogoBancoService.js
 //
-// Versão 9.0
-// Motor Estatístico v6
+// VERSÃO 10.0
+// MOTOR DE BANCO DE JOGOS
 // PostgreSQL / NeonDB
 //
 // RESPONSABILIDADES:
 //
-// - Salvar jogos recebidos da API
+// - Salvar jogos recebidos das APIs
 // - Atualizar jogos existentes
 // - Buscar jogos de hoje
 // - Buscar jogos de amanhã
 // - Buscar jogos de hoje + amanhã
-// - Manter histórico completo no banco
+// - Buscar próximos jogos
+// - Manter histórico completo
 // - Nunca criar jogos fictícios
 // - api_id tratado como INTEGER
-// - Compatível com NeonDB
-// - Timezone: America/Sao_Paulo
+// - Evitar duplicidade
+// - Compatível com PostgreSQL / NeonDB
+// - Fuso oficial: America/Sao_Paulo
 //
-// CORREÇÃO PRINCIPAL:
+// REGRA PRINCIPAL:
 //
-// O banco mantém todo o histórico.
+// O BANCO MANTÉM TODO O HISTÓRICO.
 //
-// A aplicação exibe:
+// O DASHBOARD NÃO DEVE USAR listarJogos()
 //
-// HOJE
-// +
-// AMANHÃ
+// Para datas:
 //
-// A consulta de data NÃO usa mais:
+// HOJE:
+// [00:00 Brasil, amanhã 00:00 Brasil)
 //
-// data_jogo AT TIME ZONE America/Sao_Paulo
+// AMANHÃ:
+// [00:00 amanhã Brasil, depois de amanhã 00:00 Brasil)
 //
-// diretamente sobre a coluna.
-//
-// Em vez disso, calculamos a janela UTC
-// correspondente ao calendário de São Paulo.
-//
-// Isso evita o problema:
-//
-// "1 jogo salvo"
-// +
-// "0 jogos de hoje retornados"
+// A consulta é convertida para UTC antes
+// de consultar o PostgreSQL.
 //
 // ==================================================
 
 import {
     query
 } from "../database/database.js";
+
 
 // ==================================================
 // CONFIGURAÇÃO
@@ -59,7 +54,15 @@ const TIMEZONE =
 
 
 // ==================================================
-// DATA HOJE — BRASIL
+// OBTER DATA HOJE NO BRASIL
+//
+// Retorna:
+//
+// YYYY-MM-DD
+//
+// Exemplo:
+//
+// 2026-08-13
 // ==================================================
 
 function obterDataHojeBrasil() {
@@ -96,7 +99,7 @@ function obterDataHojeBrasil() {
     catch (erro) {
 
         console.error(
-            "❌ Erro data Brasil:",
+            "❌ Erro obter data Brasil:",
             erro.message
         );
 
@@ -108,7 +111,7 @@ function obterDataHojeBrasil() {
 
 
 // ==================================================
-// DATA AMANHÃ — BRASIL
+// OBTER DATA AMANHÃ NO BRASIL
 // ==================================================
 
 function obterDataAmanhaBrasil() {
@@ -133,6 +136,67 @@ function obterDataAmanhaBrasil() {
                 .split("-")
                 .map(Number);
 
+        const data =
+            new Date(
+                Date.UTC(
+                    ano,
+                    mes - 1,
+                    dia
+                )
+            );
+
+        data.setUTCDate(
+            data.getUTCDate() + 1
+        );
+
+        return data
+            .toISOString()
+            .slice(
+                0,
+                10
+            );
+
+    }
+
+    catch (erro) {
+
+        console.error(
+            "❌ Erro obter amanhã:",
+            erro.message
+        );
+
+        return null;
+
+    }
+
+}
+
+
+// ==================================================
+// OBTER DATA DEPOIS DE AMANHÃ
+// ==================================================
+
+function obterDataDepoisDeAmanhaBrasil() {
+
+    try {
+
+        const amanha =
+            obterDataAmanhaBrasil();
+
+        if (!amanha) {
+
+            return null;
+
+        }
+
+        const [
+            ano,
+            mes,
+            dia
+        ] =
+            amanha
+                .split("-")
+                .map(Number);
 
         const data =
             new Date(
@@ -143,15 +207,13 @@ function obterDataAmanhaBrasil() {
                 )
             );
 
-
         data.setUTCDate(
             data.getUTCDate() + 1
         );
 
-
         return data
             .toISOString()
-            .substring(
+            .slice(
                 0,
                 10
             );
@@ -161,7 +223,7 @@ function obterDataAmanhaBrasil() {
     catch (erro) {
 
         console.error(
-            "❌ Erro data amanhã:",
+            "❌ Erro obter depois de amanhã:",
             erro.message
         );
 
@@ -175,15 +237,13 @@ function obterDataAmanhaBrasil() {
 // ==================================================
 // CONVERTER DATA BRASIL PARA UTC
 //
-// America/Sao_Paulo em 2026:
+// Brasil:
 //
-// UTC-03:00
+// 2026-08-13 00:00
 //
-// Exemplo:
+// UTC:
 //
-// 2026-08-13 00:00 Brasil
-// =
-// 2026-08-13 03:00 UTC
+// 2026-08-13 03:00
 //
 // ==================================================
 
@@ -199,9 +259,22 @@ function dataBrasilParaUTC(
 
     try {
 
-        return new Date(
-            `${dataBrasil}T00:00:00-03:00`
-        );
+        const data =
+            new Date(
+                `${dataBrasil}T00:00:00-03:00`
+            );
+
+        if (
+            Number.isNaN(
+                data.getTime()
+            )
+        ) {
+
+            return null;
+
+        }
+
+        return data;
 
     }
 
@@ -220,24 +293,12 @@ function dataBrasilParaUTC(
 
 
 // ==================================================
-// OBTER JANELA DE UM DIA
+// OBTER JANELA UTC DE UM DIA
 //
 // Retorna:
 //
-// início UTC
-// fim UTC
-//
-// Exemplo:
-//
-// Brasil:
-// 2026-08-13 00:00
-// até
-// 2026-08-14 00:00
-//
-// UTC:
-// 2026-08-13 03:00
-// até
-// 2026-08-14 03:00
+// início
+// fim
 //
 // ==================================================
 
@@ -252,13 +313,11 @@ function obterJanelaUTC(
                 dataBrasil
             );
 
-
         if (!inicio) {
 
             return null;
 
         }
-
 
         const fim =
             new Date(
@@ -271,7 +330,6 @@ function obterJanelaUTC(
                     1000
                 )
             );
-
 
         return {
 
@@ -298,21 +356,16 @@ function obterJanelaUTC(
 
 
 // ==================================================
-// FORMATAR DATA PARA POSTGRES
-//
-// Retorna uma string UTC sem ambiguidade.
-//
-// Exemplo:
-//
-// 2026-08-13T03:00:00.000Z
-//
+// FORMATAR UTC
 // ==================================================
 
 function formatarUTC(
     data
 ) {
 
-    if (!(data instanceof Date)) {
+    if (
+        !(data instanceof Date)
+    ) {
 
         return null;
 
@@ -351,12 +404,10 @@ function normalizarApiId(
 
     }
 
-
     const numero =
         Number(
             valor
         );
-
 
     if (
         !Number.isInteger(
@@ -370,14 +421,13 @@ function normalizarApiId(
 
     }
 
-
     return numero;
 
 }
 
 
 // ==================================================
-// NORMALIZAR ID
+// NORMALIZAR ID INTERNO
 // ==================================================
 
 function normalizarId(
@@ -394,12 +444,10 @@ function normalizarId(
 
     }
 
-
     const numero =
         Number(
             valor
         );
-
 
     if (
         !Number.isInteger(
@@ -413,8 +461,154 @@ function normalizarId(
 
     }
 
-
     return numero;
+
+}
+
+
+// ==================================================
+// OBTER NOME DO TIME CASA
+// ==================================================
+
+function obterTimeCasa(
+    jogo
+) {
+
+    return (
+
+        jogo?.time_casa ??
+        jogo?.timeCasa ??
+        jogo?.casa ??
+        jogo?.homeTeam?.name ??
+        jogo?.home_team?.name ??
+        jogo?.teams?.home?.name ??
+        jogo?.fixture?.teams?.home?.name ??
+        null
+
+    );
+
+}
+
+
+// ==================================================
+// OBTER NOME DO TIME FORA
+// ==================================================
+
+function obterTimeFora(
+    jogo
+) {
+
+    return (
+
+        jogo?.time_fora ??
+        jogo?.timeFora ??
+        jogo?.fora ??
+        jogo?.awayTeam?.name ??
+        jogo?.away_team?.name ??
+        jogo?.teams?.away?.name ??
+        jogo?.fixture?.teams?.away?.name ??
+        null
+
+    );
+
+}
+
+
+// ==================================================
+// OBTER CAMPEONATO
+// ==================================================
+
+function obterCampeonato(
+    jogo
+) {
+
+    return (
+
+        jogo?.campeonato ??
+        jogo?.competicao ??
+        jogo?.competition?.name ??
+        jogo?.league?.name ??
+        jogo?.fixture?.league?.name ??
+        "Futebol"
+
+    );
+
+}
+
+
+// ==================================================
+// OBTER DATA DO JOGO
+// ==================================================
+
+function obterDataJogo(
+    jogo
+) {
+
+    return (
+
+        jogo?.data_jogo ??
+        jogo?.dataJogo ??
+        jogo?.utcDate ??
+        jogo?.horario ??
+        jogo?.data ??
+        jogo?.fixture?.date ??
+        null
+
+    );
+
+}
+
+
+// ==================================================
+// OBTER ESTÁDIO
+// ==================================================
+
+function obterEstadio(
+    jogo
+) {
+
+    return (
+
+        jogo?.estadio ??
+        jogo?.stadium ??
+        jogo?.venue?.name ??
+        jogo?.venue ??
+        null
+
+    );
+
+}
+
+
+// ==================================================
+// OBTER STATUS
+// ==================================================
+
+function obterStatus(
+    jogo
+) {
+
+    if (
+        typeof jogo?.status === "object"
+        &&
+        jogo.status !== null
+    ) {
+
+        return (
+
+            jogo.status.short ??
+            jogo.status.type ??
+            jogo.status.name ??
+            "SCHEDULED"
+
+        );
+
+    }
+
+    return (
+        jogo?.status ??
+        "SCHEDULED"
+    );
 
 }
 
@@ -439,6 +633,7 @@ function normalizarJogo(
 
             jogo.api_id ??
             jogo.apiId ??
+            jogo.fixture?.id ??
             jogo.id
 
         );
@@ -451,55 +646,39 @@ function normalizarJogo(
 
 
     const timeCasa =
-
-        jogo.time_casa ??
-        jogo.timeCasa ??
-        jogo.casa ??
-        jogo.homeTeam?.name ??
-        jogo.home_team?.name ??
-        null;
+        obterTimeCasa(
+            jogo
+        );
 
 
     const timeFora =
-
-        jogo.time_fora ??
-        jogo.timeFora ??
-        jogo.fora ??
-        jogo.awayTeam?.name ??
-        jogo.away_team?.name ??
-        null;
+        obterTimeFora(
+            jogo
+        );
 
 
     const campeonato =
-
-        jogo.campeonato ??
-        jogo.competicao ??
-        jogo.competition?.name ??
-        "Futebol";
+        obterCampeonato(
+            jogo
+        );
 
 
     const dataJogo =
-
-        jogo.data_jogo ??
-        jogo.dataJogo ??
-        jogo.utcDate ??
-        jogo.horario ??
-        jogo.data ??
-        null;
+        obterDataJogo(
+            jogo
+        );
 
 
     const estadio =
-
-        jogo.estadio ??
-        jogo.stadium ??
-        jogo.venue ??
-        null;
+        obterEstadio(
+            jogo
+        );
 
 
     const status =
-
-        jogo.status ??
-        "SCHEDULED";
+        obterStatus(
+            jogo
+        );
 
 
     return {
@@ -509,22 +688,63 @@ function normalizarJogo(
         api_id:
             apiId,
 
-        campeonato,
+        campeonato:
+            campeonato
+                ? String(campeonato).trim()
+                : "Futebol",
 
         time_casa:
-            timeCasa,
+            timeCasa
+                ? String(timeCasa).trim()
+                : null,
 
         time_fora:
-            timeFora,
+            timeFora
+                ? String(timeFora).trim()
+                : null,
 
         data_jogo:
             dataJogo,
 
-        estadio,
+        estadio:
+            estadio
+                ? String(estadio).trim()
+                : null,
 
-        status
+        status:
+            status
+                ? String(status).trim()
+                : "SCHEDULED"
 
     };
+
+}
+
+
+// ==================================================
+// VALIDAR DATA
+// ==================================================
+
+function dataJogoValida(
+    dataJogo
+) {
+
+    if (!dataJogo) {
+
+        return false;
+
+    }
+
+    const data =
+        new Date(
+            dataJogo
+        );
+
+    return (
+        !Number.isNaN(
+            data.getTime()
+        )
+    );
 
 }
 
@@ -619,7 +839,9 @@ function jogoValido(
 
 
     if (
-        !jogo.data_jogo
+        !dataJogoValida(
+            jogo.data_jogo
+        )
     ) {
 
         return false;
@@ -633,7 +855,7 @@ function jogoValido(
 
 
 // ==================================================
-// BUSCAR JOGO PELO API ID
+// BUSCAR JOGO POR API ID
 // ==================================================
 
 export async function buscarJogoPorApiId(
@@ -644,7 +866,6 @@ export async function buscarJogoPorApiId(
         normalizarApiId(
             apiId
         );
-
 
     if (!id) {
 
@@ -660,12 +881,8 @@ export async function buscarJogoPorApiId(
 
                 `
                 SELECT *
-
                 FROM jogos
-
-                WHERE
-                    api_id = $1::integer
-
+                WHERE api_id = $1::integer
                 LIMIT 1
                 `,
 
@@ -702,13 +919,9 @@ export async function buscarJogoPorApiId(
 // ==================================================
 // SALVAR JOGO
 //
-// Se já existe:
-// UPDATE
+// UPDATE se já existir.
+// INSERT se não existir.
 //
-// Se não existe:
-// INSERT
-//
-// Nunca cria jogo fictício.
 // ==================================================
 
 export async function salvarJogo(
@@ -743,7 +956,7 @@ export async function salvarJogo(
 
 
     // ==================================================
-    // ATUALIZAR
+    // UPDATE
     // ==================================================
 
     if (
@@ -760,27 +973,20 @@ export async function salvarJogo(
 
                     SET
 
-                        campeonato =
-                            $1::text,
+                        campeonato = $1::text,
 
-                        time_casa =
-                            $2::text,
+                        time_casa = $2::text,
 
-                        time_fora =
-                            $3::text,
+                        time_fora = $3::text,
 
-                        data_jogo =
-                            $4,
+                        data_jogo = $4,
 
-                        estadio =
-                            $5::text,
+                        estadio = $5::text,
 
-                        status =
-                            $6::text
+                        status = $6::text
 
                     WHERE
-                        api_id =
-                        $7::integer
+                        api_id = $7::integer
 
                     RETURNING *
                     `,
@@ -827,9 +1033,7 @@ export async function salvarJogo(
 
             console.error(
 
-                `❌ Erro atualizar jogo ` +
-                `${normalizado.api_id}:`,
-
+                `❌ Erro atualizar jogo ${normalizado.api_id}:`,
                 erro.message
 
             );
@@ -842,7 +1046,7 @@ export async function salvarJogo(
 
 
     // ==================================================
-    // INSERIR NOVO JOGO
+    // INSERT
     // ==================================================
 
     try {
@@ -852,7 +1056,6 @@ export async function salvarJogo(
 
                 `
                 INSERT INTO jogos
-
                 (
                     api_id,
                     campeonato,
@@ -864,7 +1067,6 @@ export async function salvarJogo(
                 )
 
                 VALUES
-
                 (
                     $1::integer,
                     $2::text,
@@ -918,9 +1120,9 @@ export async function salvarJogo(
 
     catch (erro) {
 
-        // ==================================================
-        // POSSÍVEL DUPLICIDADE
-        // ==================================================
+        // ==============================================
+        // DUPLICIDADE
+        // ==============================================
 
         if (
             erro?.code === "23505"
@@ -936,6 +1138,14 @@ export async function salvarJogo(
                 recuperado
             ) {
 
+                console.log(
+
+                    `ℹ️ Jogo já existia: ` +
+                    `${normalizado.api_id}`
+
+                );
+
+
                 return recuperado;
 
             }
@@ -945,9 +1155,7 @@ export async function salvarJogo(
 
         console.error(
 
-            `❌ Erro inserir jogo ` +
-            `${normalizado.api_id}:`,
-
+            `❌ Erro inserir jogo ${normalizado.api_id}:`,
             erro.message
 
         );
@@ -1009,7 +1217,6 @@ export async function salvarListaJogos(
             console.error(
 
                 "❌ Erro salvar jogo da lista:",
-
                 erro.message
 
             );
@@ -1021,8 +1228,7 @@ export async function salvarListaJogos(
 
     console.log(
 
-        `💾 ${salvos.length} jogos ` +
-        `salvos/atualizados`
+        `💾 ${salvos.length} jogos salvos/atualizados`
 
     );
 
@@ -1035,30 +1241,20 @@ export async function salvarListaJogos(
 // ==================================================
 // BUSCAR JOGOS DE HOJE
 //
-// CORREÇÃO:
-//
-// Não usamos:
-//
-// data_jogo AT TIME ZONE $1
-//
-// A consulta usa uma janela UTC.
-//
-// Isso funciona corretamente quando a API
-// fornece utcDate e o banco armazena esse
-// instante em UTC.
+// SOMENTE CALENDÁRIO BRASILEIRO DE HOJE
 // ==================================================
 
 export async function buscarJogosDoDia() {
 
     try {
 
-        const dataHoje =
+        const hoje =
             obterDataHojeBrasil();
 
 
         const janela =
             obterJanelaUTC(
-                dataHoje
+                hoje
             );
 
 
@@ -1084,7 +1280,7 @@ export async function buscarJogosDoDia() {
 
 
         console.log(
-            `📅 Buscando jogos de hoje: ${dataHoje}`
+            `📅 Buscando jogos de hoje: ${hoje}`
         );
 
 
@@ -1102,7 +1298,6 @@ export async function buscarJogosDoDia() {
                 FROM jogos
 
                 WHERE
-
                     data_jogo IS NOT NULL
 
                     AND
@@ -1118,11 +1313,8 @@ export async function buscarJogosDoDia() {
                 `,
 
                 [
-
                     inicio,
-
                     fim
-
                 ]
 
             );
@@ -1130,8 +1322,7 @@ export async function buscarJogosDoDia() {
 
         console.log(
 
-            `⚽ ${resultado.rows.length} ` +
-            `jogos de hoje retornados`
+            `⚽ ${resultado.rows.length} jogos de hoje retornados`
 
         );
 
@@ -1144,8 +1335,7 @@ export async function buscarJogosDoDia() {
 
         console.error(
 
-            "❌ Erro buscar jogos do dia:",
-
+            "❌ Erro buscar jogos de hoje:",
             erro.message
 
         );
@@ -1165,13 +1355,13 @@ export async function buscarJogosAmanha() {
 
     try {
 
-        const dataAmanha =
+        const amanha =
             obterDataAmanhaBrasil();
 
 
         const janela =
             obterJanelaUTC(
-                dataAmanha
+                amanha
             );
 
 
@@ -1197,7 +1387,7 @@ export async function buscarJogosAmanha() {
 
 
         console.log(
-            `📅 Buscando jogos de amanhã: ${dataAmanha}`
+            `📅 Buscando jogos de amanhã: ${amanha}`
         );
 
 
@@ -1210,7 +1400,6 @@ export async function buscarJogosAmanha() {
                 FROM jogos
 
                 WHERE
-
                     data_jogo IS NOT NULL
 
                     AND
@@ -1226,11 +1415,8 @@ export async function buscarJogosAmanha() {
                 `,
 
                 [
-
                     inicio,
-
                     fim
-
                 ]
 
             );
@@ -1238,8 +1424,7 @@ export async function buscarJogosAmanha() {
 
         console.log(
 
-            `⚽ ${resultado.rows.length} ` +
-            `jogos de amanhã retornados`
+            `⚽ ${resultado.rows.length} jogos de amanhã retornados`
 
         );
 
@@ -1253,7 +1438,6 @@ export async function buscarJogosAmanha() {
         console.error(
 
             "❌ Erro buscar jogos amanhã:",
-
             erro.message
 
         );
@@ -1266,9 +1450,7 @@ export async function buscarJogosAmanha() {
 
 
 // ==================================================
-// BUSCAR JOGOS HOJE + AMANHÃ
-//
-// PRINCIPAL MÉTODO PARA O FRONTEND
+// BUSCAR HOJE + AMANHÃ
 // ==================================================
 
 export async function buscarJogosDisponiveis() {
@@ -1326,7 +1508,6 @@ export async function buscarJogosDisponiveis() {
                 FROM jogos
 
                 WHERE
-
                     data_jogo IS NOT NULL
 
                     AND
@@ -1342,11 +1523,8 @@ export async function buscarJogosDisponiveis() {
                 `,
 
                 [
-
                     inicio,
-
                     fim
-
                 ]
 
             );
@@ -1354,8 +1532,7 @@ export async function buscarJogosDisponiveis() {
 
         console.log(
 
-            `⚽ ${resultado.rows.length} ` +
-            `jogos disponíveis: hoje + amanhã`
+            `⚽ ${resultado.rows.length} jogos disponíveis: hoje + amanhã`
 
         );
 
@@ -1369,7 +1546,6 @@ export async function buscarJogosDisponiveis() {
         console.error(
 
             "❌ Erro buscar jogos disponíveis:",
-
             erro.message
 
         );
@@ -1383,8 +1559,6 @@ export async function buscarJogosDisponiveis() {
 
 // ==================================================
 // ALIAS
-//
-// Compatibilidade com código anterior.
 // ==================================================
 
 export async function buscarJogosHojeEAmanha() {
@@ -1395,11 +1569,10 @@ export async function buscarJogosHojeEAmanha() {
 
 
 // ==================================================
-// LISTAR TODOS OS JOGOS
+// LISTAR TODO O HISTÓRICO
 //
-// SOMENTE HISTÓRICO / ADMIN
-//
-// NÃO usar no dashboard principal.
+// ATENÇÃO:
+// Não usar no dashboard principal.
 // ==================================================
 
 export async function listarJogos() {
@@ -1415,9 +1588,7 @@ export async function listarJogos() {
                 FROM jogos
 
                 ORDER BY
-
                     data_jogo DESC NULLS LAST,
-
                     id DESC
                 `
 
@@ -1432,8 +1603,7 @@ export async function listarJogos() {
 
         console.error(
 
-            "❌ Erro listar histórico de jogos:",
-
+            "❌ Erro listar histórico:",
             erro.message
 
         );
@@ -1446,13 +1616,14 @@ export async function listarJogos() {
 
 
 // ==================================================
-// PRÓXIMOS JOGOS
+// BUSCAR PRÓXIMOS JOGOS
 //
 // Restante de hoje
 // +
 // amanhã
 //
-// Não retorna datas além de amanhã.
+// Não retorna datas depois de amanhã.
+//
 // ==================================================
 
 export async function buscarProximosJogos(
@@ -1489,18 +1660,8 @@ export async function buscarProximosJogos(
 
     try {
 
-        const hoje =
-            obterDataHojeBrasil();
-
-
         const amanha =
             obterDataAmanhaBrasil();
-
-
-        const janelaHoje =
-            obterJanelaUTC(
-                hoje
-            );
 
 
         const janelaAmanha =
@@ -1510,7 +1671,6 @@ export async function buscarProximosJogos(
 
 
         if (
-            !janelaHoje ||
             !janelaAmanha
         ) {
 
@@ -1519,13 +1679,13 @@ export async function buscarProximosJogos(
         }
 
 
-        const agoraUTC =
+        const agora =
             new Date();
 
 
-        const agora =
+        const inicio =
             formatarUTC(
-                agoraUTC
+                agora
             );
 
 
@@ -1562,13 +1722,9 @@ export async function buscarProximosJogos(
                 `,
 
                 [
-
-                    agora,
-
+                    inicio,
                     fim,
-
                     quantidade
-
                 ]
 
             );
@@ -1583,7 +1739,6 @@ export async function buscarProximosJogos(
         console.error(
 
             "❌ Erro buscar próximos jogos:",
-
             erro.message
 
         );
@@ -1596,7 +1751,7 @@ export async function buscarProximosJogos(
 
 
 // ==================================================
-// ESTATÍSTICAS DOS JOGOS
+// ESTATÍSTICAS
 // ==================================================
 
 export async function estatisticasJogos() {
@@ -1657,16 +1812,6 @@ export async function estatisticasJogos() {
             );
 
 
-        const inicioDisponiveis =
-            inicioHoje;
-
-
-        const fimDisponiveis =
-            formatarUTC(
-                janelaAmanha.fim
-            );
-
-
         const resultado =
             await query(
 
@@ -1674,73 +1819,43 @@ export async function estatisticasJogos() {
                 SELECT
 
                     (
-
                         SELECT COUNT(*)
-
                         FROM jogos
-
                     ) AS total_historico,
 
 
                     (
-
                         SELECT COUNT(*)
-
                         FROM jogos
 
                         WHERE
-
                             data_jogo IS NOT NULL
-
-                            AND
-
-                            data_jogo >= $1
-
-                            AND
-
-                            data_jogo < $2
+                            AND data_jogo >= $1
+                            AND data_jogo < $2
 
                     ) AS hoje,
 
 
                     (
-
                         SELECT COUNT(*)
-
                         FROM jogos
 
                         WHERE
-
                             data_jogo IS NOT NULL
-
-                            AND
-
-                            data_jogo >= $3
-
-                            AND
-
-                            data_jogo < $4
+                            AND data_jogo >= $3
+                            AND data_jogo < $4
 
                     ) AS amanha,
 
 
                     (
-
                         SELECT COUNT(*)
-
                         FROM jogos
 
                         WHERE
-
                             data_jogo IS NOT NULL
-
-                            AND
-
-                            data_jogo >= $5
-
-                            AND
-
-                            data_jogo < $6
+                            AND data_jogo >= $1
+                            AND data_jogo < $4
 
                     ) AS disponiveis
 
@@ -1749,16 +1864,9 @@ export async function estatisticasJogos() {
                 [
 
                     inicioHoje,
-
                     fimHoje,
-
                     inicioAmanha,
-
-                    fimAmanha,
-
-                    inicioDisponiveis,
-
-                    fimDisponiveis
+                    fimAmanha
 
                 ]
 
@@ -1766,10 +1874,8 @@ export async function estatisticasJogos() {
 
 
         return (
-
             resultado.rows[0] ||
             null
-
         );
 
     }
@@ -1778,8 +1884,7 @@ export async function estatisticasJogos() {
 
         console.error(
 
-            "❌ Erro estatísticas jogos:",
-
+            "❌ Erro estatísticas:",
             erro.message
 
         );
@@ -1794,9 +1899,8 @@ export async function estatisticasJogos() {
 // ==================================================
 // ENCONTRAR JOGOS INVÁLIDOS
 //
-// NÃO APAGA AUTOMATICAMENTE.
+// NÃO APAGA.
 //
-// Serve apenas para manutenção.
 // ==================================================
 
 export async function encontrarJogosInvalidos() {
@@ -1822,6 +1926,10 @@ export async function encontrarJogosInvalidos() {
                     OR
 
                     time_fora IS NULL
+
+                    OR
+
+                    data_jogo IS NULL
 
                     OR
 
@@ -1851,7 +1959,6 @@ export async function encontrarJogosInvalidos() {
         console.error(
 
             "❌ Erro verificar jogos inválidos:",
-
             erro.message
 
         );
