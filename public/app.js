@@ -813,8 +813,7 @@ function obterDataJogo(
 
     if (
         !jogo ||
-        typeof jogo !==
-        "object"
+        typeof jogo !== "object"
     ) {
 
         return null;
@@ -824,9 +823,9 @@ function obterDataJogo(
     return primeiroValor(
         jogo,
         [
+            "data",
             "data_jogo",
             "dataJogo",
-            "data",
             "horario",
             "horário",
             "date",
@@ -839,8 +838,44 @@ function obterDataJogo(
         ],
         null
     );
+}
+
+
+// ==================================================
+// DATA DA ANÁLISE
+// ==================================================
+
+function obterDataAnalise(
+    analise
+) {
+
+    if (
+        !analise ||
+        typeof analise !== "object"
+    ) {
+
+        return null;
+
+    }
+
+    return primeiroValor(
+        analise,
+        [
+            "criado_em",
+            "criadoEm",
+            "created_at",
+            "createdAt",
+            "data_criacao",
+            "dataCriacao",
+            "data",
+            "date",
+            "datetime"
+        ],
+        null
+    );
 
 }
+
 
 // ==================================================
 // CHAVE DATA HOJE
@@ -869,12 +904,8 @@ function obterChaveDataHoje() {
             "0"
         )
 
-    ].join(
-        "-"
-    );
-
+    ].join("-");
 }
-
 // ==================================================
 // CHAVE DATA
 // ==================================================
@@ -2268,23 +2299,21 @@ function renderizarValueBets(
 // ANÁLISES IA
 // ==================================================
 
+// ==================================================
+// ANÁLISES IA
+// SOMENTE ANÁLISES DO DIA ATUAL
+// ==================================================
+
 async function carregarAnalisesIA() {
 
-    if (
-        estado.carregandoAnalises
-    ) {
-
+    if (estado.carregandoAnalises) {
         return;
-
     }
 
-    estado.carregandoAnalises =
-        true;
+    estado.carregandoAnalises = true;
 
     const area =
-        document.getElementById(
-            "listaAnalises"
-        );
+        document.getElementById("listaAnalises");
 
     try {
 
@@ -2292,24 +2321,37 @@ async function carregarAnalisesIA() {
             "🤖 Buscando análises reais..."
         );
 
-        if (
-            area
-        ) {
+        if (area) {
 
             area.innerHTML = `
-
                 <div class="loading">
                     🤖 Carregando análises IA...
                 </div>
-
             `;
 
         }
 
-        const dados =
-            await requisicaoJSON(
-                "/api/analises"
+        const resposta =
+            await fetch(
+                `${CONFIG.API_URL}/api/analises`,
+                {
+                    cache: "no-store",
+                    headers: {
+                        "Cache-Control": "no-cache"
+                    }
+                }
             );
+
+        if (!resposta.ok) {
+
+            throw new Error(
+                `Erro análises IA HTTP ${resposta.status}`
+            );
+
+        }
+
+        const dados =
+            await resposta.json();
 
         console.log(
             "🤖 Resposta /api/analises:",
@@ -2331,27 +2373,55 @@ async function carregarAnalisesIA() {
                 ]
             );
 
-        estado.analises =
-            normalizarAnalises(
-                lista
+        const normalizadas =
+            normalizarAnalises(lista);
+
+        // ==========================================
+        // SOMENTE DATA DE HOJE
+        // ==========================================
+
+        const hoje =
+            obterChaveDataHoje();
+
+        const analisesHoje =
+            normalizadas.filter(
+                analise => {
+
+                    const data =
+                        obterDataAnalise(
+                            analise
+                        );
+
+                    if (!data) {
+                        return false;
+                    }
+
+                    return (
+                        obterChaveData(
+                            data
+                        ) === hoje
+                    );
+
+                }
             );
 
+        estado.analises =
+            analisesHoje;
+
         console.log(
-            `🤖 ${estado.analises.length} análises recebidas`
+            `📅 Data atual: ${hoje}`
+        );
+
+        console.log(
+            `🤖 Análises recebidas: ${normalizadas.length}`
+        );
+
+        console.log(
+            `🤖 Análises de hoje: ${analisesHoje.length}`
         );
 
         renderizarAnalisesIA(
-            estado.analises
-        );
-
-        estado.dados.analisesIA =
-            estado.analises.length;
-
-        atualizarElemento(
-            "analisesIA",
-            formatarNumero(
-                estado.analises.length
-            )
+            analisesHoje
         );
 
     }
@@ -2363,21 +2433,14 @@ async function carregarAnalisesIA() {
             erro
         );
 
-        estado.analises =
-            [];
+        estado.analises = [];
 
-        if (
-            area
-        ) {
+        if (area) {
 
             area.innerHTML = `
-
                 <div class="empty">
-
                     ❌ Não foi possível carregar as análises IA
-
                 </div>
-
             `;
 
         }
