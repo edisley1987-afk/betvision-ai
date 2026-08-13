@@ -2,33 +2,42 @@
 // BETVISION AI
 // routes/analises.js
 //
-// Rotas de Análises IA v5.4
+// Rotas de Análises IA
 //
-// PostgreSQL + Inteligência Estatística
+// CORREÇÃO V6
 //
-// GET  /api/analises
-// GET  /api/analises/:id
-// POST /api/analises
-// POST /api/analises/prever
-//
-// Compatível com America/Sao_Paulo
+// - Usa bancoService para listar análises
+// - Hoje + amanhã
+// - Mantém histórico no PostgreSQL
+// - Vincula análise ao jogo por api_id
+// - Compatível America/Sao_Paulo
 // ==================================================
 
 import express from "express";
 
 import {
     analisarMercado,
-    listarAnalises,
     gerarAnaliseIA
 } from "../services/inteligenciaService.js";
 
-const router =
-    express.Router();
+import {
+    listarAnalisesDisponiveis,
+    listarAnalisesHoje
+} from "../services/bancoService.js";
+
+const router = express.Router();
+
 
 // ==================================================
-// LISTAR ANÁLISES
+// LISTAR ANÁLISES DISPONÍVEIS
 //
 // GET /api/analises
+//
+// SOMENTE:
+// HOJE + AMANHÃ
+//
+// A data é obtida da tabela JOGOS.
+// Não depende de data_jogo dentro de ANALISES.
 // ==================================================
 
 router.get(
@@ -37,16 +46,20 @@ router.get(
 
         try {
 
-            const resultado =
-                await listarAnalises();
+            console.log(
+                "🤖 Buscando análises disponíveis..."
+            );
 
             const dados =
-                Array.isArray(resultado)
-                    ? resultado
+                await listarAnalisesDisponiveis();
+
+            const lista =
+                Array.isArray(dados)
+                    ? dados
                     : [];
 
             console.log(
-                `🤖 Análises recebidas: ${dados.length}`
+                `🤖 Análises encontradas: ${lista.length}`
             );
 
             res.json({
@@ -54,10 +67,10 @@ router.get(
                 sucesso: true,
 
                 total:
-                    dados.length,
+                    lista.length,
 
                 dados:
-                    dados
+                    lista
 
             });
 
@@ -88,6 +101,79 @@ router.get(
 
     }
 );
+
+
+// ==================================================
+// LISTAR SOMENTE ANÁLISES DE HOJE
+//
+// GET /api/analises/hoje
+//
+// IMPORTANTE:
+// Esta rota precisa ficar ANTES de /:id
+// ==================================================
+
+router.get(
+    "/hoje",
+    async (req, res) => {
+
+        try {
+
+            console.log(
+                "📅 Buscando análises de hoje..."
+            );
+
+            const dados =
+                await listarAnalisesHoje();
+
+            const lista =
+                Array.isArray(dados)
+                    ? dados
+                    : [];
+
+            console.log(
+                `📅 Análises de hoje: ${lista.length}`
+            );
+
+            res.json({
+
+                sucesso: true,
+
+                total:
+                    lista.length,
+
+                dados:
+                    lista
+
+            });
+
+        }
+
+        catch (erro) {
+
+            console.error(
+                "❌ Erro análises de hoje:",
+                erro.message
+            );
+
+            res.status(500)
+                .json({
+
+                    sucesso: false,
+
+                    total: 0,
+
+                    dados: [],
+
+                    erro:
+                        erro.message
+
+                });
+
+        }
+
+    }
+);
+
 
 // ==================================================
 // ANALISAR JOGO
@@ -124,6 +210,10 @@ router.post(
 
             }
 
+            console.log(
+                `🤖 Analisando jogo: ${jogo.trim()}`
+            );
+
             const resultado =
                 await analisarMercado(
                     jogo.trim(),
@@ -157,6 +247,7 @@ router.post(
 
     }
 );
+
 
 // ==================================================
 // ANÁLISE DIRETA
@@ -192,6 +283,10 @@ router.post(
                     });
 
             }
+
+            console.log(
+                `🔮 Prevendo análise: ${jogo.trim()}`
+            );
 
             const resultado =
                 await gerarAnaliseIA(
@@ -232,13 +327,13 @@ router.post(
     }
 );
 
+
 // ==================================================
 // BUSCAR ANÁLISE POR ID
 //
 // GET /api/analises/:id
 //
-// Observação:
-// atualmente depende de listarAnalises().
+// Busca entre as análises disponíveis
 // ==================================================
 
 router.get(
@@ -270,7 +365,7 @@ router.get(
             }
 
             const lista =
-                await listarAnalises();
+                await listarAnalisesDisponiveis();
 
             const analise =
                 Array.isArray(lista)
@@ -326,6 +421,7 @@ router.get(
 
     }
 );
+
 
 // ==================================================
 // EXPORT
