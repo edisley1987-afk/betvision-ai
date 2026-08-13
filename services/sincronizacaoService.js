@@ -2,86 +2,277 @@
 // BETVISION AI
 // services/sincronizacaoService.js
 //
-// Versão 6.0
+// MOTOR ESTATÍSTICO v6
+//
 // Neon PostgreSQL + Football-Data.org v4
 //
-// Sincronização automática de campeonatos
-// Compatível com tabela campeonatos atual
+// RESPONSABILIDADES:
 //
-// Estrutura confirmada:
+// - Sincronizar campeonatos
+// - Sincronizar jogos
+// - Buscar somente jogos de HOJE + AMANHÃ
+// - America/Sao_Paulo
+// - Evitar jogos antigos
+// - Evitar duplicação
+// - Atualizar jogos existentes
+// - Preparar dados para o Motor Estatístico v6
+// - Agendamento automático
 //
-// id
-// nome
-// pais
-// continente
-// temporada
-// api_id UNIQUE
-// logo
-// ativo
 // ==================================================
 
 import axios from "axios";
 import cron from "node-cron";
 
-import { query } from "../database/database.js";
+import {
+    query
+} from "../database/database.js";
+
 
 // ==================================================
-// CONFIGURAÇÃO FOOTBALL-DATA
+// CONFIGURAÇÃO
 // ==================================================
+
+const TIMEZONE =
+    "America/Sao_Paulo";
+
 
 const API_URL =
     process.env.API_FOOTBALL_URL ||
     "https://api.football-data.org/v4";
 
+
 const API_KEY =
     process.env.API_FOOTBALL_KEY;
 
+
 // ==================================================
-// BUSCAR CAMPEONATOS NA FOOTBALL-DATA
+// LIMITES
+// ==================================================
+
+const LIMITE_CAMPEONATOS =
+    1000;
+
+
+const LIMITE_JOGOS =
+    500;
+
+
+// ==================================================
+// DATA ATUAL EM SÃO PAULO
+// ==================================================
+
+function obterDataBrasil() {
+
+    return new Intl.DateTimeFormat(
+        "en-CA",
+        {
+            timeZone: TIMEZONE,
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit"
+        }
+    ).format(
+        new Date()
+    );
+
+}
+
+
+// ==================================================
+// DATA DE AMANHÃ
+// ==================================================
+
+function obterDataAmanha() {
+
+    const agora =
+        new Date();
+
+
+    const partes =
+        new Intl.DateTimeFormat(
+            "en-US",
+            {
+                timeZone: TIMEZONE,
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit"
+            }
+        ).formatToParts(
+            agora
+        );
+
+
+    let ano = "";
+    let mes = "";
+    let dia = "";
+
+
+    for (
+        const parte of partes
+    ) {
+
+        if (
+            parte.type === "year"
+        ) {
+
+            ano = parte.value;
+
+        }
+
+        if (
+            parte.type === "month"
+        ) {
+
+            mes = parte.value;
+
+        }
+
+        if (
+            parte.type === "day"
+        ) {
+
+            dia = parte.value;
+
+        }
+
+    }
+
+
+    const data =
+        new Date(
+            `${ano}-${mes}-${dia}T12:00:00`
+        );
+
+
+    data.setDate(
+        data.getDate() + 1
+    );
+
+
+    return (
+        data
+            .toISOString()
+            .substring(0, 10)
+    );
+
+}
+
+
+// ==================================================
+// JANELA DE JOGOS
+// ==================================================
+
+function obterJanelaJogos() {
+
+    const hoje =
+        obterDataBrasil();
+
+    const amanha =
+        obterDataAmanha();
+
+
+    return {
+
+        hoje,
+
+        amanha
+
+    };
+
+}
+
+
+// ==================================================
+// VERIFICAR API
+// ==================================================
+
+function apiDisponivel() {
+
+    if (!API_KEY) {
+
+        console.log(
+            "⚠️ API_FOOTBALL_KEY não configurada"
+        );
+
+        return false;
+
+    }
+
+    return true;
+
+}
+
+
+// ==================================================
+// HEADERS
+// ==================================================
+
+function headersAPI() {
+
+    return {
+
+        "X-Auth-Token":
+            API_KEY,
+
+        "Accept":
+            "application/json"
+
+    };
+
+}
+
+
+// ==================================================
+// BUSCAR CAMPEONATOS NA API
 // ==================================================
 
 export async function buscarCampeonatosAPI() {
 
     try {
 
-        if (!API_KEY) {
-
-            console.log(
-                "⚠️ API_FOOTBALL_KEY não configurada"
-            );
+        if (
+            !apiDisponivel()
+        ) {
 
             return [];
 
         }
 
+
         console.log(
-            "🌍 Consultando Football-Data.org..."
+            "🌍 Consultando campeonatos Football-Data..."
         );
 
-        const resposta = await axios.get(
 
-            `${API_URL}/competitions`,
+        const resposta =
+            await axios.get(
 
-            {
-                headers: {
+                `${API_URL}/competitions`,
 
-                    "X-Auth-Token":
-                        API_KEY
+                {
 
-                },
+                    headers:
+                        headersAPI(),
 
-                timeout: 15000
+                    timeout:
+                        15000
 
-            }
+                }
 
-        );
+            );
+
 
         const competicoes =
-            resposta.data?.competitions || [];
+            resposta
+                .data
+                ?.competitions ||
+            [];
+
 
         console.log(
-            `🌍 ${competicoes.length} campeonatos recebidos da API`
+            `🌍 ${competicoes.length} campeonatos recebidos`
         );
+
 
         return competicoes;
 
@@ -90,10 +281,11 @@ export async function buscarCampeonatosAPI() {
     catch (error) {
 
         console.error(
-            "❌ Erro Football-Data:",
+            "❌ Erro buscar campeonatos:",
             error.response?.data ||
             error.message
         );
+
 
         return [];
 
@@ -101,22 +293,45 @@ export async function buscarCampeonatosAPI() {
 
 }
 
+
 // ==================================================
 // NORMALIZAR CAMPEONATO
 // ==================================================
 
-function normalizarCampeonato(campeonato) {
+function normalizarCampeonato(
+    campeonato
+) {
 
-    if (!campeonato) {
+    if (
+        !campeonato
+    ) {
 
         return null;
 
     }
 
+
+    const apiId =
+        Number(
+            campeonato.id
+        );
+
+
+    if (
+        !Number.isFinite(apiId)
+        ||
+        apiId <= 0
+    ) {
+
+        return null;
+
+    }
+
+
     return {
 
         api_id:
-            Number(campeonato.id) || null,
+            apiId,
 
         nome:
             campeonato.name ||
@@ -131,8 +346,13 @@ function normalizarCampeonato(campeonato) {
             null,
 
         temporada:
-            campeonato.currentSeason?.startDate
-                ?.substring(0, 4) ||
+            campeonato
+                .currentSeason
+                ?.startDate
+                ?.substring(
+                    0,
+                    4
+                ) ||
             null,
 
         logo:
@@ -146,77 +366,63 @@ function normalizarCampeonato(campeonato) {
 
 }
 
+
 // ==================================================
-// OBTER PRÓXIMO ID INTERNO
-//
-// A tabela campeonatos possui:
-//
-// id INTEGER NOT NULL
-//
-// mas NÃO possui sequence/default.
-//
-// Portanto geramos o próximo ID manualmente.
-//
-// FOR UPDATE evita conflitos durante a transação
-// quando possível.
+// PRÓXIMO ID CAMPEONATO
 // ==================================================
 
 async function obterProximoId() {
 
-    const resultado = await query(`
+    const resultado =
+        await query(
+            `
+            SELECT
+                COALESCE(
+                    MAX(id),
+                    0
+                ) + 1 AS proximo_id
 
-        SELECT
-            COALESCE(MAX(id), 0) + 1 AS proximo_id
+            FROM campeonatos
+            `
+        );
 
-        FROM campeonatos
-
-    `);
 
     return Number(
-        resultado.rows[0]?.proximo_id || 1
+        resultado
+            .rows[0]
+            ?.proximo_id ||
+        1
     );
 
 }
 
+
 // ==================================================
 // SALVAR CAMPEONATO
-//
-// Estratégia:
-//
-// 1. Verifica pelo api_id
-// 2. Se existir -> UPDATE
-// 3. Se não existir -> INSERT
-// 4. Gera id interno manualmente
 // ==================================================
 
-async function salvarCampeonato(campeonato) {
+async function salvarCampeonato(
+    campeonato
+) {
 
     try {
 
         if (
-            !campeonato ||
+            !campeonato
+            ||
             !campeonato.api_id
         ) {
-
-            console.error(
-                "❌ Campeonato sem api_id"
-            );
 
             return null;
 
         }
 
-        // ==================================================
-        // PROCURAR CAMPEONATO PELO API_ID
-        // ==================================================
 
         const existente =
             await query(
-
                 `
                 SELECT
-                    id,
-                    api_id
+                    id
 
                 FROM campeonatos
 
@@ -224,27 +430,25 @@ async function salvarCampeonato(campeonato) {
 
                 LIMIT 1
                 `,
-
                 [
                     campeonato.api_id
                 ]
-
             );
 
-        // ==================================================
-        // CAMPEONATO JÁ EXISTE
-        // ==================================================
 
         if (
-            existente.rows.length > 0
+            existente.rows.length
+            > 0
         ) {
 
-            const idExistente =
-                existente.rows[0].id;
+            const id =
+                existente
+                    .rows[0]
+                    .id;
+
 
             const resultado =
                 await query(
-
                     `
                     UPDATE campeonatos
 
@@ -266,7 +470,6 @@ async function salvarCampeonato(campeonato) {
 
                     RETURNING *
                     `,
-
                     [
 
                         campeonato.nome,
@@ -281,33 +484,29 @@ async function salvarCampeonato(campeonato) {
 
                         campeonato.ativo,
 
-                        idExistente
+                        id
 
                     ]
-
                 );
 
-            console.log(
-                `🔄 Campeonato atualizado: ${campeonato.nome} (API ${campeonato.api_id})`
-            );
 
-            return resultado.rows[0] || null;
+            return (
+                resultado
+                    .rows[0] ||
+                null
+            );
 
         }
 
-        // ==================================================
-        // CAMPEONATO NOVO
-        // ==================================================
 
         const novoId =
             await obterProximoId();
 
+
         const resultado =
             await query(
-
                 `
                 INSERT INTO campeonatos
-
                 (
                     id,
                     nome,
@@ -320,7 +519,6 @@ async function salvarCampeonato(campeonato) {
                 )
 
                 VALUES
-
                 (
                     $1,
                     $2,
@@ -334,7 +532,6 @@ async function salvarCampeonato(campeonato) {
 
                 RETURNING *
                 `,
-
                 [
 
                     novoId,
@@ -354,14 +551,14 @@ async function salvarCampeonato(campeonato) {
                     campeonato.ativo
 
                 ]
-
             );
 
-        console.log(
-            `➕ Campeonato inserido: ${campeonato.nome} (ID ${novoId} / API ${campeonato.api_id})`
-        );
 
-        return resultado.rows[0] || null;
+        return (
+            resultado
+                .rows[0] ||
+            null
+        );
 
     }
 
@@ -372,11 +569,13 @@ async function salvarCampeonato(campeonato) {
             error.message
         );
 
+
         return null;
 
     }
 
 }
+
 
 // ==================================================
 // SINCRONIZAR CAMPEONATOS
@@ -389,51 +588,60 @@ export async function sincronizarCampeonatos() {
     );
 
     console.log(
-        "🌍 INICIANDO SINCRONIZAÇÃO DE CAMPEONATOS"
+        "🌍 SINCRONIZAÇÃO DE CAMPEONATOS"
     );
 
     console.log(
         "=============================================="
     );
 
+
     const lista =
         await buscarCampeonatosAPI();
 
-    if (!lista.length) {
 
-        console.log(
-            "⚠️ Nenhum campeonato recebido da API"
-        );
+    if (
+        !lista.length
+    ) {
 
         return {
 
-            sucesso: false,
+            sucesso:
+                false,
 
-            total: 0,
+            total:
+                0,
+
+            erros:
+                0,
 
             mensagem:
-                "Nenhum campeonato recebido da Football-Data"
+                "Nenhum campeonato recebido"
 
         };
 
     }
 
-    let salvos = 0;
 
+    let salvos = 0;
     let erros = 0;
 
-    // ==================================================
-    // PROCESSAR CAMPEONATOS
-    // ==================================================
 
-    for (const item of lista) {
+    for (
+        const item of lista
+    ) {
 
         try {
 
             const campeonato =
-                normalizarCampeonato(item);
+                normalizarCampeonato(
+                    item
+                );
 
-            if (!campeonato) {
+
+            if (
+                !campeonato
+            ) {
 
                 erros++;
 
@@ -441,12 +649,16 @@ export async function sincronizarCampeonatos() {
 
             }
 
-            const resultado =
+
+            const salvo =
                 await salvarCampeonato(
                     campeonato
                 );
 
-            if (resultado) {
+
+            if (
+                salvo
+            ) {
 
                 salvos++;
 
@@ -464,7 +676,7 @@ export async function sincronizarCampeonatos() {
             erros++;
 
             console.error(
-                "❌ Erro processamento campeonato:",
+                "❌ Erro campeonato:",
                 error.message
             );
 
@@ -472,31 +684,24 @@ export async function sincronizarCampeonatos() {
 
     }
 
-    // ==================================================
-    // RESULTADO
-    // ==================================================
 
     console.log(
-        "=============================================="
+        `🏆 Campeonatos processados: ${salvos}`
     );
 
-    console.log(
-        `🏆 ${salvos} campeonatos sincronizados`
-    );
 
     console.log(
-        `⚠️ ${erros} campeonatos com erro`
+        `⚠️ Erros: ${erros}`
     );
 
-    console.log(
-        "=============================================="
-    );
 
     return {
 
-        sucesso: true,
+        sucesso:
+            true,
 
-        total: salvos,
+        total:
+            salvos,
 
         erros
 
@@ -504,25 +709,939 @@ export async function sincronizarCampeonatos() {
 
 }
 
+
 // ==================================================
-// INICIAR SINCRONIZAÇÃO AO SUBIR O SISTEMA
+// BUSCAR JOGOS DE HOJE + AMANHÃ
+// ==================================================
+
+export async function buscarJogosAPI() {
+
+    try {
+
+        if (
+            !apiDisponivel()
+        ) {
+
+            return [];
+
+        }
+
+
+        const {
+            hoje,
+            amanha
+        } =
+            obterJanelaJogos();
+
+
+        console.log(
+            `⚽ Buscando jogos: ${hoje} + ${amanha}`
+        );
+
+
+        const datas = [
+            hoje,
+            amanha
+        ];
+
+
+        const jogos = [];
+
+
+        for (
+            const data of datas
+        ) {
+
+            try {
+
+                const resposta =
+                    await axios.get(
+
+                        `${API_URL}/matches`,
+
+                        {
+
+                            params: {
+
+                                dateFrom:
+                                    data,
+
+                                dateTo:
+                                    data
+
+                            },
+
+                            headers:
+                                headersAPI(),
+
+                            timeout:
+                                15000
+
+                        }
+
+                    );
+
+
+                const lista =
+                    resposta
+                        .data
+                        ?.matches ||
+                    [];
+
+
+                console.log(
+                    `⚽ ${data}: ${lista.length} jogos`
+                );
+
+
+                jogos.push(
+                    ...lista
+                );
+
+            }
+
+            catch (error) {
+
+                console.error(
+                    `❌ Erro jogos ${data}:`,
+                    error.response?.data ||
+                    error.message
+                );
+
+            }
+
+        }
+
+
+        return jogos
+            .slice(
+                0,
+                LIMITE_JOGOS
+            );
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "❌ Erro buscar jogos:",
+            error.message
+        );
+
+
+        return [];
+
+    }
+
+}
+
+
+// ==================================================
+// NORMALIZAR JOGO
+// ==================================================
+
+function normalizarJogo(
+    jogo
+) {
+
+    if (
+        !jogo
+    ) {
+
+        return null;
+
+    }
+
+
+    const apiId =
+        Number(
+            jogo.id
+        );
+
+
+    if (
+        !Number.isFinite(apiId)
+        ||
+        apiId <= 0
+    ) {
+
+        return null;
+
+    }
+
+
+    const dataJogo =
+        jogo.utcDate ||
+        null;
+
+
+    if (
+        !dataJogo
+    ) {
+
+        return null;
+
+    }
+
+
+    return {
+
+        api_id:
+            apiId,
+
+        time_casa:
+            jogo.homeTeam?.name ||
+            "Desconhecido",
+
+        time_fora:
+            jogo.awayTeam?.name ||
+            "Desconhecido",
+
+        data_jogo:
+            dataJogo,
+
+        campeonato:
+            jogo.competition?.name ||
+            "Desconhecido",
+
+        campeonato_api_id:
+            Number(
+                jogo.competition?.id
+            ) ||
+            null,
+
+        estadio:
+            jogo.venue ||
+            null,
+
+        status:
+            jogo.status ||
+            "SCHEDULED",
+
+        gols_casa:
+            Number.isFinite(
+                Number(
+                    jogo.score
+                        ?.fullTime
+                        ?.home
+                )
+            )
+                ? Number(
+                    jogo.score
+                        .fullTime
+                        .home
+                )
+                : null,
+
+        gols_fora:
+            Number.isFinite(
+                Number(
+                    jogo.score
+                        ?.fullTime
+                        ?.away
+                )
+            )
+                ? Number(
+                    jogo.score
+                        .fullTime
+                        .away
+                )
+                : null
+
+    };
+
+}
+
+
+// ==================================================
+// VERIFICAR SE JOGO É HOJE OU AMANHÃ
+// ==================================================
+
+function jogoDentroDaJanela(
+    dataJogo
+) {
+
+    if (
+        !dataJogo
+    ) {
+
+        return false;
+
+    }
+
+
+    const data =
+        new Date(
+            dataJogo
+        );
+
+
+    if (
+        Number.isNaN(
+            data.getTime()
+        )
+    ) {
+
+        return false;
+
+    }
+
+
+    const dataBrasil =
+        new Intl.DateTimeFormat(
+            "en-CA",
+            {
+
+                timeZone:
+                    TIMEZONE,
+
+                year:
+                    "numeric",
+
+                month:
+                    "2-digit",
+
+                day:
+                    "2-digit"
+
+            }
+        ).format(
+            data
+        );
+
+
+    const {
+        hoje,
+        amanha
+    } =
+        obterJanelaJogos();
+
+
+    return (
+        dataBrasil === hoje
+        ||
+        dataBrasil === amanha
+    );
+
+}
+
+
+// ==================================================
+// SALVAR JOGO
+//
+// Usa api_id quando disponível.
+//
+// Caso a tabela jogos não tenha api_id,
+// tenta localizar pelo confronto + data.
+// ==================================================
+
+async function salvarJogo(
+    jogo
+) {
+
+    try {
+
+        if (
+            !jogo
+        ) {
+
+            return null;
+
+        }
+
+
+        // ==========================================
+        // PROCURAR PELO API ID
+        // ==========================================
+
+        let existente =
+            await query(
+                `
+                SELECT
+                    id
+
+                FROM jogos
+
+                WHERE api_id = $1
+
+                LIMIT 1
+                `,
+                [
+                    jogo.api_id
+                ]
+            );
+
+
+        // ==========================================
+        // FALLBACK
+        // ==========================================
+
+        if (
+            existente.rows.length
+            === 0
+        ) {
+
+            existente =
+                await query(
+                    `
+                    SELECT
+                        id
+
+                    FROM jogos
+
+                    WHERE
+
+                        LOWER(time_casa)
+                        =
+                        LOWER($1)
+
+                        AND
+
+                        LOWER(time_fora)
+                        =
+                        LOWER($2)
+
+                        AND
+
+                        DATE(data_jogo)
+                        =
+                        DATE($3::timestamptz)
+
+                    LIMIT 1
+                    `,
+                    [
+
+                        jogo.time_casa,
+
+                        jogo.time_fora,
+
+                        jogo.data_jogo
+
+                    ]
+                );
+
+        }
+
+
+        // ==========================================
+        // ATUALIZAR
+        // ==========================================
+
+        if (
+            existente.rows.length
+            > 0
+        ) {
+
+            const id =
+                existente
+                    .rows[0]
+                    .id;
+
+
+            const resultado =
+                await query(
+                    `
+                    UPDATE jogos
+
+                    SET
+
+                        time_casa = $1,
+
+                        time_fora = $2,
+
+                        data_jogo = $3,
+
+                        campeonato = $4,
+
+                        estadio = $5,
+
+                        status = $6,
+
+                        gols_casa = $7,
+
+                        gols_fora = $8,
+
+                        api_id = $9
+
+                    WHERE id = $10
+
+                    RETURNING *
+                    `,
+                    [
+
+                        jogo.time_casa,
+
+                        jogo.time_fora,
+
+                        jogo.data_jogo,
+
+                        jogo.campeonato,
+
+                        jogo.estadio,
+
+                        jogo.status,
+
+                        jogo.gols_casa,
+
+                        jogo.gols_fora,
+
+                        jogo.api_id,
+
+                        id
+
+                    ]
+                );
+
+
+            return (
+                resultado
+                    .rows[0] ||
+                null
+            );
+
+        }
+
+
+        // ==========================================
+        // INSERIR NOVO
+        // ==========================================
+
+        const resultado =
+            await query(
+                `
+                INSERT INTO jogos
+                (
+                    api_id,
+                    time_casa,
+                    time_fora,
+                    data_jogo,
+                    campeonato,
+                    estadio,
+                    status,
+                    gols_casa,
+                    gols_fora
+                )
+
+                VALUES
+                (
+                    $1,
+                    $2,
+                    $3,
+                    $4,
+                    $5,
+                    $6,
+                    $7,
+                    $8,
+                    $9
+                )
+
+                RETURNING *
+                `,
+                [
+
+                    jogo.api_id,
+
+                    jogo.time_casa,
+
+                    jogo.time_fora,
+
+                    jogo.data_jogo,
+
+                    jogo.campeonato,
+
+                    jogo.estadio,
+
+                    jogo.status,
+
+                    jogo.gols_casa,
+
+                    jogo.gols_fora
+
+                ]
+            );
+
+
+        return (
+            resultado
+                .rows[0] ||
+            null
+        );
+
+    }
+
+    catch (error) {
+
+        console.error(
+            `❌ Erro salvar jogo ${jogo?.time_casa || ""} x ${jogo?.time_fora || ""}:`,
+            error.message
+        );
+
+
+        return null;
+
+    }
+
+}
+
+
+// ==================================================
+// SINCRONIZAR JOGOS
+// ==================================================
+
+export async function sincronizarJogos() {
+
+    console.log(
+        "=============================================="
+    );
+
+    console.log(
+        "⚽ SINCRONIZAÇÃO DE JOGOS"
+    );
+
+    console.log(
+        "=============================================="
+    );
+
+
+    const {
+        hoje,
+        amanha
+    } =
+        obterJanelaJogos();
+
+
+    console.log(
+        `📅 Janela: ${hoje} até ${amanha}`
+    );
+
+
+    const lista =
+        await buscarJogosAPI();
+
+
+    if (
+        !lista.length
+    ) {
+
+        console.log(
+            "⚠️ Nenhum jogo recebido"
+        );
+
+
+        return {
+
+            sucesso:
+                true,
+
+            total:
+                0,
+
+            erros:
+                0
+
+        };
+
+    }
+
+
+    let salvos = 0;
+    let erros = 0;
+    let ignorados = 0;
+
+
+    for (
+        const item of lista
+    ) {
+
+        try {
+
+            const jogo =
+                normalizarJogo(
+                    item
+                );
+
+
+            if (
+                !jogo
+            ) {
+
+                ignorados++;
+
+                continue;
+
+            }
+
+
+            // ======================================
+            // FILTRO DEFINITIVO
+            // ======================================
+
+            if (
+                !jogoDentroDaJanela(
+                    jogo.data_jogo
+                )
+            ) {
+
+                ignorados++;
+
+                continue;
+
+            }
+
+
+            const salvo =
+                await salvarJogo(
+                    jogo
+                );
+
+
+            if (
+                salvo
+            ) {
+
+                salvos++;
+
+            }
+            else {
+
+                erros++;
+
+            }
+
+        }
+
+        catch (error) {
+
+            erros++;
+
+            console.error(
+                "❌ Erro processamento jogo:",
+                error.message
+            );
+
+        }
+
+    }
+
+
+    console.log(
+        `⚽ ${salvos} jogos sincronizados`
+    );
+
+
+    console.log(
+        `🚫 ${ignorados} jogos fora da janela`
+    );
+
+
+    console.log(
+        `⚠️ ${erros} erros`
+    );
+
+
+    return {
+
+        sucesso:
+            true,
+
+        total:
+            salvos,
+
+        ignorados,
+
+        erros,
+
+        hoje,
+
+        amanha
+
+    };
+
+}
+
+
+// ==================================================
+// LIMPAR JOGOS ANTIGOS
+//
+// NÃO apaga jogos do banco.
+//
+// Apenas desativa/atualiza status quando
+// a estrutura permitir.
+//
+// O frontend deverá filtrar por data.
+//
+// ==================================================
+
+export async function limparJogosAntigos() {
+
+    try {
+
+        const resultado =
+            await query(
+                `
+                UPDATE jogos
+
+                SET status =
+
+                    CASE
+
+                        WHEN
+                            status IS NULL
+                        THEN
+                            'FINISHED'
+
+                        ELSE
+                            status
+
+                    END
+
+                WHERE
+                    data_jogo <
+                    (
+                        CURRENT_TIMESTAMP
+                        AT TIME ZONE
+                        'America/Sao_Paulo'
+                    )::date
+
+                RETURNING id
+                `
+            );
+
+
+        console.log(
+            `🧹 ${resultado.rowCount || 0} jogos antigos verificados`
+        );
+
+
+        return {
+
+            sucesso:
+                true,
+
+            total:
+                resultado.rowCount || 0
+
+        };
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "❌ Erro limpeza jogos:",
+            error.message
+        );
+
+
+        return {
+
+            sucesso:
+                false,
+
+            total:
+                0,
+
+            erro:
+                error.message
+
+        };
+
+    }
+
+}
+
+
+// ==================================================
+// SINCRONIZAÇÃO COMPLETA
+// ==================================================
+
+export async function sincronizarTudo() {
+
+    console.log(
+        "=============================================="
+    );
+
+    console.log(
+        "🚀 BETVISION AI v6"
+    );
+
+    console.log(
+        "🚀 SINCRONIZAÇÃO COMPLETA"
+    );
+
+    console.log(
+        "=============================================="
+    );
+
+
+    const inicio =
+        Date.now();
+
+
+    const campeonatos =
+        await sincronizarCampeonatos();
+
+
+    const jogos =
+        await sincronizarJogos();
+
+
+    const limpeza =
+        await limparJogosAntigos();
+
+
+    const tempo =
+        Date.now() -
+        inicio;
+
+
+    console.log(
+        `⏱️ Sincronização concluída em ${tempo} ms`
+    );
+
+
+    return {
+
+        sucesso:
+            true,
+
+        campeonatos,
+
+        jogos,
+
+        limpeza,
+
+        tempo
+
+    };
+
+}
+
+
+// ==================================================
+// INICIAR SINCRONIZAÇÃO
+//
+// Mantém compatibilidade com server.js
 // ==================================================
 
 export async function iniciarSincronizacao() {
 
     console.log(
-        "🚀 Iniciando serviço de sincronização..."
+        "🚀 Iniciando serviço de sincronização v6..."
     );
+
 
     try {
 
         const resultado =
-            await sincronizarCampeonatos();
+            await sincronizarTudo();
+
 
         console.log(
             "📊 Resultado sincronização:",
             resultado
         );
+
 
         return resultado;
 
@@ -535,16 +1654,17 @@ export async function iniciarSincronizacao() {
             error.message
         );
 
+
         return {
 
-            sucesso: false,
-
-            total: 0,
-
-            erros: 1,
+            sucesso:
+                false,
 
             erro:
-                error.message
+                error.message,
+
+            total:
+                0
 
         };
 
@@ -552,30 +1672,45 @@ export async function iniciarSincronizacao() {
 
 }
 
+
 // ==================================================
-// AGENDAMENTO AUTOMÁTICO
+// AGENDAMENTO
 //
-// Executa todos os dias às 03:00.
+// 03:00
+// 09:00
+// 15:00
+// 21:00
 //
-// Horário do servidor/ambiente.
+// Isso mantém os jogos de hoje/amanhã
+// atualizados ao longo do dia.
 // ==================================================
 
 export function ativarAgendamento() {
 
     cron.schedule(
 
-        "0 3 * * *",
+        "0 3,9,15,21 * * *",
 
         async () => {
 
             console.log(
-                "🔄 Atualização automática de campeonatos"
+                "=============================================="
             );
+
+            console.log(
+                "⏰ SINCRONIZAÇÃO AUTOMÁTICA v6"
+            );
+
+            console.log(
+                "=============================================="
+            );
+
 
             try {
 
                 const resultado =
-                    await sincronizarCampeonatos();
+                    await sincronizarTudo();
+
 
                 console.log(
                     "📊 Atualização automática concluída:",
@@ -593,15 +1728,24 @@ export function ativarAgendamento() {
 
             }
 
+        },
+
+        {
+
+            timezone:
+                TIMEZONE
+
         }
 
     );
 
+
     console.log(
-        "⏰ Agendamento de campeonatos ativo"
+        "⏰ Agendamento v6 ativo: 03:00 / 09:00 / 15:00 / 21:00"
     );
 
 }
+
 
 // ==================================================
 // EXPORT DEFAULT
@@ -612,6 +1756,14 @@ export default {
     buscarCampeonatosAPI,
 
     sincronizarCampeonatos,
+
+    buscarJogosAPI,
+
+    sincronizarJogos,
+
+    limparJogosAntigos,
+
+    sincronizarTudo,
 
     iniciarSincronizacao,
 
