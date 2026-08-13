@@ -1,618 +1,93 @@
-// =======================================
+// ==================================================
 // BETVISION AI
 // ai/analiseJogo.js
 //
-// MOTOR DE ENTRADA DA ANÁLISE
+// Motor local de análise
+// Versão 2.0
 //
 // IMPORTANTE:
-// Este arquivo NÃO calcula mais probabilidades
-// aleatórias.
 //
-// Todo cálculo estatístico real é delegado para:
+// Este arquivo NÃO usa Math.random().
+//
+// O motor principal do sistema é:
 //
 // services/inteligenciaService.js
 //
-// Recursos utilizados:
-//
-// - XG
-// - Poisson
-// - forma recente
-// - gols marcados
-// - gols sofridos
-// - mando de campo
-// - H2H com peso controlado
-// - placar previsto
-// - confiança
-// - Value Bet
-// - PostgreSQL / NeonDB
-//
-// =======================================
+// Este módulo existe para manter compatibilidade
+// com chamadas antigas do projeto.
+// ==================================================
 
-import {
-    calcularXG,
-    calcularProbabilidades,
-    calcularPlacar,
-    calcularConfianca,
-    calcularValueBet
-} from "../services/inteligenciaService.js";
+// ==================================================
+// NORMALIZAR NÚMERO
+// ==================================================
 
+function numeroSeguro(
+    valor,
+    padrao = 0
+) {
 
-// =======================================
-// CONVERTER NÚMERO COM SEGURANÇA
-// =======================================
+    const numero =
+        Number(valor);
 
-function numeroSeguro(valor, padrao = 0) {
-
-    const numero = Number(valor);
-
-    return Number.isFinite(numero)
+    return Number.isFinite(
+        numero
+    )
         ? numero
         : padrao;
 
 }
 
+// ==================================================
+// LIMITAR
+// ==================================================
 
-// =======================================
-// PEGAR PRIMEIRO VALOR VÁLIDO
-// =======================================
+function limitar(
+    valor,
+    minimo,
+    maximo
+) {
 
-function primeiroValor(...valores) {
-
-    for (const valor of valores) {
-
-        if (
-            valor !== undefined &&
-            valor !== null &&
-            valor !== ""
-        ) {
-
-            return valor;
-
-        }
-
-    }
-
-    return undefined;
-
-}
-
-
-// =======================================
-// NORMALIZAR NOME DO TIME
-// =======================================
-
-function obterNomeTime(jogo, lado) {
-
-    if (!jogo || typeof jogo !== "object") {
-
-        return null;
-
-    }
-
-    if (lado === "casa") {
-
-        return primeiroValor(
-
-            jogo.time_casa,
-
-            jogo.timeCasa,
-
-            jogo.casa,
-
-            jogo.homeTeam?.name,
-
-            jogo.home_team?.name,
-
-            jogo.home?.name,
-
-            jogo.home?.team?.name
-
+    const numero =
+        numeroSeguro(
+            valor,
+            minimo
         );
 
-    }
-
-
-    return primeiroValor(
-
-        jogo.time_fora,
-
-        jogo.timeFora,
-
-        jogo.fora,
-
-        jogo.awayTeam?.name,
-
-        jogo.away_team?.name,
-
-        jogo.away?.name,
-
-        jogo.away?.team?.name
-
+    return Math.max(
+        minimo,
+        Math.min(
+            maximo,
+            numero
+        )
     );
 
 }
 
+// ==================================================
+// ARREDONDAR
+// ==================================================
 
-// =======================================
-// OBTER API ID
-// =======================================
+function arredondar(
+    valor,
+    casas = 2
+) {
 
-function obterApiId(jogo) {
-
-    if (!jogo || typeof jogo !== "object") {
-
-        return null;
-
-    }
-
-    const valor = primeiroValor(
-
-        jogo.api_id,
-
-        jogo.apiId,
-
-        jogo.fixture_id,
-
-        jogo.fixtureId,
-
-        jogo.id_api,
-
-        jogo.external_id
-
+    return Number(
+        numeroSeguro(
+            valor,
+            0
+        ).toFixed(casas)
     );
 
-
-    const numero = Number(valor);
-
-
-    if (
-        !Number.isInteger(numero) ||
-        numero <= 0
-    ) {
-
-        return null;
-
-    }
-
-
-    return numero;
-
 }
 
-
-// =======================================
-// EXTRAIR ESTATÍSTICAS DO JOGO
-//
-// O frontend/API pode entregar os dados
-// em estruturas diferentes.
-//
-// Este adaptador tenta aproveitar todas.
-// =======================================
-
-function extrairDadosDoJogo(jogo = {}) {
-
-    const estatisticas =
-        jogo.estatisticas ??
-        jogo.estatisticasJogo ??
-        jogo.statistics ??
-        jogo.stats ??
-        {};
-
-
-    const historico =
-        jogo.historico ??
-        jogo.historicoTimes ??
-        jogo.history ??
-        {};
-
-
-    const casa =
-        historico.casa ??
-        historico.home ??
-        estatisticas.casa ??
-        estatisticas.home ??
-        {};
-
-
-    const fora =
-        historico.fora ??
-        historico.away ??
-        estatisticas.fora ??
-        estatisticas.away ??
-        {};
-
-
-    const h2h =
-        jogo.h2h ??
-        jogo.H2H ??
-        estatisticas.h2h ??
-        estatisticas.H2H ??
-        {};
-
-
-    const dados = {
-
-        // ==================================
-        // ATAQUE
-        // ==================================
-
-        ataqueCasa:
-
-            primeiroValor(
-
-                jogo.ataqueCasa,
-
-                jogo.forcaAtaqueCasa,
-
-                jogo.mediaAtaqueCasa,
-
-                casa.ataque,
-
-                casa.forcaAtaque,
-
-                casa.mediaAtaque
-
-            ),
-
-
-        ataqueFora:
-
-            primeiroValor(
-
-                jogo.ataqueFora,
-
-                jogo.forcaAtaqueFora,
-
-                jogo.mediaAtaqueFora,
-
-                fora.ataque,
-
-                fora.forcaAtaque,
-
-                fora.mediaAtaque
-
-            ),
-
-
-        // ==================================
-        // DEFESA
-        // ==================================
-
-        defesaCasa:
-
-            primeiroValor(
-
-                jogo.defesaCasa,
-
-                jogo.forcaDefesaCasa,
-
-                jogo.mediaDefesaCasa,
-
-                casa.defesa,
-
-                casa.forcaDefesa,
-
-                casa.mediaDefesa
-
-            ),
-
-
-        defesaFora:
-
-            primeiroValor(
-
-                jogo.defesaFora,
-
-                jogo.forcaDefesaFora,
-
-                jogo.mediaDefesaFora,
-
-                fora.defesa,
-
-                fora.forcaDefesa,
-
-                fora.mediaDefesa
-
-            ),
-
-
-        // ==================================
-        // FORMA
-        // ==================================
-
-        formaCasa:
-
-            primeiroValor(
-
-                jogo.formaCasa,
-
-                jogo.percentualFormaCasa,
-
-                jogo.formaCasaPercentual,
-
-                casa.forma,
-
-                casa.percentualForma,
-
-                casa.formaPercentual
-
-            ),
-
-
-        formaFora:
-
-            primeiroValor(
-
-                jogo.formaFora,
-
-                jogo.percentualFormaFora,
-
-                jogo.formaForaPercentual,
-
-                fora.forma,
-
-                fora.percentualForma,
-
-                fora.formaPercentual
-
-            ),
-
-
-        // ==================================
-        // GOLS MARCADOS
-        // ==================================
-
-        mediaGolsCasa:
-
-            primeiroValor(
-
-                jogo.mediaGolsCasa,
-
-                jogo.golsCasa,
-                
-                jogo.mediaCasa,
-
-                casa.mediaGols,
-
-                casa.mediaGolsMarcados,
-
-                casa.golsMarcados,
-
-                casa.media
-
-            ),
-
-
-        mediaGolsFora:
-
-            primeiroValor(
-
-                jogo.mediaGolsFora,
-
-                jogo.golsFora,
-
-                jogo.mediaFora,
-
-                fora.mediaGols,
-
-                fora.mediaGolsMarcados,
-
-                fora.golsMarcados,
-
-                fora.media
-
-            ),
-
-
-        // ==================================
-        // GOLS SOFRIDOS
-        // ==================================
-
-        mediaGolsSofridosCasa:
-
-            primeiroValor(
-
-                jogo.mediaGolsSofridosCasa,
-
-                jogo.golsSofridosCasa,
-
-                jogo.mediaSofridosCasa,
-
-                casa.mediaGolsSofridos,
-
-                casa.golsSofridos,
-
-                casa.mediaSofridos
-
-            ),
-
-
-        mediaGolsSofridosFora:
-
-            primeiroValor(
-
-                jogo.mediaGolsSofridosFora,
-
-                jogo.golsSofridosFora,
-
-                jogo.mediaSofridosFora,
-
-                fora.mediaGolsSofridos,
-
-                fora.golsSofridos,
-
-                fora.mediaSofridos
-
-            ),
-
-
-        // ==================================
-        // HISTÓRICO
-        // ==================================
-
-        jogosCasa:
-
-            primeiroValor(
-
-                jogo.jogosCasa,
-
-                jogo.historicoCasa,
-
-                jogo.totalJogosCasa,
-
-                casa.jogos,
-
-                casa.totalJogos,
-
-                casa.total
-
-            ),
-
-
-        jogosFora:
-
-            primeiroValor(
-
-                jogo.jogosFora,
-
-                jogo.historicoFora,
-
-                jogo.totalJogosFora,
-
-                fora.jogos,
-
-                fora.totalJogos,
-
-                fora.total
-
-            ),
-
-
-        // ==================================
-        // H2H
-        // ==================================
-
-        h2h,
-
-        totalH2H:
-
-            primeiroValor(
-
-                jogo.totalH2H,
-
-                jogo.confrontosH2H,
-
-                h2h.total,
-
-                h2h.totalConfrontos
-
-            ),
-
-
-        vitoriasCasaH2H:
-
-            primeiroValor(
-
-                jogo.vitoriasCasaH2H,
-
-                jogo.h2hCasa,
-
-                h2h.vitoriasCasa,
-
-                h2h.casa
-
-            ),
-
-
-        empatesH2H:
-
-            primeiroValor(
-
-                jogo.empatesH2H,
-
-                jogo.h2hEmpates,
-
-                h2h.empates,
-
-                h2h.draws
-
-            ),
-
-
-        vitoriasForaH2H:
-
-            primeiroValor(
-
-                jogo.vitoriasForaH2H,
-
-                jogo.h2hFora,
-
-                h2h.vitoriasFora,
-
-                h2h.fora
-
-            )
-
-    };
-
-
-    // ==================================
-    // REMOVER PROPRIEDADES UNDEFINED
-    // ==================================
-
-    for (const chave of Object.keys(dados)) {
-
-        if (
-            dados[chave] === undefined
-        ) {
-
-            delete dados[chave];
-
-        }
-
-    }
-
-
-    return dados;
-
-}
-
-
-// =======================================
-// NORMALIZAR DADOS EXTERNOS
-//
-// Permite:
-//
-// analisarJogo(jogo)
-//
-// ou:
-//
-// analisarJogo(jogo, dados)
-//
-// =======================================
-
-function normalizarDados(jogo, dados = {}) {
-
-    const dadosDoJogo =
-        extrairDadosDoJogo(jogo);
-
-
-    return {
-
-        ...dadosDoJogo,
-
-        ...(dados || {})
-
-    };
-
-}
-
-
-// =======================================
-// VALIDAR JOGO
-// =======================================
-
-function validarJogo(jogo) {
+// ==================================================
+// NORMALIZAR JOGO
+// ==================================================
+
+function normalizarJogo(
+    jogo
+) {
 
     if (
         !jogo ||
@@ -625,20 +100,19 @@ function validarJogo(jogo) {
 
     }
 
-
     const casa =
-        obterNomeTime(
-            jogo,
-            "casa"
-        );
-
+        jogo.time_casa ??
+        jogo.timeCasa ??
+        jogo.casa ??
+        jogo.home ??
+        jogo.homeTeam?.name;
 
     const fora =
-        obterNomeTime(
-            jogo,
-            "fora"
-        );
-
+        jogo.time_fora ??
+        jogo.timeFora ??
+        jogo.fora ??
+        jogo.away ??
+        jogo.awayTeam?.name;
 
     if (
         !casa ||
@@ -646,488 +120,575 @@ function validarJogo(jogo) {
     ) {
 
         throw new Error(
-            "Não foi possível identificar os times do jogo"
+            "Times do jogo não identificados"
         );
 
     }
-
-
-    const casaNormalizada =
-        String(casa)
-            .trim()
-            .toLowerCase();
-
-
-    const foraNormalizada =
-        String(fora)
-            .trim()
-            .toLowerCase();
-
-
-    if (
-        casaNormalizada ===
-        foraNormalizada
-    ) {
-
-        throw new Error(
-            "Os times da casa e visitante são iguais"
-        );
-
-    }
-
-
-    const nomesInvalidos = [
-
-        "casa",
-        "fora",
-        "home",
-        "away",
-        "home team",
-        "away team",
-        "time a",
-        "time b",
-        "undefined",
-        "null"
-
-    ];
-
-
-    if (
-        nomesInvalidos.includes(
-            casaNormalizada
-        )
-        ||
-        nomesInvalidos.includes(
-            foraNormalizada
-        )
-    ) {
-
-        throw new Error(
-            "Times fictícios ou de fallback"
-        );
-
-    }
-
-
-    const apiId =
-        obterApiId(
-            jogo
-        );
-
 
     return {
 
-        apiId,
-
         casa:
-            String(casa).trim(),
+            String(casa)
+                .trim(),
 
         fora:
-            String(fora).trim()
+            String(fora)
+                .trim()
 
     };
 
 }
 
+// ==================================================
+// PROBABILIDADE BASE
+// ==================================================
 
-// =======================================
-// ANALISAR JOGO
+function calcularProbabilidadeBase(
+    dados = {}
+) {
+
+    const forcaCasa =
+        limitar(
+            dados.forcaCasa ??
+            dados.ataqueCasa ??
+            dados.formaCasa ??
+            50,
+            0,
+            100
+        );
+
+    const forcaFora =
+        limitar(
+            dados.forcaFora ??
+            dados.ataqueFora ??
+            dados.formaFora ??
+            50,
+            0,
+            100
+        );
+
+    const total =
+        forcaCasa +
+        forcaFora;
+
+    let casa;
+    let fora;
+
+    if (
+        total > 0
+    ) {
+
+        casa =
+            (
+                forcaCasa /
+                total
+            ) * 70;
+
+        fora =
+            (
+                forcaFora /
+                total
+            ) * 30;
+
+    }
+
+    else {
+
+        casa = 35;
+        fora = 30;
+
+    }
+
+    // Mando de campo
+
+    casa += 8;
+
+    // Empate calculado de acordo
+    // com equilíbrio entre as equipes.
+
+    const diferenca =
+        Math.abs(
+            forcaCasa -
+            forcaFora
+        );
+
+    let empate =
+        30 -
+        (
+            diferenca *
+            0.08
+        );
+
+    empate =
+        limitar(
+            empate,
+            18,
+            30
+        );
+
+    const soma =
+        casa +
+        empate +
+        fora;
+
+    return {
+
+        casa:
+            (casa / soma) * 100,
+
+        empate:
+            (empate / soma) * 100,
+
+        fora:
+            (fora / soma) * 100
+
+    };
+
+}
+
+// ==================================================
+// GOLS ESPERADOS
+// ==================================================
+
+function calcularGols(
+    dados = {}
+) {
+
+    const golsCasa =
+        numeroSeguro(
+            dados.mediaGolsCasa ??
+            dados.golsCasa ??
+            dados.ataqueCasa,
+            1.20
+        );
+
+    const golsFora =
+        numeroSeguro(
+            dados.mediaGolsFora ??
+            dados.golsFora ??
+            dados.ataqueFora,
+            1.10
+        );
+
+    const sofridosCasa =
+        numeroSeguro(
+            dados.mediaGolsSofridosCasa ??
+            dados.mediaSofridosCasa,
+            1.20
+        );
+
+    const sofridosFora =
+        numeroSeguro(
+            dados.mediaGolsSofridosFora ??
+            dados.mediaSofridosFora,
+            1.20
+        );
+
+    let xgCasa =
+        (
+            golsCasa * 0.60
+        )
+        +
+        (
+            sofridosFora * 0.40
+        );
+
+    let xgFora =
+        (
+            golsFora * 0.60
+        )
+        +
+        (
+            sofridosCasa * 0.40
+        );
+
+    // Mando
+
+    xgCasa *= 1.08;
+
+    xgFora *= 0.94;
+
+    xgCasa =
+        limitar(
+            xgCasa,
+            0.35,
+            4.50
+        );
+
+    xgFora =
+        limitar(
+            xgFora,
+            0.35,
+            4.50
+        );
+
+    return {
+
+        casa:
+            arredondar(
+                xgCasa
+            ),
+
+        fora:
+            arredondar(
+                xgFora
+            ),
+
+        total:
+            arredondar(
+                xgCasa +
+                xgFora
+            )
+
+    };
+
+}
+
+// ==================================================
+// PREVER PLACAR
+// ==================================================
+
+function preverPlacar(
+    gols
+) {
+
+    const casa =
+        Math.max(
+            0,
+            Math.round(
+                numeroSeguro(
+                    gols?.casa,
+                    1
+                )
+            )
+        );
+
+    const fora =
+        Math.max(
+            0,
+            Math.round(
+                numeroSeguro(
+                    gols?.fora,
+                    1
+                )
+            )
+        );
+
+    return {
+
+        casa,
+
+        fora,
+
+        texto:
+            `${casa}x${fora}`
+
+    };
+
+}
+
+// ==================================================
+// VALUE BET
 //
-// Esta é a função principal usada pelo
-// código antigo.
+// Aqui só analisamos probabilidade.
 //
-// NÃO USA RANDOM.
+// Não usamos "maior que 55%" como
+// value bet verdadeiro.
 //
-// NÃO GERA PROBABILIDADE ARTIFICIAL.
-//
-// Usa exclusivamente o motor estatístico
-// central.
-// =======================================
+// Value Bet real precisa de odd.
+// ==================================================
+
+function detectarValor(
+    probabilidades,
+    odds = {}
+) {
+
+    const mercados = [
+
+        {
+            nome: "Casa",
+
+            probabilidade:
+                probabilidades.casa,
+
+            odd:
+                odds.casa
+        },
+
+        {
+            nome: "Empate",
+
+            probabilidade:
+                probabilidades.empate,
+
+            odd:
+                odds.empate
+        },
+
+        {
+            nome: "Fora",
+
+            probabilidade:
+                probabilidades.fora,
+
+            odd:
+                odds.fora
+        }
+
+    ];
+
+    const oportunidades =
+        mercados
+            .filter(
+                mercado => {
+
+                    const odd =
+                        Number(
+                            mercado.odd
+                        );
+
+                    const prob =
+                        Number(
+                            mercado.probabilidade
+                        );
+
+                    if (
+                        !Number.isFinite(
+                            odd
+                        ) ||
+                        odd <= 1
+                    ) {
+
+                        return false;
+
+                    }
+
+                    if (
+                        !Number.isFinite(
+                            prob
+                        ) ||
+                        prob <= 0
+                    ) {
+
+                        return false;
+
+                    }
+
+                    const valor =
+                        (
+                            odd *
+                            (
+                                prob / 100
+                            )
+                        ) - 1;
+
+                    return valor > 0.05;
+
+                }
+            );
+
+    if (
+        oportunidades.length === 0
+    ) {
+
+        return {
+
+            possui:
+                false,
+
+            mercado:
+                null
+
+        };
+
+    }
+
+    const melhor =
+        oportunidades
+            .sort(
+                (
+                    a,
+                    b
+                ) => {
+
+                    const valorA =
+                        (
+                            Number(a.odd) *
+                            (
+                                Number(
+                                    a.probabilidade
+                                ) / 100
+                            )
+                        ) - 1;
+
+                    const valorB =
+                        (
+                            Number(b.odd) *
+                            (
+                                Number(
+                                    b.probabilidade
+                                ) / 100
+                            )
+                        ) - 1;
+
+                    return valorB - valorA;
+
+                }
+            )[0];
+
+    return {
+
+        possui:
+            true,
+
+        mercado:
+            melhor.nome,
+
+        odd:
+            Number(
+                melhor.odd
+            ),
+
+        probabilidade:
+            Number(
+                melhor.probabilidade
+            )
+
+    };
+
+}
+
+// ==================================================
+// CONFIANÇA
+// ==================================================
+
+function calcularConfianca(
+    probabilidades
+) {
+
+    const maior =
+        Math.max(
+            probabilidades.casa,
+            probabilidades.empate,
+            probabilidades.fora
+        );
+
+    if (
+        maior >= 65
+    ) {
+
+        return "ALTA";
+
+    }
+
+    if (
+        maior >= 50
+    ) {
+
+        return "MEDIA";
+
+    }
+
+    return "BAIXA";
+
+}
+
+// ==================================================
+// FUNÇÃO PRINCIPAL
+// ==================================================
 
 export function analisarJogo(
     jogo,
     dados = {}
 ) {
 
-    const validacao =
-        validarJogo(
+    const times =
+        normalizarJogo(
             jogo
         );
 
-
-    const dadosEstatisticos =
-        normalizarDados(
-            jogo,
+    const probabilidades =
+        calcularProbabilidadeBase(
             dados
         );
 
-
-    console.log(
-        "=========================================="
-    );
-
-
-    console.log(
-        "🤖 BETVISION AI"
-    );
-
-
-    console.log(
-        `⚽ ${validacao.casa} x ${validacao.fora}`
-    );
-
-
-    console.log(
-        `🆔 API ID: ${validacao.apiId || "não informado"}`
-    );
-
-
-    console.log(
-        "📊 Executando motor estatístico central..."
-    );
-
-
-    // ==================================
-    // XG
-    // ==================================
-
-    const xg =
-        calcularXG(
-            dadosEstatisticos
+    const gols =
+        calcularGols(
+            dados
         );
-
-
-    // ==================================
-    // PROBABILIDADES
-    // ==================================
-
-    const probabilidades =
-        calcularProbabilidades(
-            dadosEstatisticos
-        );
-
-
-    // ==================================
-    // PLACAR
-    // ==================================
 
     const placar =
-        calcularPlacar(
-            dadosEstatisticos
+        preverPlacar(
+            gols
         );
 
-
-    // ==================================
-    // CONFIANÇA
-    // ==================================
+    const valueBet =
+        detectarValor(
+            probabilidades,
+            dados.odds ||
+            {}
+        );
 
     const confianca =
         calcularConfianca(
             probabilidades
         );
 
-
-    // ==================================
-    // FAVORITO
-    // ==================================
-
-    let favorito =
-        "Empate";
-
-
-    if (
-        probabilidades.casa >
-        probabilidades.empate &&
-        probabilidades.casa >
-        probabilidades.fora
-    ) {
-
-        favorito =
-            validacao.casa;
-
-    }
-
-
-    else if (
-        probabilidades.fora >
-        probabilidades.empate &&
-        probabilidades.fora >
-        probabilidades.casa
-    ) {
-
-        favorito =
-            validacao.fora;
-
-    }
-
-
-    // ==================================
-    // RESULTADO COMPATÍVEL COM
-    // O SERVIÇO CENTRAL
-    // ==================================
-
-    const resultado = {
-
-        api_id:
-            validacao.apiId,
-
-        jogo:
-            `${validacao.casa} x ${validacao.fora}`,
-
-        casa:
-            validacao.casa,
-
-        fora:
-            validacao.fora,
-
-
-        probabilidadeCasa:
-            probabilidades.casa,
-
-        probabilidadeEmpate:
-            probabilidades.empate,
-
-        probabilidadeFora:
-            probabilidades.fora,
-
-
-        // aliases compatíveis
-
-        probabilidade_casa:
-            probabilidades.casa,
-
-        probabilidade_empate:
-            probabilidades.empate,
-
-        probabilidade_fora:
-            probabilidades.fora,
-
-
-        golsEsperados:
-            Number(
-                (
-                    xg.casa +
-                    xg.fora
-                ).toFixed(2)
-            ),
-
-
-        golsEsperadosCasa:
-            xg.casa,
-
-        golsEsperadosFora:
-            xg.fora,
-
-
-        placarPrevisto:
-            `${placar.casa}x${placar.fora}`,
-
-        placar_previsto:
-            `${placar.casa}x${placar.fora}`,
-
-
-        favorito,
-
-
-        confianca,
-
-
-        valueBet:
-            false,
-
-
-        algoritmo:
-            "BetVision Statistical AI v10.0"
-
-    };
-
-
-    // ==================================
-    // LOG
-    // ==================================
-
-    console.log(
-        `🏠 Casa: ${resultado.probabilidadeCasa}%`
-    );
-
-
-    console.log(
-        `🤝 Empate: ${resultado.probabilidadeEmpate}%`
-    );
-
-
-    console.log(
-        `✈️ Fora: ${resultado.probabilidadeFora}%`
-    );
-
-
-    console.log(
-        `⚽ XG: ${xg.casa} x ${xg.fora}`
-    );
-
-
-    console.log(
-        `🎯 Placar: ${resultado.placarPrevisto}`
-    );
-
-
-    console.log(
-        `🏆 Favorito: ${favorito}`
-    );
-
-
-    console.log(
-        `🎯 Confiança: ${confianca}`
-    );
-
-
-    console.log(
-        "=========================================="
-    );
-
-
-    return resultado;
-
-}
-
-
-// =======================================
-// ANALISAR JOGO + VALUE BET
-//
-// Função auxiliar para quem já possui
-// odd e mercado.
-// =======================================
-
-export function analisarJogoComOdd(
-    jogo,
-    dados = {},
-    mercado = null,
-    odd = null
-) {
-
-    const analise =
-        analisarJogo(
-            jogo,
-            dados
-        );
-
-
-    if (
-        !mercado ||
-        !Number.isFinite(
-            Number(odd)
-        )
-    ) {
-
-        return analise;
-
-    }
-
-
-    let probabilidade;
-
-
-    const mercadoNormalizado =
-        String(mercado)
-            .toLowerCase()
-            .trim();
-
-
-    if (
-        mercadoNormalizado === "casa" ||
-        mercadoNormalizado === "home" ||
-        mercadoNormalizado === "1"
-    ) {
-
-        probabilidade =
-            analise.probabilidadeCasa;
-
-    }
-
-
-    else if (
-        mercadoNormalizado === "empate" ||
-        mercadoNormalizado === "draw" ||
-        mercadoNormalizado === "x"
-    ) {
-
-        probabilidade =
-            analise.probabilidadeEmpate;
-
-    }
-
-
-    else if (
-        mercadoNormalizado === "fora" ||
-        mercadoNormalizado === "away" ||
-        mercadoNormalizado === "2"
-    ) {
-
-        probabilidade =
-            analise.probabilidadeFora;
-
-    }
-
-
-    else {
-
-        return {
-
-            ...analise,
-
-            valueBet:
-                false
-
-        };
-
-    }
-
-
-    const resultadoValueBet =
-        calcularValueBet(
-            odd,
-            probabilidade
-        );
-
-
     return {
 
-        ...analise,
+        jogo:
+            `${times.casa} x ${times.fora}`,
+
+        probabilidadeCasa:
+            arredondar(
+                probabilidades.casa
+            ),
+
+        probabilidadeEmpate:
+            arredondar(
+                probabilidades.empate
+            ),
+
+        probabilidadeFora:
+            arredondar(
+                probabilidades.fora
+            ),
+
+        golsEsperados:
+            gols.total,
+
+        xgCasa:
+            gols.casa,
+
+        xgFora:
+            gols.fora,
+
+        placarPrevisto:
+            placar.texto,
 
         valueBet:
-            resultadoValueBet.possui,
+            valueBet.possui,
 
-        valueBetDetalhes: {
+        mercadoValueBet:
+            valueBet.mercado,
 
-            mercado,
+        confianca:
 
-            odd:
-                Number(odd),
+            confianca,
 
-            probabilidade:
-                Number(probabilidade),
-
-            valorEsperado:
-                resultadoValueBet.valor,
-
-            possui:
-                resultadoValueBet.possui
-
-        }
+        algoritmo:
+            "BetVision Statistical AI v2.0"
 
     };
 
 }
 
-
-// =======================================
-// EXPORT DEFAULT
-// =======================================
+// ==================================================
+// EXPORTS
+// ==================================================
 
 export default {
 
-    analisarJogo,
-
-    analisarJogoComOdd
+    analisarJogo
 
 };
