@@ -1,379 +1,281 @@
 // ==================================================
 // BETVISION AI
-// server.js
-// Versão 4.3
-// Servidor Principal
-// Neon PostgreSQL + Football-Data
+// routes/valuebets.js
+//
+// Motor Value Bets
+// Versão 5.1
+//
+// PostgreSQL + NeonDB
+//
+// Tabela oficial:
+// value_bets
+//
+// Rotas:
+// GET    /api/valuebets
+// GET    /api/valuebets/:id
+// POST   /api/valuebets
+// PUT    /api/valuebets/:id/desativar
+// PUT    /api/valuebets/:id/ativar
+//
+// IMPORTANTE:
+// Este arquivo está em:
+// routes/valuebets.js
+//
+// O banco está em:
+// database/database.js
+//
+// Portanto o import correto é:
+// ../database/database.js
 // ==================================================
 
 import express from "express";
-import cors from "cors";
-import helmet from "helmet";
-import compression from "compression";
-import morgan from "morgan";
-import dotenv from "dotenv";
-
-import http from "http";
-import path from "path";
 
 import {
-    fileURLToPath
-} from "url";
-
-import {
-    WebSocketServer
-} from "ws";
-
-// ==================================================
-// BANCO
-// ==================================================
-
-import {
-    conectarBanco,
     query
-} from "./database/database.js";
+} from "../database/database.js";
+
+const router =
+    express.Router();
 
 // ==================================================
-// SINCRONIZAÇÃO
-// ==================================================
-
-import {
-    iniciarSincronizacao,
-    ativarAgendamento
-} from "./services/sincronizacaoService.js";
-
-// ==================================================
-// ROTAS
-// ==================================================
-
-import campeonatosRouter
-    from "./routes/campeonatos.js";
-
-import oddsRouter
-    from "./routes/odds.js";
-
-import valuebetsRouter
-    from "./routes/valuebets.js";
-
-import jogosRouter
-    from "./routes/jogos.js";
-
-import futebolRouter
-    from "./routes/futebol.js";
-
-import analisesRouter
-    from "./routes/analises.js";
-
-import inteligenciaRouter
-    from "./routes/inteligencia.js";
-
-// ==================================================
-// CONFIGURAÇÃO
-// ==================================================
-
-dotenv.config();
-
-const app = express();
-
-const servidor =
-    http.createServer(app);
-
-const PORT =
-    process.env.PORT || 3000;
-
-const __filename =
-    fileURLToPath(import.meta.url);
-
-const __dirname =
-    path.dirname(__filename);
-
-// ==================================================
-// MIDDLEWARES
-// ==================================================
-
-app.use(
-    helmet({
-        contentSecurityPolicy: false
-    })
-);
-
-app.use(
-    compression()
-);
-
-app.use(
-    cors()
-);
-
-app.use(
-    express.json()
-);
-
-app.use(
-    express.urlencoded({
-        extended: true
-    })
-);
-
-app.use(
-    morgan("dev")
-);
-
-// ==================================================
-// FRONTEND
-// ==================================================
-
-app.use(
-    express.static(
-        path.join(
-            __dirname,
-            "public"
-        )
-    )
-);
-
-// ==================================================
-// CONEXÃO BANCO
-// ==================================================
-
-try {
-
-    await conectarBanco();
-
-    console.log(
-        "🟢 PostgreSQL conectado"
-    );
-
-    // ==================================================
-    // SINCRONIZAÇÃO
-    // ==================================================
-
-    try {
-
-        await iniciarSincronizacao();
-
-        ativarAgendamento();
-
-        console.log(
-            "🟢 Sincronização de campeonatos ativa"
-        );
-
-    }
-
-    catch (error) {
-
-        console.error(
-            "🔴 Erro sincronização:",
-            error.message
-        );
-
-    }
-
-}
-
-catch (erro) {
-
-    console.error(
-        "🔴 Erro PostgreSQL:",
-        erro.message
-    );
-
-}
-
-// ==================================================
-// ROTAS API
-// ==================================================
-
-app.use(
-    "/api/campeonatos",
-    campeonatosRouter
-);
-
-app.use(
-    "/api/odds",
-    oddsRouter
-);
-
-// ==================================================
-// VALUE BETS
+// LISTAR VALUE BETS
 //
-// Rota oficial:
-// /api/valuebets
+// GET /api/valuebets
 //
-// Alias de compatibilidade:
-// /api/value-bets
+// Também funciona através do alias:
 //
-// O frontend atual está chamando:
-// /api/value-bets
+// GET /api/value-bets
 //
-// Portanto os DOIS caminhos funcionam.
+// O alias é configurado no server.js.
 // ==================================================
 
-app.use(
-    "/api/valuebets",
-    valuebetsRouter
-);
-
-app.use(
-    "/api/value-bets",
-    valuebetsRouter
-);
-
-// ==================================================
-
-app.use(
-    "/api/jogos",
-    jogosRouter
-);
-
-app.use(
-    "/api/futebol",
-    futebolRouter
-);
-
-app.use(
-    "/api/analises",
-    analisesRouter
-);
-
-app.use(
-    "/api/inteligencia",
-    inteligenciaRouter
-);
-
-// ==================================================
-// API PING
-// ==================================================
-
-app.get(
-    "/api/ping",
-    (req, res) => {
-
-        res.json({
-
-            sucesso: true,
-
-            status: "online",
-
-            sistema: "BetVision AI",
-
-            horario: new Date()
-
-        });
-
-    }
-);
-
-// ==================================================
-// DASHBOARD REAL
-// ==================================================
-
-app.get(
-    "/api/dashboard",
+router.get(
+    "/",
     async (req, res) => {
-
-        const inicio =
-            Date.now();
 
         try {
 
+            console.log(
+                "💎 Buscando Value Bets..."
+            );
+
             const resultado =
-                await query(`
+                await query(
+                    `
                     SELECT
 
-                        (
-                            SELECT COUNT(*)
-                            FROM campeonatos
-                        ) AS campeonatos,
+                        vb.id,
 
-                        (
-                            SELECT COUNT(*)
-                            FROM jogos
-                            WHERE DATE(data_jogo) =
-                                (
-                                    CURRENT_TIMESTAMP
-                                    AT TIME ZONE 'America/Sao_Paulo'
-                                )::date
-                        ) AS jogos,
+                        vb.jogo_id,
 
-                        (
-                            SELECT COUNT(*)
-                            FROM analises
-                        ) AS analises,
+                        vb.mercado,
 
-                        (
-                            SELECT COUNT(*)
-                            FROM value_bets
-                            WHERE ativo = true
-                        ) AS valuebets
-                `);
+                        vb.selecao,
 
-            const dados =
-                resultado.rows[0];
+                        vb.odd_mercado,
 
-            const resposta = {
+                        vb.probabilidade,
 
-                sistema:
-                    "BetVision AI",
+                        vb.valor_estimado,
 
-                status:
-                    "operacional",
+                        vb.ativo,
 
-                jogosHoje:
-                    Number(
-                        dados.jogos || 0
-                    ),
+                        vb.criado_em,
 
-                campeonatos:
-                    Number(
-                        dados.campeonatos || 0
-                    ),
+                        j.time_casa,
 
-                analisesIA:
-                    Number(
-                        dados.analises || 0
-                    ),
+                        j.time_fora,
 
-                valueBets:
-                    Number(
-                        dados.valuebets || 0
-                    ),
+                        j.data_jogo,
 
-                roi:
-                    0,
+                        j.campeonato,
 
-                precisao:
-                    0,
+                        j.estadio,
 
-                modelo:
-                    "Probabilidade + Estatística",
+                        j.status
 
-                ultimaAtualizacao:
-                    new Date()
+                    FROM value_bets vb
 
-            };
+                    LEFT JOIN jogos j
+                        ON j.id = vb.jogo_id
 
-            const tempo =
-                Date.now() - inicio;
+                    WHERE vb.ativo = true
+
+                    ORDER BY
+                        vb.valor_estimado DESC
+
+                    LIMIT 100
+                    `
+                );
 
             console.log(
-                `📊 Dashboard: ${tempo} ms`
+                `💎 ${resultado.rows.length} Value Bets encontradas`
             );
 
-            res.json(
-                resposta
-            );
+            return res.json({
+
+                sucesso: true,
+
+                total:
+                    resultado.rows.length,
+
+                valuebets:
+                    resultado.rows
+
+            });
 
         }
 
         catch (erro) {
 
             console.error(
-                "🔴 Erro dashboard:",
+                "❌ Erro Value Bets:",
                 erro.message
             );
 
-            res.status(500)
+            return res.status(500)
+                .json({
+
+                    sucesso: false,
+
+                    total: 0,
+
+                    erro:
+                        erro.message,
+
+                    valuebets: []
+
+                });
+
+        }
+
+    }
+);
+
+// ==================================================
+// BUSCAR VALUE BET POR ID
+//
+// GET /api/valuebets/:id
+//
+// Também funciona:
+//
+// GET /api/value-bets/:id
+//
+// através do alias do server.js.
+// ==================================================
+
+router.get(
+    "/:id",
+    async (req, res) => {
+
+        try {
+
+            const id =
+                Number(
+                    req.params.id
+                );
+
+            // ==================================================
+            // VALIDAR ID
+            // ==================================================
+
+            if (
+                !Number.isInteger(id) ||
+                id <= 0
+            ) {
+
+                return res.status(400)
+                    .json({
+
+                        sucesso: false,
+
+                        erro:
+                            "ID da Value Bet inválido"
+
+                    });
+
+            }
+
+            // ==================================================
+            // BUSCAR
+            // ==================================================
+
+            const resultado =
+                await query(
+                    `
+                    SELECT
+
+                        vb.*,
+
+                        j.time_casa,
+
+                        j.time_fora,
+
+                        j.data_jogo,
+
+                        j.campeonato,
+
+                        j.estadio,
+
+                        j.status
+
+                    FROM value_bets vb
+
+                    LEFT JOIN jogos j
+                        ON j.id = vb.jogo_id
+
+                    WHERE vb.id = $1
+
+                    LIMIT 1
+                    `,
+                    [
+                        id
+                    ]
+                );
+
+            // ==================================================
+            // NÃO ENCONTRADA
+            // ==================================================
+
+            if (
+                resultado.rows.length === 0
+            ) {
+
+                return res.status(404)
+                    .json({
+
+                        sucesso: false,
+
+                        erro:
+                            "Value Bet não encontrada"
+
+                    });
+
+            }
+
+            // ==================================================
+            // RETORNO
+            // ==================================================
+
+            return res.json({
+
+                sucesso: true,
+
+                valuebet:
+                    resultado.rows[0]
+
+            });
+
+        }
+
+        catch (erro) {
+
+            console.error(
+                "❌ Erro buscar Value Bet:",
+                erro.message
+            );
+
+            return res.status(500)
                 .json({
 
                     sucesso: false,
@@ -389,290 +291,485 @@ app.get(
 );
 
 // ==================================================
-// WEBSOCKET
+// CRIAR VALUE BET
+//
+// POST /api/valuebets
+//
+// Body:
+//
+// {
+//     "jogo_id": 123,
+//     "mercado": "Casa",
+//     "selecao": "Palmeiras",
+//     "odd_mercado": 2.10,
+//     "probabilidade": 58,
+//     "valor_estimado": 21.8
+// }
 // ==================================================
 
-const wss =
-    new WebSocketServer({
-        server: servidor
-    });
+router.post(
+    "/",
+    async (req, res) => {
 
-global.websocketClients =
-    new Set();
+        try {
 
-wss.on(
-    "connection",
-    (socket) => {
+            const {
 
-        console.log(
-            "🔌 Cliente WebSocket conectado"
-        );
+                jogo_id,
 
-        global.websocketClients.add(
-            socket
-        );
+                mercado,
 
-        socket.send(
-            JSON.stringify({
+                selecao,
 
-                tipo: "status",
+                odd_mercado,
 
-                sistema:
-                    "BetVision AI",
+                probabilidade,
 
-                online: true,
+                valor_estimado
 
-                horario:
-                    new Date()
+            } = req.body || {};
 
-            })
-        );
+            // ==================================================
+            // VALIDAR JOGO
+            // ==================================================
 
-        socket.on(
-            "close",
-            () => {
+            if (
+                jogo_id === undefined ||
+                jogo_id === null ||
+                jogo_id === ""
+            ) {
 
-                global.websocketClients.delete(
-                    socket
-                );
+                return res.status(400)
+                    .json({
+
+                        sucesso: false,
+
+                        erro:
+                            "jogo_id é obrigatório"
+
+                    });
 
             }
-        );
 
-        socket.on(
-            "error",
-            (erro) => {
+            // ==================================================
+            // VALIDAR MERCADO
+            // ==================================================
 
-                console.error(
-                    "🔴 WebSocket:",
-                    erro.message
-                );
+            if (
+                !mercado ||
+                typeof mercado !== "string"
+            ) {
 
-                global.websocketClients.delete(
-                    socket
-                );
+                return res.status(400)
+                    .json({
+
+                        sucesso: false,
+
+                        erro:
+                            "mercado é obrigatório"
+
+                    });
 
             }
-        );
 
-    }
-);
+            // ==================================================
+            // VALIDAR SELEÇÃO
+            // ==================================================
 
-// ==================================================
-// ENVIO WEBSOCKET
-// ==================================================
+            if (
+                !selecao ||
+                typeof selecao !== "string"
+            ) {
 
-global.enviarAtualizacao =
-    (dados) => {
+                return res.status(400)
+                    .json({
 
-        const mensagem =
-            JSON.stringify(
-                dados
+                        sucesso: false,
+
+                        erro:
+                            "selecao é obrigatória"
+
+                    });
+
+            }
+
+            // ==================================================
+            // VALIDAR ODD
+            // ==================================================
+
+            if (
+                odd_mercado !== undefined &&
+                odd_mercado !== null &&
+                (
+                    Number.isNaN(
+                        Number(
+                            odd_mercado
+                        )
+                    ) ||
+                    Number(
+                        odd_mercado
+                    ) <= 0
+                )
+            ) {
+
+                return res.status(400)
+                    .json({
+
+                        sucesso: false,
+
+                        erro:
+                            "odd_mercado inválida"
+
+                    });
+
+            }
+
+            // ==================================================
+            // VALIDAR PROBABILIDADE
+            // ==================================================
+
+            if (
+                probabilidade !== undefined &&
+                probabilidade !== null &&
+                (
+                    Number.isNaN(
+                        Number(
+                            probabilidade
+                        )
+                    ) ||
+                    Number(
+                        probabilidade
+                    ) < 0 ||
+                    Number(
+                        probabilidade
+                    ) > 100
+                )
+            ) {
+
+                return res.status(400)
+                    .json({
+
+                        sucesso: false,
+
+                        erro:
+                            "probabilidade deve estar entre 0 e 100"
+
+                    });
+
+            }
+
+            // ==================================================
+            // INSERIR
+            // ==================================================
+
+            const resultado =
+                await query(
+                    `
+                    INSERT INTO value_bets
+                    (
+                        jogo_id,
+                        mercado,
+                        selecao,
+                        odd_mercado,
+                        probabilidade,
+                        valor_estimado,
+                        ativo
+                    )
+
+                    VALUES
+                    (
+                        $1,
+                        $2,
+                        $3,
+                        $4,
+                        $5,
+                        $6,
+                        true
+                    )
+
+                    RETURNING *
+                    `,
+                    [
+
+                        jogo_id,
+
+                        mercado.trim(),
+
+                        selecao.trim(),
+
+                        odd_mercado !== undefined &&
+                        odd_mercado !== null
+                            ? Number(
+                                odd_mercado
+                            )
+                            : null,
+
+                        probabilidade !== undefined &&
+                        probabilidade !== null
+                            ? Number(
+                                probabilidade
+                            )
+                            : null,
+
+                        valor_estimado !== undefined &&
+                        valor_estimado !== null
+                            ? Number(
+                                valor_estimado
+                            )
+                            : null
+
+                    ]
+                );
+
+            console.log(
+                "💎 Value Bet criada:",
+                resultado.rows[0]?.id
             );
 
-        global.websocketClients.forEach(
-            (cliente) => {
+            return res.status(201)
+                .json({
 
-                if (
-                    cliente.readyState === 1
-                ) {
+                    sucesso: true,
 
-                    try {
+                    valuebet:
+                        resultado.rows[0]
 
-                        cliente.send(
-                            mensagem
-                        );
+                });
 
-                    }
+        }
 
-                    catch (erro) {
+        catch (erro) {
 
-                        console.error(
-                            "🔴 Erro WebSocket:",
-                            erro.message
-                        );
+            console.error(
+                "❌ Erro criar Value Bet:",
+                erro.message
+            );
 
-                    }
+            return res.status(500)
+                .json({
 
-                }
+                    sucesso: false,
+
+                    erro:
+                        erro.message
+
+                });
+
+        }
+
+    }
+);
+
+// ==================================================
+// DESATIVAR VALUE BET
+//
+// PUT /api/valuebets/:id/desativar
+// ==================================================
+
+router.put(
+    "/:id/desativar",
+    async (req, res) => {
+
+        try {
+
+            const id =
+                Number(
+                    req.params.id
+                );
+
+            if (
+                !Number.isInteger(id) ||
+                id <= 0
+            ) {
+
+                return res.status(400)
+                    .json({
+
+                        sucesso: false,
+
+                        erro:
+                            "ID da Value Bet inválido"
+
+                    });
 
             }
-        );
 
-    };
+            const resultado =
+                await query(
+                    `
+                    UPDATE value_bets
 
-// ==================================================
-// STATUS DO SISTEMA
-// ==================================================
+                    SET ativo = false
 
-app.get(
-    "/api/status",
-    (req, res) => {
+                    WHERE id = $1
 
-        res.json({
+                    RETURNING *
+                    `,
+                    [
+                        id
+                    ]
+                );
 
-            sucesso: true,
+            if (
+                resultado.rows.length === 0
+            ) {
 
-            sistema:
-                "BetVision AI",
+                return res.status(404)
+                    .json({
 
-            servidor:
-                "online",
+                        sucesso: false,
 
-            banco:
-                "PostgreSQL NeonDB",
+                        erro:
+                            "Value Bet não encontrada"
 
-            websocket:
-                "ativo",
+                    });
 
-            ambiente:
-                process.env.NODE_ENV ||
-                "development",
+            }
 
-            horario:
-                new Date()
+            console.log(
+                "💎 Value Bet desativada:",
+                id
+            );
 
-        });
+            return res.json({
 
-    }
-);
+                sucesso: true,
 
-// ==================================================
-// HEALTH CHECK
-// ==================================================
-
-app.get(
-    "/health",
-    (req, res) => {
-
-        res.status(200)
-            .json({
-
-                status: "ok",
-
-                sistema:
-                    "BetVision AI",
-
-                horario:
-                    new Date()
+                valuebet:
+                    resultado.rows[0]
 
             });
 
+        }
+
+        catch (erro) {
+
+            console.error(
+                "❌ Erro desativar Value Bet:",
+                erro.message
+            );
+
+            return res.status(500)
+                .json({
+
+                    sucesso: false,
+
+                    erro:
+                        erro.message
+
+                });
+
+        }
+
     }
 );
 
 // ==================================================
-// PÁGINA PRINCIPAL
+// ATIVAR VALUE BET
+//
+// PUT /api/valuebets/:id/ativar
 // ==================================================
 
-app.get(
-    "/",
-    (req, res) => {
+router.put(
+    "/:id/ativar",
+    async (req, res) => {
 
-        res.sendFile(
-            path.join(
-                __dirname,
-                "public",
-                "index.html"
-            )
-        );
+        try {
 
-    }
-);
+            const id =
+                Number(
+                    req.params.id
+                );
 
-// ==================================================
-// ROTA NÃO ENCONTRADA - API
-// ==================================================
+            if (
+                !Number.isInteger(id) ||
+                id <= 0
+            ) {
 
-app.use(
-    "/api",
-    (req, res) => {
+                return res.status(400)
+                    .json({
 
-        res.status(404)
-            .json({
+                        sucesso: false,
 
-                sucesso: false,
+                        erro:
+                            "ID da Value Bet inválido"
 
-                erro:
-                    "Endpoint API não encontrado",
+                    });
 
-                rota:
-                    req.originalUrl,
+            }
 
-                metodo:
-                    req.method
+            const resultado =
+                await query(
+                    `
+                    UPDATE value_bets
+
+                    SET ativo = true
+
+                    WHERE id = $1
+
+                    RETURNING *
+                    `,
+                    [
+                        id
+                    ]
+                );
+
+            if (
+                resultado.rows.length === 0
+            ) {
+
+                return res.status(404)
+                    .json({
+
+                        sucesso: false,
+
+                        erro:
+                            "Value Bet não encontrada"
+
+                    });
+
+            }
+
+            console.log(
+                "💎 Value Bet ativada:",
+                id
+            );
+
+            return res.json({
+
+                sucesso: true,
+
+                valuebet:
+                    resultado.rows[0]
 
             });
 
-    }
-);
+        }
 
-// ==================================================
-// TRATAMENTO DE ERROS
-// ==================================================
+        catch (erro) {
 
-app.use(
-    (erro, req, res, next) => {
+            console.error(
+                "❌ Erro ativar Value Bet:",
+                erro.message
+            );
 
-        console.error(
-            "ERRO SERVIDOR:",
-            erro
-        );
+            return res.status(500)
+                .json({
 
-        res.status(500)
-            .json({
+                    sucesso: false,
 
-                sucesso: false,
+                    erro:
+                        erro.message
 
-                erro:
-                    "Erro interno do servidor"
+                });
 
-            });
+        }
 
     }
 );
 
 // ==================================================
-// INICIAR SERVIDOR
+// EXPORT
 // ==================================================
 
-servidor.listen(
-    PORT,
-    () => {
-
-        console.log(`
-================================================
-
-🤖 BETVISION AI
-
-================================================
-
-🟢 Sistema operacional
-
-🚀 Porta:
-${PORT}
-
-🌐 Ambiente:
-${process.env.NODE_ENV || "development"}
-
-🗄 Banco:
-PostgreSQL NeonDB
-
-📡 WebSocket:
-Ativo
-
-💎 Value Bets:
- /api/valuebets
- /api/value-bets
-
-🤖 Análises:
- /api/analises
-
-⚽ Jogos:
- /api/jogos
-
-================================================
-        `);
-
-    }
-);
+export default router;
