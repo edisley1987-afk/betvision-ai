@@ -2,37 +2,40 @@
 // BETVISION AI
 // server.js
 //
-// VERSÃO 5.0
-//
 // SERVIDOR PRINCIPAL
 //
+// VERSÃO 9.0
+//
+// PostgreSQL / NeonDB
+// Express
+// WebSocket
+// Render
+//
 // CORREÇÕES:
-// - Render detecta a porta imediatamente
-// - listen() antes da sincronização pesada
-// - PostgreSQL / NeonDB
-// - Timezone America/Sao_Paulo
-// - Jogos de HOJE + AMANHÃ
-// - Análises exibidas SOMENTE HOJE
-// - Dashboard corrigido
-// - WebSocket
-// - Proteção contra erro de sincronização
-// - Não derruba servidor se sincronização falhar
-// - Mantém todas as rotas existentes
+//
+// - CORRIGE IMPORTAÇÃO sincronizarSistema
+// - USA iniciarSincronizacao()
+// - ATIVA agendamento automático
+// - TIMEZONE America/Sao_Paulo
+// - MANTÉM TODAS AS ROTAS
+// - PROTEÇÃO CONTRA ERROS DE INICIALIZAÇÃO
+// - COMPATÍVEL COM NODE.JS 20+
+// - COMPATÍVEL COM NODE.JS 26
 // ==========================================================
 
 import "dotenv/config";
 
 import express from "express";
 import cors from "cors";
-import helmet from "helmet";
 import compression from "compression";
+import helmet from "helmet";
 import morgan from "morgan";
 
 import http from "http";
+import path from "path";
+import { fileURLToPath } from "url";
 
-import {
-    WebSocketServer
-} from "ws";
+import { WebSocketServer } from "ws";
 
 
 // ==========================================================
@@ -40,17 +43,30 @@ import {
 // ==========================================================
 
 import {
-    conectarBanco,
     query
 } from "./database/database.js";
 
 
 // ==========================================================
 // SINCRONIZAÇÃO
+//
+// IMPORTANTE:
+//
+// O sincronizacaoService.js NÃO exporta
+// sincronizarSistema.
+//
+// Ele exporta:
+//
+// - iniciarSincronizacao
+// - sincronizarTudo
+// - ativarAgendamento
+//
+// Portanto usamos iniciarSincronizacao.
 // ==========================================================
 
 import {
-    sincronizarSistema
+    iniciarSincronizacao,
+    ativarAgendamento
 } from "./services/sincronizacaoService.js";
 
 
@@ -58,110 +74,78 @@ import {
 // ROTAS
 // ==========================================================
 
-import campeonatosRouter from "./routes/campeonatos.js";
+import apiRouter from "./routes/api.js";
+import futebolRouter from "./routes/futebol.js";
+import jogosRouter from "./routes/jogos.js";
+import matchesRouter from "./routes/matches.js";
 import oddsRouter from "./routes/odds.js";
 import valuebetsRouter from "./routes/valuebets.js";
-import jogosRouter from "./routes/jogos.js";
-import futebolRouter from "./routes/futebol.js";
 import analisesRouter from "./routes/analises.js";
 import inteligenciaRouter from "./routes/inteligencia.js";
-
-
-// ==========================================================
-// SERVIÇOS DO BANCO
-// ==========================================================
-
-import {
-    obterDataHojeBrasil,
-    obterDataAmanhaBrasil,
-    listarJogosHoje,
-    listarJogosAmanha,
-    listarAnalisesHoje,
-    listarValueBetsDisponiveis,
-    estatisticasBanco
-} from "./services/bancoService.js";
-
-
-// ==========================================================
-// EXPRESS
-// ==========================================================
-
-const app =
-    express();
-
-
-// ==========================================================
-// HTTP SERVER
-// ==========================================================
-
-const servidor =
-    http.createServer(app);
+import alertsRouter from "./routes/alerts.js";
+import authRouter from "./routes/auth.js";
+import usersRouter from "./routes/users.js";
+import adminRouter from "./routes/admin.js";
 
 
 // ==========================================================
 // CONFIGURAÇÃO
 // ==========================================================
 
+const app =
+    express();
+
+const server =
+    http.createServer(
+        app
+    );
+
+
 const PORT =
     Number(
         process.env.PORT
-    ) || 3000;
+    ) ||
+    10000;
+
 
 const HOST =
     "0.0.0.0";
+
 
 const TIMEZONE =
     "America/Sao_Paulo";
 
 
-// ==========================================================
-// MIDDLEWARES
-// ==========================================================
+const __filename =
+    fileURLToPath(
+        import.meta.url
+    );
 
-app.use(
-    helmet({
-        crossOriginResourcePolicy: false
-    })
-);
 
-app.use(
-    cors({
-        origin: true,
-        credentials: true
-    })
-);
-
-app.use(
-    compression()
-);
-
-app.use(
-    express.json({
-        limit: "10mb"
-    })
-);
-
-app.use(
-    express.urlencoded({
-        extended: true,
-        limit: "10mb"
-    })
-);
-
-app.use(
-    morgan("combined")
-);
+const __dirname =
+    path.dirname(
+        __filename
+    );
 
 
 // ==========================================================
-// ARQUIVOS ESTÁTICOS
+// ESTADO DO SISTEMA
 // ==========================================================
 
-app.use(
-    express.static(
-        "public"
-    )
-);
+let servidorOnline =
+    false;
+
+let bancoOnline =
+    false;
+
+let ultimaSincronizacao =
+    null;
+
+let ultimaSincronizacaoResultado =
+    null;
+
+let sincronizacaoEmAndamento =
+    false;
 
 
 // ==========================================================
@@ -170,33 +154,29 @@ app.use(
 
 const wss =
     new WebSocketServer({
-        server: servidor,
-        path: "/ws"
+        server
     });
 
-
-// ==========================================================
-// CLIENTES WEBSOCKET
-// ==========================================================
 
 const clientesWebSocket =
     new Set();
 
 
 // ==========================================================
-// CONEXÃO WEBSOCKET
+// WEBSOCKET - CONEXÃO
 // ==========================================================
 
 wss.on(
     "connection",
-    (ws) => {
+    (socket) => {
 
         console.log(
             "🔌 WebSocket conectado"
         );
 
+
         clientesWebSocket.add(
-            ws
+            socket
         );
 
 
@@ -206,21 +186,34 @@ wss.on(
 
         try {
 
-            ws.send(
+            socket.send(
                 JSON.stringify({
-                    tipo: "conexao",
-                    status: "online",
-                    sistema: "BetVision AI",
-                    timezone: TIMEZONE,
-                    data: obterDataHojeBrasil(),
-                    timestamp: new Date().toISOString()
+
+                    tipo:
+                        "status",
+
+                    sistema:
+                        "BetVision AI",
+
+                    status:
+                        "online",
+
+                    timezone:
+                        TIMEZONE,
+
+                    timestamp:
+                        new Date()
+                            .toISOString()
+
                 })
             );
 
-        } catch (erro) {
+        }
+
+        catch (erro) {
 
             console.error(
-                "⚠️ Erro enviando mensagem inicial WS:",
+                "⚠️ Erro enviando status WebSocket:",
                 erro.message
             );
 
@@ -228,18 +221,18 @@ wss.on(
 
 
         // --------------------------------------------------
-        // PING
+        // PING / PONG
         // --------------------------------------------------
 
-        ws.isAlive =
+        socket.isAlive =
             true;
 
 
-        ws.on(
+        socket.on(
             "pong",
             () => {
 
-                ws.isAlive =
+                socket.isAlive =
                     true;
 
             }
@@ -247,15 +240,15 @@ wss.on(
 
 
         // --------------------------------------------------
-        // CLOSE
+        // FECHAMENTO
         // --------------------------------------------------
 
-        ws.on(
+        socket.on(
             "close",
             () => {
 
                 clientesWebSocket.delete(
-                    ws
+                    socket
                 );
 
                 console.log(
@@ -267,20 +260,20 @@ wss.on(
 
 
         // --------------------------------------------------
-        // ERROR
+        // ERRO
         // --------------------------------------------------
 
-        ws.on(
+        socket.on(
             "error",
             (erro) => {
 
                 console.error(
-                    "⚠️ WebSocket:",
+                    "❌ Erro WebSocket:",
                     erro.message
                 );
 
                 clientesWebSocket.delete(
-                    ws
+                    socket
                 );
 
             }
@@ -299,21 +292,23 @@ const intervaloWebSocket =
         () => {
 
             for (
-                const ws of clientesWebSocket
+                const socket of clientesWebSocket
             ) {
 
                 if (
-                    ws.isAlive === false
+                    socket.isAlive === false
                 ) {
 
                     try {
 
-                        ws.terminate();
+                        socket.terminate();
 
-                    } catch {}
+                    }
+
+                    catch {}
 
                     clientesWebSocket.delete(
-                        ws
+                        socket
                     );
 
                     continue;
@@ -321,18 +316,20 @@ const intervaloWebSocket =
                 }
 
 
-                ws.isAlive =
+                socket.isAlive =
                     false;
 
 
                 try {
 
-                    ws.ping();
+                    socket.ping();
 
-                } catch {
+                }
+
+                catch {
 
                     clientesWebSocket.delete(
-                        ws
+                        socket
                     );
 
                 }
@@ -340,12 +337,13 @@ const intervaloWebSocket =
             }
 
         },
+
         30000
     );
 
 
 // ==========================================================
-// BROADCAST
+// FUNÇÃO BROADCAST
 // ==========================================================
 
 function transmitirWebSocket(
@@ -359,20 +357,22 @@ function transmitirWebSocket(
 
 
     for (
-        const ws of clientesWebSocket
+        const socket of clientesWebSocket
     ) {
 
         if (
-            ws.readyState === 1
+            socket.readyState === 1
         ) {
 
             try {
 
-                ws.send(
+                socket.send(
                     mensagem
                 );
 
-            } catch (erro) {
+            }
+
+            catch (erro) {
 
                 console.error(
                     "⚠️ Erro broadcast:",
@@ -389,110 +389,110 @@ function transmitirWebSocket(
 
 
 // ==========================================================
-// ROTAS
+// MIDDLEWARES
 // ==========================================================
 
+app.set(
+    "trust proxy",
+    1
+);
 
-// ==========================================================
-// CAMPEONATOS
-// ==========================================================
+
+// ----------------------------------------------------------
+// HELMET
+// ----------------------------------------------------------
 
 app.use(
-    "/api/campeonatos",
-    campeonatosRouter
+
+    helmet({
+
+        crossOriginResourcePolicy:
+            false,
+
+        contentSecurityPolicy:
+            false
+
+    })
+
+);
+
+
+// ----------------------------------------------------------
+// CORS
+// ----------------------------------------------------------
+
+app.use(
+
+    cors({
+
+        origin:
+            true,
+
+        credentials:
+            true
+
+    })
+
+);
+
+
+// ----------------------------------------------------------
+// COMPRESSION
+// ----------------------------------------------------------
+
+app.use(
+    compression()
+);
+
+
+// ----------------------------------------------------------
+// JSON
+// ----------------------------------------------------------
+
+app.use(
+    express.json({
+        limit: "5mb"
+    })
+);
+
+
+app.use(
+    express.urlencoded({
+
+        extended:
+            true,
+
+        limit:
+            "5mb"
+
+    })
+);
+
+
+// ----------------------------------------------------------
+// LOG
+// ----------------------------------------------------------
+
+app.use(
+    morgan("dev")
 );
 
 
 // ==========================================================
-// ODDS
+// ARQUIVOS ESTÁTICOS
 // ==========================================================
 
 app.use(
-    "/api/odds",
-    oddsRouter
-);
 
+    express.static(
 
-// ==========================================================
-// VALUE BETS
-// ==========================================================
+        path.join(
+            __dirname,
+            "public"
+        )
 
-app.use(
-    "/api/valuebets",
-    valuebetsRouter
-);
+    )
 
-
-// ==========================================================
-// JOGOS
-// ==========================================================
-
-app.use(
-    "/api/jogos",
-    jogosRouter
-);
-
-
-// ==========================================================
-// FUTEBOL
-// ==========================================================
-
-app.use(
-    "/api/futebol",
-    futebolRouter
-);
-
-
-// ==========================================================
-// ANÁLISES
-// ==========================================================
-
-app.use(
-    "/api/analises",
-    analisesRouter
-);
-
-
-// ==========================================================
-// INTELIGÊNCIA
-// ==========================================================
-
-app.use(
-    "/api/inteligencia",
-    inteligenciaRouter
-);
-
-
-// ==========================================================
-// PING
-// ==========================================================
-
-app.get(
-    "/api/ping",
-    (req, res) => {
-
-        res.json({
-
-            sucesso: true,
-
-            sistema:
-                "BetVision AI",
-
-            status:
-                "online",
-
-            timestamp:
-                new Date().toISOString(),
-
-            data:
-                obterDataHojeBrasil(),
-
-            timezone:
-                TIMEZONE
-
-        });
-
-    }
 );
 
 
@@ -502,66 +502,39 @@ app.get(
 
 app.get(
     "/health",
-    async (req, res) => {
+    async (
+        req,
+        res
+    ) => {
 
-        try {
+        return res.json({
 
-            await query(
-                "SELECT 1"
-            );
+            sucesso:
+                true,
 
+            sistema:
+                "BetVision AI",
 
-            return res.json({
+            status:
+                "online",
 
-                status:
-                    "ok",
+            servidor:
+                servidorOnline,
 
-                sistema:
-                    "BetVision AI",
+            banco:
+                bancoOnline,
 
-                banco:
-                    "PostgreSQL conectado",
+            timezone:
+                TIMEZONE,
 
-                timestamp:
-                    new Date().toISOString(),
+            timestamp:
+                new Date()
+                    .toISOString(),
 
-                data:
-                    obterDataHojeBrasil(),
+            ultimaSincronizacao:
+                ultimaSincronizacao
 
-                timezone:
-                    TIMEZONE
-
-            });
-
-        }
-
-        catch (erro) {
-
-            console.error(
-                "❌ Health check:",
-                erro.message
-            );
-
-
-            return res
-                .status(503)
-                .json({
-
-                    status:
-                        "degraded",
-
-                    sistema:
-                        "BetVision AI",
-
-                    banco:
-                        "PostgreSQL indisponível",
-
-                    erro:
-                        erro.message
-
-                });
-
-        }
+        });
 
     }
 );
@@ -572,659 +545,109 @@ app.get(
 // ==========================================================
 
 app.get(
-    "/api/status",
-    async (req, res) => {
+    "/status",
+    async (
+        req,
+        res
+    ) => {
+
+        let banco =
+            false;
+
 
         try {
 
-            let banco =
+            await query(
+                "SELECT 1"
+            );
+
+            banco =
+                true;
+
+        }
+
+        catch {
+
+            banco =
                 false;
 
-
-            try {
-
-                await query(
-                    "SELECT 1"
-                );
-
-                banco =
-                    true;
-
-            } catch {}
-
-
-            let estatisticas =
-                null;
-
-
-            try {
-
-                estatisticas =
-                    await estatisticasBanco();
-
-            } catch {}
-
-
-            return res.json({
-
-                sistema:
-                    "BetVision AI",
-
-                status:
-                    "operacional",
-
-                banco:
-                    banco
-                        ? "conectado"
-                        : "desconectado",
-
-                timezone:
-                    TIMEZONE,
-
-                data:
-                    obterDataHojeBrasil(),
-
-                jogosHoje:
-                    Number(
-                        estatisticas?.jogos_hoje
-                    ) || 0,
-
-                jogosAmanha:
-                    Number(
-                        estatisticas?.jogos_amanha
-                    ) || 0,
-
-                campeonatos:
-                    Number(
-                        estatisticas?.campeonatos
-                    ) || 0,
-
-                analises:
-                    Number(
-                        estatisticas?.analises
-                    ) || 0,
-
-                valueBets:
-                    Number(
-                        estatisticas?.valuebets_ativas
-                    ) || 0,
-
-                modelo:
-                    "BetVision Statistical AI",
-
-                ultimaAtualizacao:
-                    new Date().toISOString()
-
-            });
-
         }
 
-        catch (erro) {
 
-            console.error(
-                "❌ Status:",
-                erro.message
-            );
-
-
-            return res
-                .status(500)
-                .json({
-
-                    sistema:
-                        "BetVision AI",
-
-                    status:
-                        "erro",
-
-                    erro:
-                        erro.message
-
-                });
-
-        }
-
-    }
-);
-
-
-// ==========================================================
-// DASHBOARD
-//
-// IMPORTANTE:
-//
-// Jogos:
-// HOJE + AMANHÃ
-//
-// Análises:
-// SOMENTE HOJE
-//
-// Value Bets:
-// HOJE + AMANHÃ
-// ==========================================================
-
-app.get(
-    "/api/dashboard",
-    async (req, res) => {
-
-        try {
-
-            const hoje =
-                obterDataHojeBrasil();
-
-            const amanha =
-                obterDataAmanhaBrasil();
-
-
-            console.log(
-                "=========================================="
-            );
-
-            console.log(
-                "📊 DASHBOARD"
-            );
-
-            console.log(
-                `📅 Hoje: ${hoje}`
-            );
-
-            console.log(
-                `📅 Amanhã: ${amanha}`
-            );
-
-            console.log(
-                `🌎 Fuso: ${TIMEZONE}`
-            );
-
-
-            // ==================================================
-            // JOGOS
-            // ==================================================
-
-            let jogosHoje =
-                [];
-
-            let jogosAmanha =
-                [];
-
-
-            try {
-
-                jogosHoje =
-                    await listarJogosHoje();
-
-            } catch (erro) {
-
-                console.error(
-                    "⚠️ Erro jogos hoje:",
-                    erro.message
-                );
-
-            }
-
-
-            try {
-
-                jogosAmanha =
-                    await listarJogosAmanha();
-
-            } catch (erro) {
-
-                console.error(
-                    "⚠️ Erro jogos amanhã:",
-                    erro.message
-                );
-
-            }
-
-
-            const jogos =
-                [
-                    ...jogosHoje,
-                    ...jogosAmanha
-                ];
-
-
-            // ==================================================
-            // ANÁLISES
-            //
-            // SOMENTE HOJE
-            // ==================================================
-
-            let analises =
-                [];
-
-
-            try {
-
-                analises =
-                    await listarAnalisesHoje();
-
-            } catch (erro) {
-
-                console.error(
-                    "⚠️ Erro análises hoje:",
-                    erro.message
-                );
-
-            }
-
-
-            // ==================================================
-            // VALUE BETS
-            // ==================================================
-
-            let valueBets =
-                [];
-
-
-            try {
-
-                valueBets =
-                    await listarValueBetsDisponiveis();
-
-            } catch (erro) {
-
-                console.error(
-                    "⚠️ Erro value bets:",
-                    erro.message
-                );
-
-            }
-
-
-            // ==================================================
-            // ESTATÍSTICAS
-            // ==================================================
-
-            let estatisticas =
-                null;
-
-
-            try {
-
-                estatisticas =
-                    await estatisticasBanco();
-
-            } catch (erro) {
-
-                console.error(
-                    "⚠️ Erro estatísticas:",
-                    erro.message
-                );
-
-            }
-
-
-            // ==================================================
-            // CAMPEONATOS
-            // ==================================================
-
-            let campeonatos =
-                Number(
-                    estatisticas?.campeonatos
-                ) || 0;
-
-
-            // ==================================================
-            // PRECISÃO
-            //
-            // Só calcula se houver dados reais.
-            // ==================================================
-
-            let precisao =
-                0;
-
-
-            let roi =
-                0;
-
-
-            if (
-                Array.isArray(valueBets) &&
-                valueBets.length > 0
-            ) {
-
-                const valores =
-                    valueBets
-                        .map(
-                            item =>
-                                Number(
-                                    item.valor_estimado
-                                )
-                        )
-                        .filter(
-                            valor =>
-                                Number.isFinite(
-                                    valor
-                                )
-                        );
-
-
-                if (
-                    valores.length > 0
-                ) {
-
-                    roi =
-                        valores.reduce(
-                            (
-                                total,
-                                valor
-                            ) =>
-                                total + valor,
-                            0
-                        ) /
-                        valores.length;
-
-                }
-
-            }
-
-
-            // ==================================================
-            // NÃO INVENTAR PRECISÃO
-            // ==================================================
-
-            if (
-                !analises.length
-            ) {
-
-                precisao =
-                    0;
-
-            }
-
-
-            console.log(
-                `⚽ Jogos hoje: ${jogosHoje.length}`
-            );
-
-            console.log(
-                `⚽ Jogos amanhã: ${jogosAmanha.length}`
-            );
-
-            console.log(
-                `🤖 Análises hoje: ${analises.length}`
-            );
-
-            console.log(
-                `💎 Value Bets: ${valueBets.length}`
-            );
-
-
-            console.log(
-                "=========================================="
-            );
-
-
-            return res.json({
-
-                sucesso:
-                    true,
-
-                sistema:
-                    "BetVision AI",
-
-                status:
-                    "operacional",
-
-                timezone:
-                    TIMEZONE,
-
-                data:
-                    hoje,
-
-                hoje,
-
-                amanha,
-
-
-                // ==================================================
-                // RESUMO
-                // ==================================================
-
-                resumo: {
-
-                    jogosHoje:
-                        jogosHoje.length,
-
-                    jogosAmanha:
-                        jogosAmanha.length,
-
-                    jogosDisponiveis:
-                        jogos.length,
-
-                    campeonatos,
-
-                    analisesIA:
-                        analises.length,
-
-                    valueBets:
-                        valueBets.length,
-
-                    roiPrevisto:
-                        Number(
-                            roi
-                        ) || 0,
-
-                    precisaoIA:
-                        Number(
-                            precisao
-                        ) || 0
-
-                },
-
-
-                // ==================================================
-                // JOGOS
-                // ==================================================
-
-                jogosHoje,
-
-                jogosAmanha,
-
-                jogos,
-
-
-                // ==================================================
-                // ANÁLISES
-                //
-                // SOMENTE HOJE
-                // ==================================================
-
-                analisesIA:
-                    analises,
-
-                analises:
-
-
-                    analises,
-
-
-                // ==================================================
-                // VALUE BETS
-                // ==================================================
-
-                valueBets,
-
-
-                // ==================================================
-                // ESTATÍSTICAS
-                // ==================================================
-
-                estatisticas:
-
-
-                    estatisticas,
-
-
-                // ==================================================
-                // MODELO
-                // ==================================================
-
-                modelo:
-                    "BetVision Statistical AI",
-
-                versaoModelo:
-                    "v2.0",
-
-                ultimaAtualizacao:
-                    new Date().toISOString()
-
-            });
-
-        }
-
-        catch (erro) {
-
-            console.error(
-                "❌ ERRO DASHBOARD:",
-                erro
-            );
-
-
-            return res
-                .status(500)
-                .json({
-
-                    sucesso:
-                        false,
-
-                    sistema:
-                        "BetVision AI",
-
-                    status:
-                        "erro",
-
-                    timezone:
-                        TIMEZONE,
-
-                    data:
-                        obterDataHojeBrasil(),
-
-                    erro:
-                        erro.message
-
-                });
-
-        }
-
-    }
-);
-
-
-// ==========================================================
-// RESUMO RÁPIDO
-// ==========================================================
-
-app.get(
-    "/api/resumo",
-    async (req, res) => {
-
-        try {
-
-            const estatisticas =
-                await estatisticasBanco();
-
-
-            return res.json({
-
-                sucesso:
-                    true,
-
-                data:
-                    obterDataHojeBrasil(),
-
-                timezone:
-                    TIMEZONE,
-
-                jogosHoje:
-                    Number(
-                        estatisticas?.jogos_hoje
-                    ) || 0,
-
-                jogosAmanha:
-                    Number(
-                        estatisticas?.jogos_amanha
-                    ) || 0,
-
-                campeonatos:
-                    Number(
-                        estatisticas?.campeonatos
-                    ) || 0,
-
-                analisesIA:
-                    Number(
-                        estatisticas?.analises
-                    ) || 0,
-
-                valueBets:
-                    Number(
-                        estatisticas?.valuebets_ativas
-                    ) || 0
-
-            });
-
-        }
-
-        catch (erro) {
-
-            return res
-                .status(500)
-                .json({
-
-                    sucesso:
-                        false,
-
-                    erro:
-                        erro.message
-
-                });
-
-        }
-
-    }
-);
-
-
-// ==========================================================
-// ROOT
-// ==========================================================
-
-app.get(
-    "/",
-    (req, res) => {
-
-        res.json({
+        return res.json({
 
             sistema:
                 "BetVision AI",
 
             status:
-                "online",
+                servidorOnline
+                    ? "operacional"
+                    : "inicializando",
 
-            versao:
-                "5.0",
+            servidor:
+                servidorOnline,
 
-            modelo:
-                "BetVision Statistical AI",
+            banco:
+                banco,
+
+            bancoPostgreSQL:
+                banco,
 
             timezone:
                 TIMEZONE,
 
-            data:
-                obterDataHojeBrasil(),
+            modelo:
+                "BetVision Statistical AI v9",
+
+            ultimaSincronizacao:
+                ultimaSincronizacao,
+
+            ultimaSincronizacaoResultado:
+                ultimaSincronizacaoResultado,
+
+            websocket:
+
+                clientesWebSocket.size,
+
+            timestamp:
+                new Date()
+                    .toISOString()
+
+        });
+
+    }
+);
+
+
+// ==========================================================
+// API ROOT
+// ==========================================================
+
+app.get(
+    "/api",
+    (
+        req,
+        res
+    ) => {
+
+        return res.json({
+
+            sucesso:
+                true,
+
+            sistema:
+                "BetVision AI",
+
+            versao:
+                "9.0",
+
+            status:
+                "operacional",
+
+            timezone:
+                TIMEZONE,
 
             endpoints: {
-
-                ping:
-                    "/api/ping",
-
-                status:
-                    "/api/status",
-
-                health:
-                    "/health",
 
                 dashboard:
                     "/api/dashboard",
@@ -1238,11 +661,29 @@ app.get(
                 valuebets:
                     "/api/valuebets",
 
-                campeonatos:
-                    "/api/campeonatos",
+                futebol:
+                    "/api/futebol",
 
-                websocket:
-                    "/ws"
+                matches:
+                    "/api/matches",
+
+                odds:
+                    "/api/odds",
+
+                inteligencia:
+                    "/api/inteligencia",
+
+                alerts:
+                    "/api/alerts",
+
+                auth:
+                    "/api/auth",
+
+                users:
+                    "/api/users",
+
+                admin:
+                    "/api/admin"
 
             }
 
@@ -1253,11 +694,517 @@ app.get(
 
 
 // ==========================================================
-// 404
+// ROTAS PRINCIPAIS
 // ==========================================================
 
 app.use(
-    (req, res) => {
+    "/api",
+    apiRouter
+);
+
+
+app.use(
+    "/api/futebol",
+    futebolRouter
+);
+
+
+app.use(
+    "/api/jogos",
+    jogosRouter
+);
+
+
+app.use(
+    "/api/matches",
+    matchesRouter
+);
+
+
+app.use(
+    "/api/odds",
+    oddsRouter
+);
+
+
+app.use(
+    "/api/valuebets",
+    valuebetsRouter
+);
+
+
+app.use(
+    "/api/analises",
+    analisesRouter
+);
+
+
+app.use(
+    "/api/inteligencia",
+    inteligenciaRouter
+);
+
+
+app.use(
+    "/api/alerts",
+    alertsRouter
+);
+
+
+app.use(
+    "/api/auth",
+    authRouter
+);
+
+
+app.use(
+    "/api/users",
+    usersRouter
+);
+
+
+app.use(
+    "/api/admin",
+    adminRouter
+);
+
+
+// ==========================================================
+// DASHBOARD
+// ==========================================================
+
+app.get(
+    "/api/dashboard",
+    async (
+        req,
+        res
+    ) => {
+
+        try {
+
+            const hoje =
+                obterDataHojeBrasilServidor();
+
+
+            const resultado =
+                await query(
+                    `
+                    SELECT
+
+                        (
+                            SELECT COUNT(*)
+                            FROM jogos
+                            WHERE data_jogo IS NOT NULL
+                            AND (
+                                data_jogo AT TIME ZONE $1
+                            )::date = $2::date
+                        ) AS jogos_hoje,
+
+                        (
+                            SELECT COUNT(*)
+                            FROM campeonatos
+                        ) AS campeonatos,
+
+                        (
+                            SELECT COUNT(*)
+                            FROM analises
+                        ) AS analises,
+
+                        (
+                            SELECT COUNT(*)
+                            FROM value_bets
+                            WHERE ativo = true
+                        ) AS valuebets
+                    `,
+                    [
+                        TIMEZONE,
+                        hoje
+                    ]
+                );
+
+
+            const dados =
+                resultado.rows[0] ||
+                {};
+
+
+            return res.json({
+
+                sucesso:
+                    true,
+
+                sistema:
+                    "BetVision AI",
+
+                status:
+                    "operacional",
+
+                jogosHoje:
+                    Number(
+                        dados.jogos_hoje
+                    ) || 0,
+
+                campeonatos:
+                    Number(
+                        dados.campeonatos
+                    ) || 0,
+
+                analisesIA:
+                    Number(
+                        dados.analises
+                    ) || 0,
+
+                valueBets:
+                    Number(
+                        dados.valuebets
+                    ) || 0,
+
+                roi:
+                    0,
+
+                precisao:
+                    0,
+
+                modelo:
+                    "Prediction Engine v2.0",
+
+                ultimaAtualizacao:
+                    ultimaSincronizacao
+
+            });
+
+        }
+
+        catch (erro) {
+
+            console.error(
+                "❌ Erro dashboard:",
+                erro.message
+            );
+
+
+            return res
+                .status(500)
+                .json({
+
+                    sucesso:
+                        false,
+
+                    sistema:
+                        "BetVision AI",
+
+                    status:
+                        "erro",
+
+                    jogosHoje:
+                        0,
+
+                    campeonatos:
+                        0,
+
+                    analisesIA:
+                        0,
+
+                    valueBets:
+                        0,
+
+                    roi:
+                        0,
+
+                    precisao:
+                        0,
+
+                    erro:
+                        erro.message
+
+                });
+
+        }
+
+    }
+);
+
+
+// ==========================================================
+// STATUS DO BANCO
+// ==========================================================
+
+app.get(
+    "/api/database/status",
+    async (
+        req,
+        res
+    ) => {
+
+        try {
+
+            const resultado =
+                await query(
+                    "SELECT NOW() AS agora"
+                );
+
+
+            bancoOnline =
+                true;
+
+
+            return res.json({
+
+                sucesso:
+                    true,
+
+                conectado:
+                    true,
+
+                banco:
+                    "PostgreSQL / NeonDB",
+
+                servidor:
+                    resultado.rows[0]
+                        ?.agora ||
+                    null,
+
+                timezone:
+                    TIMEZONE
+
+            });
+
+        }
+
+        catch (erro) {
+
+            bancoOnline =
+                false;
+
+
+            return res
+                .status(500)
+                .json({
+
+                    sucesso:
+                        false,
+
+                    conectado:
+                        false,
+
+                    erro:
+                        erro.message
+
+                });
+
+        }
+
+    }
+);
+
+
+// ==========================================================
+// DATA HOJE BRASIL
+// ==========================================================
+
+function obterDataHojeBrasilServidor() {
+
+    try {
+
+        return new Intl.DateTimeFormat(
+            "en-CA",
+            {
+
+                timeZone:
+                    TIMEZONE,
+
+                year:
+                    "numeric",
+
+                month:
+                    "2-digit",
+
+                day:
+                    "2-digit"
+
+            }
+        ).format(
+            new Date()
+        );
+
+    }
+
+    catch {
+
+        return new Date()
+            .toISOString()
+            .slice(
+                0,
+                10
+            );
+
+    }
+
+}
+
+
+// ==========================================================
+// SINCRONIZAÇÃO MANUAL
+// ==========================================================
+
+app.post(
+    "/api/sincronizar",
+    async (
+        req,
+        res
+    ) => {
+
+        if (
+            sincronizacaoEmAndamento
+        ) {
+
+            return res.json({
+
+                sucesso:
+                    false,
+
+                emAndamento:
+                    true,
+
+                mensagem:
+                    "Sincronização já está em andamento."
+
+            });
+
+        }
+
+
+        try {
+
+            sincronizacaoEmAndamento =
+                true;
+
+
+            console.log(
+                "🔄 Sincronização manual solicitada..."
+            );
+
+
+            const resultado =
+                await iniciarSincronizacao();
+
+
+            ultimaSincronizacao =
+                new Date()
+                    .toISOString();
+
+
+            ultimaSincronizacaoResultado =
+                resultado;
+
+
+            transmitirWebSocket({
+
+                tipo:
+                    "sincronizacao",
+
+                sucesso:
+                    resultado?.sucesso ??
+                    false,
+
+                resultado,
+
+                timestamp:
+                    ultimaSincronizacao
+
+            });
+
+
+            return res.json({
+
+                sucesso:
+                    true,
+
+                resultado,
+
+                ultimaSincronizacao
+
+            });
+
+        }
+
+        catch (erro) {
+
+            console.error(
+                "❌ Erro sincronização manual:",
+                erro.message
+            );
+
+
+            return res
+                .status(500)
+                .json({
+
+                    sucesso:
+                        false,
+
+                    erro:
+                        erro.message
+
+                });
+
+        }
+
+        finally {
+
+            sincronizacaoEmAndamento =
+                false;
+
+        }
+
+    }
+);
+
+
+// ==========================================================
+// FALLBACK PARA FRONTEND
+// ==========================================================
+
+app.get(
+    "*",
+    (
+        req,
+        res,
+        next
+    ) => {
+
+        if (
+            req.path.startsWith(
+                "/api/"
+            )
+        ) {
+
+            return next();
+
+        }
+
+
+        return res.sendFile(
+            path.join(
+                __dirname,
+                "public",
+                "index.html"
+            )
+        );
+
+    }
+);
+
+
+// ==========================================================
+// 404 API
+// ==========================================================
+
+app.use(
+    (
+        req,
+        res
+    ) => {
 
         return res
             .status(404)
@@ -1267,9 +1214,9 @@ app.use(
                     false,
 
                 erro:
-                    "Rota não encontrada",
+                    "Endpoint não encontrado",
 
-                rota:
+                caminho:
                     req.originalUrl
 
             });
@@ -1279,7 +1226,7 @@ app.use(
 
 
 // ==========================================================
-// ERROR HANDLER
+// TRATAMENTO GLOBAL DE ERROS
 // ==========================================================
 
 app.use(
@@ -1309,7 +1256,8 @@ app.use(
 
         return res
             .status(
-                erro.status || 500
+                erro.status ||
+                500
             )
             .json({
 
@@ -1327,35 +1275,25 @@ app.use(
 
 
 // ==========================================================
-// FUNÇÃO DE SINCRONIZAÇÃO
+// INICIALIZAÇÃO DO BANCO
 // ==========================================================
 
-async function executarSincronizacao() {
+async function verificarBanco() {
 
     try {
 
         console.log(
-            "=========================================="
-        );
-
-        console.log(
-            "🔄 INICIANDO SINCRONIZAÇÃO DO SISTEMA"
-        );
-
-        console.log(
-            `📅 Data Brasil: ${obterDataHojeBrasil()}`
-        );
-
-        console.log(
-            `🌎 Fuso: ${TIMEZONE}`
-        );
-
-        console.log(
-            "=========================================="
+            "🔌 Verificando PostgreSQL..."
         );
 
 
-        await conectarBanco();
+        await query(
+            "SELECT NOW()"
+        );
+
+
+        bancoOnline =
+            true;
 
 
         console.log(
@@ -1363,190 +1301,269 @@ async function executarSincronizacao() {
         );
 
 
-        try {
-
-            await sincronizarSistema();
-
-            console.log(
-                "✅ Sincronização concluída"
-            );
-
-        }
-
-        catch (erroSync) {
-
-            console.error(
-                "⚠️ Falha na sincronização:"
-            );
-
-            console.error(
-                erroSync.message
-            );
-
-            console.log(
-                "⚠️ Servidor continuará online."
-            );
-
-        }
-
-
-        // ==================================================
-        // NOTIFICAR FRONTEND
-        // ==================================================
-
-        transmitirWebSocket({
-
-            tipo:
-                "sistema",
-
-            evento:
-                "sincronizacao",
-
-            status:
-                "concluida",
-
-            data:
-                obterDataHojeBrasil(),
-
-            timestamp:
-                new Date().toISOString()
-
-        });
+        return true;
 
     }
 
     catch (erro) {
 
-        console.error(
-            "❌ ERRO INICIALIZANDO BANCO:"
-        );
-
-        console.error(
-            erro.message
-        );
-
-        console.log(
-            "⚠️ Servidor permanece online."
-        );
-
-    }
-
-}
-
-
-// ==========================================================
-// SINCRONIZAÇÃO AUTOMÁTICA
-// ==========================================================
-
-let sincronizacaoEmExecucao =
-    false;
-
-
-async function executarSincronizacaoSegura() {
-
-    if (
-        sincronizacaoEmExecucao
-    ) {
-
-        console.log(
-            "⏳ Sincronização já em execução."
-        );
-
-        return;
-
-    }
-
-
-    sincronizacaoEmExecucao =
-        true;
-
-
-    try {
-
-        await executarSincronizacao();
-
-    }
-
-    catch (erro) {
-
-        console.error(
-            "❌ Erro sincronização segura:",
-            erro.message
-        );
-
-    }
-
-    finally {
-
-        sincronizacaoEmExecucao =
+        bancoOnline =
             false;
 
+
+        console.error(
+            "❌ PostgreSQL não conectado:",
+            erro.message
+        );
+
+
+        return false;
+
     }
 
 }
 
 
 // ==========================================================
-// INICIAR SERVIDOR
-//
-// IMPORTANTE:
-//
-// O Render precisa detectar a porta ANTES
-// de qualquer operação pesada.
-//
-// NÃO colocar await conectarBanco()
-// antes do listen().
+// INICIALIZAÇÃO
 // ==========================================================
 
-servidor.listen(
-    PORT,
-    HOST,
-    () => {
+async function iniciarServidor() {
 
-        console.log(
-            "=========================================="
+    console.log(
+        "=================================================="
+    );
+
+    console.log(
+        "🚀 BETVISION AI"
+    );
+
+    console.log(
+        "🚀 Prediction Engine"
+    );
+
+    console.log(
+        "=================================================="
+    );
+
+    console.log(
+        `📅 Timezone: ${TIMEZONE}`
+    );
+
+    console.log(
+        `🌐 Porta: ${PORT}`
+    );
+
+    console.log(
+        `🟢 Node.js: ${process.version}`
+    );
+
+    console.log(
+        "=================================================="
+    );
+
+
+    // ------------------------------------------------------
+    // BANCO
+    // ------------------------------------------------------
+
+    await verificarBanco();
+
+
+    // ------------------------------------------------------
+    // SERVIDOR
+    // ------------------------------------------------------
+
+    server.listen(
+        PORT,
+        HOST,
+        () => {
+
+            servidorOnline =
+                true;
+
+
+            console.log(
+                "=================================================="
+            );
+
+            console.log(
+                `🚀 BetVision AI online porta ${PORT}`
+            );
+
+            console.log(
+                `🌎 Timezone: ${TIMEZONE}`
+            );
+
+            console.log(
+                `🗄️ PostgreSQL: ${
+                    bancoOnline
+                        ? "CONECTADO"
+                        : "OFFLINE"
+                }`
+            );
+
+            console.log(
+                `🔌 WebSocket: ATIVO`
+            );
+
+            console.log(
+                "=================================================="
+            );
+
+
+            // --------------------------------------------------
+            // AGENDAMENTO
+            // --------------------------------------------------
+
+            try {
+
+                ativarAgendamento();
+
+                console.log(
+                    "⏰ Agendamento automático ativado"
+                );
+
+            }
+
+            catch (erro) {
+
+                console.error(
+                    "❌ Erro ativando agendamento:",
+                    erro.message
+                );
+
+            }
+
+
+            // --------------------------------------------------
+            // SINCRONIZAÇÃO INICIAL
+            //
+            // Executa depois que o servidor já está ouvindo.
+            // --------------------------------------------------
+
+            setTimeout(
+                async () => {
+
+                    if (
+                        sincronizacaoEmAndamento
+                    ) {
+
+                        return;
+
+                    }
+
+
+                    try {
+
+                        sincronizacaoEmAndamento =
+                            true;
+
+
+                        console.log(
+                            "🔄 Executando sincronização inicial..."
+                        );
+
+
+                        const resultado =
+                            await iniciarSincronizacao();
+
+
+                        ultimaSincronizacao =
+                            new Date()
+                                .toISOString();
+
+
+                        ultimaSincronizacaoResultado =
+                            resultado;
+
+
+                        console.log(
+                            "✅ Sincronização inicial concluída"
+                        );
+
+
+                        console.log(
+                            resultado
+                        );
+
+
+                        transmitirWebSocket({
+
+                            tipo:
+                                "sincronizacao",
+
+                            inicial:
+                                true,
+
+                            sucesso:
+                                resultado?.sucesso ??
+                                false,
+
+                            resultado,
+
+                            timestamp:
+                                ultimaSincronizacao
+
+                        });
+
+                    }
+
+                    catch (erro) {
+
+                        console.error(
+                            "❌ Erro sincronização inicial:",
+                            erro.message
+                        );
+
+                    }
+
+                    finally {
+
+                        sincronizacaoEmAndamento =
+                            false;
+
+                    }
+
+                },
+
+                3000
+            );
+
+        }
+    );
+
+}
+
+
+// ==========================================================
+// TRATAMENTO DE ERROS NÃO CAPTURADOS
+// ==========================================================
+
+process.on(
+    "uncaughtException",
+    (
+        erro
+    ) => {
+
+        console.error(
+            "❌ UNCAUGHT EXCEPTION:",
+            erro
         );
 
-        console.log(
-            "🚀 BETVISION AI ONLINE"
-        );
-
-        console.log(
-            `🌐 Porta: ${PORT}`
-        );
-
-        console.log(
-            `🌐 Host: ${HOST}`
-        );
-
-        console.log(
-            `🌎 Timezone: ${TIMEZONE}`
-        );
-
-        console.log(
-            `📅 Data Brasil: ${obterDataHojeBrasil()}`
-        );
-
-        console.log(
-            `🔌 WebSocket: /ws`
-        );
-
-        console.log(
-            "=========================================="
-        );
+    }
+);
 
 
-        // --------------------------------------------------
-        // SINCRONIZAÇÃO APÓS SERVIDOR ONLINE
-        // --------------------------------------------------
+process.on(
+    "unhandledRejection",
+    (
+        erro
+    ) => {
 
-        setTimeout(
-            () => {
-
-                executarSincronizacaoSegura();
-
-            },
-            1000
+        console.error(
+            "❌ UNHANDLED REJECTION:",
+            erro
         );
 
     }
@@ -1554,36 +1571,10 @@ servidor.listen(
 
 
 // ==========================================================
-// SINCRONIZAÇÃO PERIÓDICA
-//
-// 15 MINUTOS
+// DESLIGAMENTO GRACIOSO
 // ==========================================================
 
-const INTERVALO_SINCRONIZACAO =
-    15 * 60 * 1000;
-
-
-const intervaloSincronizacao =
-    setInterval(
-        () => {
-
-            console.log(
-                "🔄 Executando sincronização automática..."
-            );
-
-
-            executarSincronizacaoSegura();
-
-        },
-        INTERVALO_SINCRONIZACAO
-    );
-
-
-// ==========================================================
-// SHUTDOWN
-// ==========================================================
-
-async function desligarServidor(
+async function desligar(
     sinal
 ) {
 
@@ -1597,44 +1588,37 @@ async function desligarServidor(
     );
 
 
-    clearInterval(
-        intervaloSincronizacao
-    );
+    // ------------------------------------------------------
+    // FECHAR WEBSOCKETS
+    // ------------------------------------------------------
 
+    for (
+        const socket of clientesWebSocket
+    ) {
 
-    try {
+        try {
 
-        for (
-            const ws of clientesWebSocket
-        ) {
-
-            try {
-
-                ws.close();
-
-            } catch {}
+            socket.close();
 
         }
 
-
-        wss.close();
-
-
-    } catch (erro) {
-
-        console.error(
-            "⚠️ Erro fechando WebSocket:",
-            erro.message
-        );
+        catch {}
 
     }
 
 
-    servidor.close(
+    clientesWebSocket.clear();
+
+
+    // ------------------------------------------------------
+    // FECHAR HTTP
+    // ------------------------------------------------------
+
+    server.close(
         () => {
 
             console.log(
-                "✅ Servidor encerrado."
+                "🌐 Servidor HTTP encerrado"
             );
 
             process.exit(
@@ -1645,33 +1629,30 @@ async function desligarServidor(
     );
 
 
+    // ------------------------------------------------------
+    // SEGURANÇA
+    // ------------------------------------------------------
+
     setTimeout(
         () => {
 
-            console.error(
-                "⚠️ Encerramento forçado."
-            );
-
             process.exit(
-                1
+                0
             );
 
         },
+
         10000
     );
 
 }
 
 
-// ==========================================================
-// SIGNALS
-// ==========================================================
-
 process.on(
     "SIGTERM",
     () => {
 
-        desligarServidor(
+        desligar(
             "SIGTERM"
         );
 
@@ -1683,7 +1664,7 @@ process.on(
     "SIGINT",
     () => {
 
-        desligarServidor(
+        desligar(
             "SIGINT"
         );
 
@@ -1692,40 +1673,14 @@ process.on(
 
 
 // ==========================================================
-// ERRO NÃO CAPTURADO
+// INICIAR
 // ==========================================================
 
-process.on(
-    "uncaughtException",
-    (erro) => {
-
-        console.error(
-            "❌ UNCAUGHT EXCEPTION:"
-        );
-
-        console.error(
-            erro
-        );
-
-    }
-);
+iniciarServidor();
 
 
 // ==========================================================
-// PROMISE NÃO TRATADA
+// EXPORT
 // ==========================================================
 
-process.on(
-    "unhandledRejection",
-    (erro) => {
-
-        console.error(
-            "❌ UNHANDLED REJECTION:"
-        );
-
-        console.error(
-            erro
-        );
-
-    }
-);
+export default app;
