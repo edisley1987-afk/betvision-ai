@@ -4,14 +4,14 @@
 //
 // SERVIDOR PRINCIPAL
 //
-// VERSÃO 9.0
+// VERSÃO 9.1
 //
 // PostgreSQL / NeonDB
 // Express
 // WebSocket
 // Render
 //
-// CORREÇÕES:
+// CORREÇÕES V9.1:
 //
 // - CORRIGE IMPORTAÇÃO sincronizarSistema
 // - USA iniciarSincronizacao()
@@ -21,6 +21,14 @@
 // - PROTEÇÃO CONTRA ERROS DE INICIALIZAÇÃO
 // - COMPATÍVEL COM NODE.JS 20+
 // - COMPATÍVEL COM NODE.JS 26
+//
+// COMPATIBILIDADE FRONTEND v7.2:
+//
+// - /api/valuebets
+// - /api/value-bets
+// - /api/campeonatos
+// - /api/ping
+//
 // ==========================================================
 
 import "dotenv/config";
@@ -49,19 +57,6 @@ import {
 
 // ==========================================================
 // SINCRONIZAÇÃO
-//
-// IMPORTANTE:
-//
-// O sincronizacaoService.js NÃO exporta
-// sincronizarSistema.
-//
-// Ele exporta:
-//
-// - iniciarSincronizacao
-// - sincronizarTudo
-// - ativarAgendamento
-//
-// Portanto usamos iniciarSincronizacao.
 // ==========================================================
 
 import {
@@ -350,10 +345,27 @@ function transmitirWebSocket(
     dados
 ) {
 
-    const mensagem =
-        JSON.stringify(
-            dados
+    let mensagem;
+
+    try {
+
+        mensagem =
+            JSON.stringify(
+                dados
+            );
+
+    }
+
+    catch (erro) {
+
+        console.error(
+            "❌ Erro serializando WebSocket:",
+            erro.message
         );
+
+        return;
+
+    }
 
 
     for (
@@ -398,9 +410,9 @@ app.set(
 );
 
 
-// ----------------------------------------------------------
+// ==========================================================
 // HELMET
-// ----------------------------------------------------------
+// ==========================================================
 
 app.use(
 
@@ -417,9 +429,9 @@ app.use(
 );
 
 
-// ----------------------------------------------------------
+// ==========================================================
 // CORS
-// ----------------------------------------------------------
+// ==========================================================
 
 app.use(
 
@@ -436,18 +448,18 @@ app.use(
 );
 
 
-// ----------------------------------------------------------
+// ==========================================================
 // COMPRESSION
-// ----------------------------------------------------------
+// ==========================================================
 
 app.use(
     compression()
 );
 
 
-// ----------------------------------------------------------
+// ==========================================================
 // JSON
-// ----------------------------------------------------------
+// ==========================================================
 
 app.use(
     express.json({
@@ -469,9 +481,9 @@ app.use(
 );
 
 
-// ----------------------------------------------------------
+// ==========================================================
 // LOG
-// ----------------------------------------------------------
+// ==========================================================
 
 app.use(
     morgan("dev")
@@ -493,6 +505,53 @@ app.use(
 
     )
 
+);
+
+
+// ==========================================================
+// PING
+//
+// FRONTEND v7.2 USA:
+//
+// GET /api/ping
+//
+// Antes retornava 404.
+// ==========================================================
+
+app.get(
+    "/api/ping",
+    (
+        req,
+        res
+    ) => {
+
+        return res.json({
+
+            sucesso:
+                true,
+
+            sistema:
+                "BetVision AI",
+
+            status:
+                "online",
+
+            servidor:
+                servidorOnline,
+
+            banco:
+                bancoOnline,
+
+            timezone:
+                TIMEZONE,
+
+            timestamp:
+                new Date()
+                    .toISOString()
+
+        });
+
+    }
 );
 
 
@@ -597,7 +656,7 @@ app.get(
                 TIMEZONE,
 
             modelo:
-                "BetVision Statistical AI v9",
+                "BetVision Statistical AI v9.1",
 
             ultimaSincronizacao:
                 ultimaSincronizacao,
@@ -606,7 +665,6 @@ app.get(
                 ultimaSincronizacaoResultado,
 
             websocket:
-
                 clientesWebSocket.size,
 
             timestamp:
@@ -639,7 +697,7 @@ app.get(
                 "BetVision AI",
 
             versao:
-                "9.0",
+                "9.1",
 
             status:
                 "operacional",
@@ -649,17 +707,26 @@ app.get(
 
             endpoints: {
 
+                ping:
+                    "/api/ping",
+
                 dashboard:
                     "/api/dashboard",
 
                 jogos:
                     "/api/jogos",
 
+                campeonatos:
+                    "/api/campeonatos",
+
                 analises:
                     "/api/analises",
 
                 valuebets:
                     "/api/valuebets",
+
+                valueBetsCompatibilidade:
+                    "/api/value-bets",
 
                 futebol:
                     "/api/futebol",
@@ -727,6 +794,18 @@ app.use(
 );
 
 
+// ==========================================================
+// VALUE BETS
+//
+// ROTA PRINCIPAL:
+//
+// /api/valuebets
+//
+// ROTA COMPATÍVEL COM FRONTEND:
+//
+// /api/value-bets
+// ==========================================================
+
 app.use(
     "/api/valuebets",
     valuebetsRouter
@@ -734,10 +813,24 @@ app.use(
 
 
 app.use(
+    "/api/value-bets",
+    valuebetsRouter
+);
+
+
+// ==========================================================
+// ANÁLISES
+// ==========================================================
+
+app.use(
     "/api/analises",
     analisesRouter
 );
 
+
+// ==========================================================
+// INTELIGÊNCIA
+// ==========================================================
 
 app.use(
     "/api/inteligencia",
@@ -745,11 +838,19 @@ app.use(
 );
 
 
+// ==========================================================
+// ALERTAS
+// ==========================================================
+
 app.use(
     "/api/alerts",
     alertsRouter
 );
 
+
+// ==========================================================
+// AUTH
+// ==========================================================
 
 app.use(
     "/api/auth",
@@ -757,15 +858,111 @@ app.use(
 );
 
 
+// ==========================================================
+// USERS
+// ==========================================================
+
 app.use(
     "/api/users",
     usersRouter
 );
 
 
+// ==========================================================
+// ADMIN
+// ==========================================================
+
 app.use(
     "/api/admin",
     adminRouter
+);
+
+
+// ==========================================================
+// CAMPEONATOS
+//
+// FRONTEND v7.2:
+//
+// GET /api/campeonatos
+//
+// ==========================================================
+
+app.get(
+    "/api/campeonatos",
+    async (
+        req,
+        res
+    ) => {
+
+        try {
+
+            const resultado =
+                await query(
+                    `
+                    SELECT
+                        *
+                    FROM campeonatos
+                    ORDER BY
+                        nome ASC NULLS LAST
+                    `
+                );
+
+
+            const campeonatos =
+                resultado.rows || [];
+
+
+            return res.json({
+
+                sucesso:
+                    true,
+
+                total:
+                    campeonatos.length,
+
+                campeonatos:
+
+                    campeonatos,
+
+                data:
+                    campeonatos
+
+            });
+
+        }
+
+        catch (erro) {
+
+            console.error(
+                "❌ Erro /api/campeonatos:",
+                erro.message
+            );
+
+
+            return res
+                .status(500)
+                .json({
+
+                    sucesso:
+                        false,
+
+                    total:
+                        0,
+
+                    campeonatos:
+                        [],
+
+                    data:
+                        [],
+
+                    erro:
+                        erro.message
+
+                });
+
+        }
+
+    }
 );
 
 
@@ -869,7 +1066,13 @@ app.get(
                     "Prediction Engine v2.0",
 
                 ultimaAtualizacao:
-                    ultimaSincronizacao
+                    ultimaSincronizacao,
+
+                timezone:
+                    TIMEZONE,
+
+                data:
+                    hoje
 
             });
 
@@ -1162,7 +1365,7 @@ app.post(
 
 
 // ==========================================================
-// FALLBACK PARA FRONTEND
+// FALLBACK FRONTEND
 // ==========================================================
 
 app.get(
@@ -1404,11 +1607,44 @@ async function iniciarServidor() {
             );
 
             console.log(
-                `🔌 WebSocket: ATIVO`
+                "🔌 WebSocket: ATIVO"
             );
 
             console.log(
                 "=================================================="
+            );
+
+
+            // --------------------------------------------------
+            // ROTAS DE COMPATIBILIDADE
+            // --------------------------------------------------
+
+            console.log(
+                "🌐 Rotas compatíveis frontend v7.2:"
+            );
+
+            console.log(
+                "   ✅ GET /api/ping"
+            );
+
+            console.log(
+                "   ✅ GET /api/campeonatos"
+            );
+
+            console.log(
+                "   ✅ GET /api/valuebets"
+            );
+
+            console.log(
+                "   ✅ GET /api/value-bets"
+            );
+
+            console.log(
+                "   ✅ GET /api/jogos"
+            );
+
+            console.log(
+                "   ✅ GET /api/analises"
             );
 
 
@@ -1438,8 +1674,6 @@ async function iniciarServidor() {
 
             // --------------------------------------------------
             // SINCRONIZAÇÃO INICIAL
-            //
-            // Executa depois que o servidor já está ouvindo.
             // --------------------------------------------------
 
             setTimeout(
@@ -1537,7 +1771,7 @@ async function iniciarServidor() {
 
 
 // ==========================================================
-// TRATAMENTO DE ERROS NÃO CAPTURADOS
+// ERROS NÃO CAPTURADOS
 // ==========================================================
 
 process.on(
