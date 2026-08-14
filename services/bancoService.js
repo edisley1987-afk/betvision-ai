@@ -2,30 +2,22 @@
 // BETVISION AI
 // services/bancoService.js
 //
-// VERSÃO 9.0
+// VERSÃO 10.0
 //
 // PostgreSQL / NeonDB
 //
-// RESPONSABILIDADES:
-// - Campeonatos
-// - Times
-// - Jogos
-// - Histórico
-// - H2H
-// - Análises
-// - Value Bets
-// - Dashboard
-//
-// REGRAS:
-// - Jogos disponíveis = HOJE + AMANHÃ
-// - Análises exibidas = SOMENTE HOJE
-// - Histórico permanece no banco
-// - IA pode consultar histórico
-// - api_id = INTEGER
+// CORREÇÃO PRINCIPAL:
+// - Compatível com a tabela ANALISES atual
+// - NÃO usa colunas inexistentes em analises
+// - Data do jogo vem da tabela JOGOS
+// - Análises de hoje são relacionadas pelo nome do jogo
+// - Histórico continua funcionando
+// - H2H continua funcionando
+// - Jogos = HOJE + AMANHÃ
+// - Análises = SOMENTE HOJE
+// - Timezone = America/Sao_Paulo
 // - Não cria jogos fictícios
 // - Não cria resultados fictícios
-// - Proteção contra análise duplicada
-// - Timezone = America/Sao_Paulo
 // ==================================================
 
 import {
@@ -388,6 +380,9 @@ export async function listarJogosHoje() {
 
     try {
 
+        const hoje =
+            obterDataHojeBrasil();
+
         const resultado =
             await query(
                 `
@@ -404,9 +399,13 @@ export async function listarJogosHoje() {
                 `,
                 [
                     TIMEZONE,
-                    obterDataHojeBrasil()
+                    hoje
                 ]
             );
+
+        console.log(
+            `⚽ ${resultado.rows.length} jogos encontrados para hoje`
+        );
 
         return resultado.rows;
 
@@ -430,6 +429,9 @@ export async function listarJogosAmanha() {
 
     try {
 
+        const amanha =
+            obterDataAmanhaBrasil();
+
         const resultado =
             await query(
                 `
@@ -446,9 +448,13 @@ export async function listarJogosAmanha() {
                 `,
                 [
                     TIMEZONE,
-                    obterDataAmanhaBrasil()
+                    amanha
                 ]
             );
+
+        console.log(
+            `⚽ ${resultado.rows.length} jogos encontrados para amanhã`
+        );
 
         return resultado.rows;
 
@@ -609,14 +615,6 @@ export async function buscarJogoPorApiId(
 
 // ==================================================
 // HISTÓRICO REAL DE UM TIME
-//
-// IMPORTANTE:
-// Somente jogos que possuem:
-// - gols_casa
-// - gols_fora
-//
-// Jogos sem placar não são considerados.
-// Nenhum resultado é inventado.
 // ==================================================
 
 export async function buscarHistoricoTime(
@@ -806,96 +804,11 @@ export async function buscarH2H(
 
 
 // ==================================================
-// BUSCAR ANÁLISE POR API ID
-// ==================================================
-
-export async function buscarAnalisePorApiId(
-    api_id
-) {
-
-    const apiId =
-        normalizarApiId(api_id);
-
-    if (!apiId) {
-        return null;
-    }
-
-    try {
-
-        const resultado =
-            await query(
-                `
-                SELECT *
-                FROM analises
-
-                WHERE api_id = $1::integer
-
-                ORDER BY
-                    id DESC
-
-                LIMIT 1
-                `,
-                [apiId]
-            );
-
-        return resultado.rows[0] || null;
-
-    } catch (erro) {
-
-        console.error(
-            "❌ Erro buscar análise API:",
-            erro.message
-        );
-
-        return null;
-    }
-}
-
-
-// ==================================================
-// BUSCAR ANÁLISE POR ID INTERNO
-// ==================================================
-
-export async function buscarAnalisePorId(
-    id
-) {
-
-    const analiseId =
-        normalizarId(id);
-
-    if (!analiseId) {
-        return null;
-    }
-
-    try {
-
-        const resultado =
-            await query(
-                `
-                SELECT *
-                FROM analises
-                WHERE id = $1::integer
-                LIMIT 1
-                `,
-                [analiseId]
-            );
-
-        return resultado.rows[0] || null;
-
-    } catch (erro) {
-
-        console.error(
-            "❌ Erro buscar análise por ID:",
-            erro.message
-        );
-
-        return null;
-    }
-}
-
-
-// ==================================================
 // BUSCAR ANÁLISE POR NOME
+//
+// IMPORTANTE:
+// A tabela analises atual NÃO possui api_id.
+// Portanto a identificação é feita pelo nome do jogo.
 // ==================================================
 
 export async function buscarAnalisePorNome(
@@ -940,212 +853,221 @@ export async function buscarAnalisePorNome(
 
 
 // ==================================================
-// SALVAR ANÁLISE
-//
-// Proteção por índice UNIQUE api_id.
+// BUSCAR ANÁLISE POR ID
 // ==================================================
 
-export async function salvarAnalise(
-    analise
+export async function buscarAnalisePorId(
+    id
 ) {
 
-    if (
-        !analise ||
-        typeof analise !== "object"
-    ) {
+    const analiseId =
+        normalizarId(id);
 
-        throw new Error(
-            "Dados da análise inválidos"
-        );
+    if (!analiseId) {
+        return null;
     }
-
-    const {
-
-        api_id,
-        jogo,
-
-        probabilidade_casa,
-        probabilidade_empate,
-        probabilidade_fora,
-
-        gols_esperados,
-        placar_previsto,
-
-        value_bet,
-        confianca,
-        algoritmo
-
-    } = analise;
-
-    const apiId =
-        normalizarApiId(api_id);
-
-
-    // ==================================================
-    // ANÁLISE SEM API ID
-    // ==================================================
-
-    if (apiId === null) {
-
-        const resultado =
-            await query(
-                `
-                INSERT INTO analises
-                (
-                    jogo,
-                    probabilidade_casa,
-                    probabilidade_empate,
-                    probabilidade_fora,
-                    gols_esperados,
-                    placar_previsto,
-                    value_bet,
-                    confianca,
-                    algoritmo
-                )
-
-                VALUES
-                (
-                    $1::text,
-                    $2::numeric,
-                    $3::numeric,
-                    $4::numeric,
-                    $5::numeric,
-                    $6::text,
-                    COALESCE($7::boolean, false),
-                    $8::text,
-                    $9::text
-                )
-
-                RETURNING *
-                `,
-                [
-                    jogo ?? null,
-                    probabilidade_casa ?? null,
-                    probabilidade_empate ?? null,
-                    probabilidade_fora ?? null,
-                    gols_esperados ?? null,
-                    placar_previsto ?? null,
-                    value_bet ?? false,
-                    confianca ?? null,
-                    algoritmo ??
-                        "BetVision Statistical AI v9"
-                ]
-            );
-
-        return resultado.rows[0] || null;
-    }
-
-
-    // ==================================================
-    // VERIFICAR EXISTENTE
-    // ==================================================
-
-    const existente =
-        await buscarAnalisePorApiId(apiId);
-
-    if (existente) {
-
-        console.log(
-            `♻️ Análise já existe para API ${apiId} - ID ${existente.id}`
-        );
-
-        return existente;
-    }
-
-
-    // ==================================================
-    // INSERÇÃO PROTEGIDA
-    // ==================================================
 
     try {
 
         const resultado =
             await query(
                 `
-                INSERT INTO analises
-                (
-                    jogo,
-                    probabilidade_casa,
-                    probabilidade_empate,
-                    probabilidade_fora,
-                    gols_esperados,
-                    placar_previsto,
-                    value_bet,
-                    confianca,
-                    algoritmo,
-                    api_id
-                )
+                SELECT
+                    a.*,
 
-                VALUES
-                (
-                    $1::text,
-                    $2::numeric,
-                    $3::numeric,
-                    $4::numeric,
-                    $5::numeric,
-                    $6::text,
-                    COALESCE($7::boolean, false),
-                    $8::text,
-                    $9::text,
-                    $10::integer
-                )
+                    j.id AS jogo_id,
+                    j.api_id AS jogo_api_id,
 
-                ON CONFLICT (api_id)
-                WHERE api_id IS NOT NULL
-                DO NOTHING
+                    j.data_jogo,
+                    j.campeonato,
+                    j.time_casa,
+                    j.time_fora,
+                    j.estadio,
+                    j.status,
 
-                RETURNING *
+                    j.gols_casa,
+                    j.gols_fora
+
+                FROM analises a
+
+                LEFT JOIN jogos j
+
+                    ON LOWER(TRIM(a.jogo))
+                    =
+                    LOWER(
+                        TRIM(
+                            COALESCE(j.time_casa, '')
+                            || ' x ' ||
+                            COALESCE(j.time_fora, '')
+                        )
+                    )
+
+                WHERE a.id = $1::integer
+
+                LIMIT 1
                 `,
-                [
-                    jogo ?? null,
-                    probabilidade_casa ?? null,
-                    probabilidade_empate ?? null,
-                    probabilidade_fora ?? null,
-                    gols_esperados ?? null,
-                    placar_previsto ?? null,
-                    value_bet ?? false,
-                    confianca ?? null,
-                    algoritmo ??
-                        "BetVision Statistical AI v9",
-                    apiId
-                ]
+                [analiseId]
             );
 
-        if (resultado.rows[0]) {
-
-            console.log(
-                `💾 Análise salva API ${apiId} - ID ${resultado.rows[0].id}`
-            );
-
-            return resultado.rows[0];
-        }
-
-
-        const recuperada =
-            await buscarAnalisePorApiId(apiId);
-
-        if (recuperada) {
-            return recuperada;
-        }
-
-        throw new Error(
-            `Não foi possível salvar análise API ${apiId}`
-        );
+        return resultado.rows[0] || null;
 
     } catch (erro) {
 
         console.error(
-            `❌ Erro salvando análise API ${apiId}:`,
+            "❌ Erro buscar análise por ID:",
             erro.message
         );
 
-        throw erro;
+        return null;
     }
 }
 
 
 // ==================================================
-// LISTAR TODAS
+// BUSCAR ANÁLISES DE HOJE
+//
+// CORREÇÃO CRÍTICA:
+//
+// NÃO usa:
+//     a.api_id
+//
+// porque essa coluna NÃO existe na tabela analises.
+//
+// A relação é feita por:
+//
+//     analises.jogo
+//
+// com:
+//
+//     jogos.time_casa + " x " + jogos.time_fora
+// ==================================================
+
+export async function listarAnalisesHoje() {
+
+    try {
+
+        const hoje =
+            obterDataHojeBrasil();
+
+        console.log(
+            "=========================================="
+        );
+
+        console.log(
+            "🤖 BUSCANDO ANÁLISES NO BANCO"
+        );
+
+        console.log(
+            `📅 Data Brasil: ${hoje}`
+        );
+
+        console.log(
+            `🌎 Fuso: ${TIMEZONE}`
+        );
+
+        const resultado =
+            await query(
+                `
+                SELECT
+
+                    a.id AS analise_id,
+
+                    a.jogo,
+
+                    a.probabilidade_casa,
+                    a.probabilidade_empate,
+                    a.probabilidade_fora,
+
+                    a.gols_esperados,
+                    a.placar_previsto,
+
+                    a.value_bet,
+
+                    j.id AS jogo_id,
+                    j.api_id AS jogo_api_id,
+
+                    j.data_jogo,
+
+                    j.campeonato,
+
+                    j.time_casa,
+                    j.time_fora,
+
+                    j.estadio,
+                    j.status,
+
+                    j.gols_casa,
+                    j.gols_fora
+
+                FROM analises a
+
+                INNER JOIN jogos j
+
+                    ON LOWER(TRIM(a.jogo))
+                    =
+                    LOWER(
+                        TRIM(
+                            COALESCE(j.time_casa, '')
+                            || ' x ' ||
+                            COALESCE(j.time_fora, '')
+                        )
+                    )
+
+                WHERE
+
+                    j.data_jogo IS NOT NULL
+
+                    AND (
+                        j.data_jogo AT TIME ZONE $1
+                    )::date = $2::date
+
+                ORDER BY
+
+                    j.data_jogo ASC,
+                    a.id DESC
+                `,
+                [
+                    TIMEZONE,
+                    hoje
+                ]
+            );
+
+        console.log(
+            `🤖 ${resultado.rows.length} análises encontradas para hoje`
+        );
+
+        for (
+            const linha of resultado.rows
+        ) {
+
+            console.log(
+                `⚽ ${linha.time_casa} x ${linha.time_fora} | ` +
+                `API ${linha.jogo_api_id} | ` +
+                `Data ${linha.data_jogo}`
+            );
+
+        }
+
+        console.log(
+            "=========================================="
+        );
+
+        return resultado.rows;
+
+    } catch (erro) {
+
+        console.error(
+            "❌ Erro análises hoje:",
+            erro.message
+        );
+
+        return [];
+    }
+}
+
+
+// ==================================================
+// LISTAR TODAS AS ANÁLISES
 // ==================================================
 
 export async function listarAnalises() {
@@ -1174,67 +1096,296 @@ export async function listarAnalises() {
 
 
 // ==================================================
-// LISTAR ANÁLISES DE HOJE
+// SALVAR ANÁLISE
+//
+// COMPATÍVEL COM A TABELA ANALISES ATUAL:
+//
+// id
+// jogo
+// probabilidade_casa
+// probabilidade_empate
+// probabilidade_fora
+// gols_esperados
+// placar_previsto
+// value_bet
+//
+// NÃO usa:
+// api_id
+// jogo_id
+// data_jogo
+// confianca
+// algoritmo
 // ==================================================
 
-export async function listarAnalisesHoje() {
+export async function salvarAnalise(
+    analise
+) {
+
+    if (
+        !analise ||
+        typeof analise !== "object"
+    ) {
+
+        throw new Error(
+            "Dados da análise inválidos"
+        );
+    }
+
+    const {
+
+        jogo,
+
+        probabilidade_casa,
+        probabilidade_empate,
+        probabilidade_fora,
+
+        gols_esperados,
+        placar_previsto,
+
+        value_bet
+
+    } = analise;
+
+
+    // ==================================================
+    // VALIDAR JOGO
+    // ==================================================
+
+    if (
+        !jogo ||
+        !String(jogo).trim()
+    ) {
+
+        throw new Error(
+            "Nome do jogo obrigatório"
+        );
+    }
+
+
+    const nomeJogo =
+        String(jogo).trim();
+
+
+    // ==================================================
+    // VERIFICAR ANÁLISE EXISTENTE
+    // ==================================================
+
+    const existente =
+        await buscarAnalisePorNome(
+            nomeJogo
+        );
+
+
+    if (existente) {
+
+        console.log(
+            `♻️ Análise já existe: ${nomeJogo} - ID ${existente.id}`
+        );
+
+        return existente;
+    }
+
+
+    // ==================================================
+    // NORMALIZAR GOLS
+    // ==================================================
+
+    let golsEsperadosBanco =
+        gols_esperados;
+
+
+    // --------------------------------------------------
+    // Se vier objeto:
+    //
+    // {
+    //   casa: 1.5,
+    //   fora: 1.1,
+    //   total: 2.6
+    // }
+    //
+    // a tabela aceita apenas NUMERIC.
+    // --------------------------------------------------
+
+    if (
+        gols_esperados &&
+        typeof gols_esperados === "object"
+    ) {
+
+        if (
+            gols_esperados.total !== undefined &&
+            gols_esperados.total !== null
+        ) {
+
+            golsEsperadosBanco =
+                Number(
+                    gols_esperados.total
+                );
+
+        }
+
+        else {
+
+            const casa =
+                Number(
+                    gols_esperados.casa
+                ) || 0;
+
+            const fora =
+                Number(
+                    gols_esperados.fora
+                ) || 0;
+
+            golsEsperadosBanco =
+                casa + fora;
+        }
+
+    }
+
+
+    // ==================================================
+    // NORMALIZAR VALUE BET
+    // ==================================================
+
+    let valueBetBanco =
+        false;
+
+
+    if (
+        typeof value_bet === "boolean"
+    ) {
+
+        valueBetBanco =
+            value_bet;
+
+    }
+
+    else if (
+        Array.isArray(value_bet)
+    ) {
+
+        valueBetBanco =
+            value_bet.length > 0;
+
+    }
+
+    else if (
+        value_bet &&
+        typeof value_bet === "object"
+    ) {
+
+        valueBetBanco =
+            true;
+
+    }
+
+    else if (
+        typeof value_bet === "string"
+    ) {
+
+        valueBetBanco =
+            (
+                value_bet.toLowerCase()
+                === "true"
+            );
+
+    }
+
+
+    // ==================================================
+    // INSERIR
+    // ==================================================
 
     try {
 
         const resultado =
             await query(
                 `
-                SELECT
+                INSERT INTO analises
+                (
+                    jogo,
+                    probabilidade_casa,
+                    probabilidade_empate,
+                    probabilidade_fora,
+                    gols_esperados,
+                    placar_previsto,
+                    value_bet
+                )
 
-                    a.*,
+                VALUES
+                (
+                    $1::text,
+                    $2::numeric,
+                    $3::numeric,
+                    $4::numeric,
+                    $5::numeric,
+                    $6::text,
+                    $7::boolean
+                )
 
-                    j.id AS jogo_id,
-                    j.api_id AS jogo_api_id,
-
-                    j.data_jogo,
-                    j.campeonato,
-                    j.time_casa,
-                    j.time_fora,
-                    j.estadio,
-                    j.status,
-
-                    j.gols_casa,
-                    j.gols_fora
-
-                FROM analises a
-
-                INNER JOIN jogos j
-                    ON j.api_id = a.api_id
-
-                WHERE
-
-                    j.data_jogo IS NOT NULL
-
-                    AND (
-                        j.data_jogo AT TIME ZONE $1
-                    )::date = $2::date
-
-                ORDER BY
-
-                    j.data_jogo ASC,
-                    a.id DESC
+                RETURNING *
                 `,
                 [
-                    TIMEZONE,
-                    obterDataHojeBrasil()
+                    nomeJogo,
+
+                    probabilidade_casa ??
+                        null,
+
+                    probabilidade_empate ??
+                        null,
+
+                    probabilidade_fora ??
+                        null,
+
+                    Number.isFinite(
+                        Number(
+                            golsEsperadosBanco
+                        )
+                    )
+                        ? Number(
+                            golsEsperadosBanco
+                        )
+                        : null,
+
+                    typeof placar_previsto === "object"
+                        ? JSON.stringify(
+                            placar_previsto
+                        )
+                        : (
+                            placar_previsto ??
+                            null
+                        ),
+
+                    valueBetBanco
                 ]
             );
 
-        return resultado.rows;
+
+        if (
+            resultado.rows[0]
+        ) {
+
+            console.log(
+                `💾 Análise salva: ID ${resultado.rows[0].id}`
+            );
+
+            console.log(
+                `⚽ ${resultado.rows[0].jogo}`
+            );
+
+            return resultado.rows[0];
+        }
+
+
+        return null;
 
     } catch (erro) {
 
         console.error(
-            "❌ Erro análises hoje:",
+            "❌ Erro salvando análise:",
             erro.message
         );
 
-        return [];
+        throw erro;
     }
 }
 
@@ -1252,15 +1403,28 @@ export async function listarAnalisesDisponiveis() {
                 `
                 SELECT
 
-                    a.*,
+                    a.id AS analise_id,
+
+                    a.jogo,
+
+                    a.probabilidade_casa,
+                    a.probabilidade_empate,
+                    a.probabilidade_fora,
+
+                    a.gols_esperados,
+                    a.placar_previsto,
+
+                    a.value_bet,
 
                     j.id AS jogo_id,
                     j.api_id AS jogo_api_id,
 
                     j.data_jogo,
                     j.campeonato,
+
                     j.time_casa,
                     j.time_fora,
+
                     j.estadio,
                     j.status,
 
@@ -1270,7 +1434,16 @@ export async function listarAnalisesDisponiveis() {
                 FROM analises a
 
                 INNER JOIN jogos j
-                    ON j.api_id = a.api_id
+
+                    ON LOWER(TRIM(a.jogo))
+                    =
+                    LOWER(
+                        TRIM(
+                            COALESCE(j.time_casa, '')
+                            || ' x ' ||
+                            COALESCE(j.time_fora, '')
+                        )
+                    )
 
                 WHERE
 
@@ -1302,6 +1475,81 @@ export async function listarAnalisesDisponiveis() {
         );
 
         return [];
+    }
+}
+
+
+// ==================================================
+// BUSCAR ANÁLISE POR API ID
+//
+// A tabela analises NÃO possui api_id.
+//
+// A busca é feita através da tabela jogos.
+// ==================================================
+
+export async function buscarAnalisePorApiId(
+    api_id
+) {
+
+    const apiId =
+        normalizarApiId(api_id);
+
+    if (!apiId) {
+        return null;
+    }
+
+    try {
+
+        const resultado =
+            await query(
+                `
+                SELECT
+
+                    a.*,
+
+                    j.id AS jogo_id,
+                    j.api_id AS jogo_api_id,
+
+                    j.data_jogo,
+                    j.time_casa,
+                    j.time_fora,
+                    j.campeonato,
+                    j.estadio,
+                    j.status
+
+                FROM analises a
+
+                INNER JOIN jogos j
+
+                    ON LOWER(TRIM(a.jogo))
+                    =
+                    LOWER(
+                        TRIM(
+                            COALESCE(j.time_casa, '')
+                            || ' x ' ||
+                            COALESCE(j.time_fora, '')
+                        )
+                    )
+
+                WHERE j.api_id = $1::integer
+
+                ORDER BY a.id DESC
+
+                LIMIT 1
+                `,
+                [apiId]
+            );
+
+        return resultado.rows[0] || null;
+
+    } catch (erro) {
+
+        console.error(
+            "❌ Erro buscar análise API:",
+            erro.message
+        );
+
+        return null;
     }
 }
 
@@ -1536,7 +1784,6 @@ export async function estatisticasBanco() {
                         FROM value_bets
                         WHERE ativo = true
                     ) AS valuebets_ativas
-
                 `,
                 [
                     TIMEZONE,
