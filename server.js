@@ -1,9 +1,20 @@
 // ==================================================
 // BETVISION AI
 // server.js
-// Versão 4.3
-// Servidor Principal
+// Versão 4.4
+//
+// SERVIDOR PRINCIPAL
 // Neon PostgreSQL + Football-Data
+//
+// CORREÇÕES:
+// - Servidor inicia ANTES do PostgreSQL
+// - Servidor inicia ANTES da sincronização
+// - Bind explícito em 0.0.0.0 para Render
+// - Falha do banco não impede o servidor de subir
+// - Falha da sincronização não impede o servidor de subir
+// - Health Check disponível imediatamente
+// - WebSocket preservado
+// - Todas as rotas preservadas
 // ==================================================
 
 import express from "express";
@@ -78,14 +89,48 @@ const app = express();
 const servidor =
     http.createServer(app);
 
+// ==================================================
+// RENDER
+//
+// O Render fornece process.env.PORT.
+// Nunca devemos depender somente de uma porta fixa.
+//
+// 0.0.0.0 permite acesso externo ao serviço.
+// ==================================================
+
 const PORT =
-    process.env.PORT || 3000;
+    Number(process.env.PORT) || 3000;
+
+const HOST =
+    "0.0.0.0";
+
+// ==================================================
+// CAMINHOS
+// ==================================================
 
 const __filename =
     fileURLToPath(import.meta.url);
 
 const __dirname =
     path.dirname(__filename);
+
+// ==================================================
+// ESTADO DO SISTEMA
+// ==================================================
+
+global.sistemaStatus = {
+
+    servidor: false,
+
+    banco: false,
+
+    sincronizacao: false,
+
+    websocket: false,
+
+    iniciadoEm: null
+
+};
 
 // ==================================================
 // MIDDLEWARES
@@ -106,12 +151,15 @@ app.use(
 );
 
 app.use(
-    express.json()
+    express.json({
+        limit: "2mb"
+    })
 );
 
 app.use(
     express.urlencoded({
-        extended: true
+        extended: true,
+        limit: "2mb"
     })
 );
 
@@ -133,52 +181,83 @@ app.use(
 );
 
 // ==================================================
-// CONEXÃO BANCO
+// HEALTH CHECK
+//
+// IMPORTANTE:
+// Esta rota fica registrada ANTES de qualquer
+// inicialização do banco.
+//
+// O Render consegue verificar o servidor mesmo
+// enquanto PostgreSQL ou sincronização inicializam.
 // ==================================================
 
-try {
+app.get(
+    "/health",
+    (req, res) => {
 
-    await conectarBanco();
+        res.status(200)
+            .json({
 
-    console.log(
-        "🟢 PostgreSQL conectado"
-    );
+                status: "ok",
 
-    // ==================================================
-    // SINCRONIZAÇÃO
-    // ==================================================
+                sistema:
+                    "BetVision AI",
 
-    try {
+                servidor:
+                    global.sistemaStatus.servidor
+                        ? "online"
+                        : "iniciando",
 
-        await iniciarSincronizacao();
+                banco:
+                    global.sistemaStatus.banco
+                        ? "online"
+                        : "aguardando",
 
-        ativarAgendamento();
+                sincronizacao:
+                    global.sistemaStatus.sincronizacao
+                        ? "ativa"
+                        : "aguardando",
 
-        console.log(
-            "🟢 Sincronização de campeonatos ativa"
-        );
+                horario:
+                    new Date()
+
+            });
 
     }
+);
 
-    catch (error) {
+// ==================================================
+// API PING
+// ==================================================
 
-        console.error(
-            "🔴 Erro sincronização:",
-            error.message
-        );
+app.get(
+    "/api/ping",
+    (req, res) => {
+
+        res.json({
+
+            sucesso: true,
+
+            status:
+                global.sistemaStatus.servidor
+                    ? "online"
+                    : "iniciando",
+
+            sistema:
+                "BetVision AI",
+
+            banco:
+                global.sistemaStatus.banco
+                    ? "online"
+                    : "aguardando",
+
+            horario:
+                new Date()
+
+        });
 
     }
-
-}
-
-catch (erro) {
-
-    console.error(
-        "🔴 Erro PostgreSQL:",
-        erro.message
-    );
-
-}
+);
 
 // ==================================================
 // ROTAS API
@@ -200,13 +279,8 @@ app.use(
 // Rota oficial:
 // /api/valuebets
 //
-// Alias de compatibilidade:
+// Alias:
 // /api/value-bets
-//
-// O frontend atual está chamando:
-// /api/value-bets
-//
-// Portanto os DOIS caminhos funcionam.
 // ==================================================
 
 app.use(
@@ -242,29 +316,6 @@ app.use(
 );
 
 // ==================================================
-// API PING
-// ==================================================
-
-app.get(
-    "/api/ping",
-    (req, res) => {
-
-        res.json({
-
-            sucesso: true,
-
-            status: "online",
-
-            sistema: "BetVision AI",
-
-            horario: new Date()
-
-        });
-
-    }
-);
-
-// ==================================================
 // DASHBOARD REAL
 // ==================================================
 
@@ -277,8 +328,45 @@ app.get(
 
         try {
 
+            // ------------------------------------------
+            // Verificação rápida
+            // ------------------------------------------
+
+            if (
+                !global.sistemaStatus.banco
+            ) {
+
+                return res.status(503)
+                    .json({
+
+                        sucesso: false,
+
+                        status:
+                            "banco_indisponivel",
+
+                        sistema:
+                            "BetVision AI",
+
+                        mensagem:
+                            "PostgreSQL ainda não está disponível.",
+
+                        banco:
+                            "aguardando",
+
+                        horario:
+                            new Date()
+
+                    });
+
+            }
+
+            // ------------------------------------------
+            // Consulta
+            // ------------------------------------------
+
             const resultado =
                 await query(`
+
                     SELECT
 
                         (
@@ -292,7 +380,8 @@ app.get(
                             WHERE DATE(data_jogo) =
                                 (
                                     CURRENT_TIMESTAMP
-                                    AT TIME ZONE 'America/Sao_Paulo'
+                                    AT TIME ZONE
+                                    'America/Sao_Paulo'
                                 )::date
                         ) AS jogos,
 
@@ -306,10 +395,15 @@ app.get(
                             FROM value_bets
                             WHERE ativo = true
                         ) AS valuebets
+
                 `);
 
             const dados =
-                resultado.rows[0];
+                resultado.rows[0] || {};
+
+            // ------------------------------------------
+            // Resposta
+            // ------------------------------------------
 
             const resposta = {
 
@@ -360,7 +454,7 @@ app.get(
                 `📊 Dashboard: ${tempo} ms`
             );
 
-            res.json(
+            return res.json(
                 resposta
             );
 
@@ -373,7 +467,7 @@ app.get(
                 erro.message
             );
 
-            res.status(500)
+            return res.status(500)
                 .json({
 
                     sucesso: false,
@@ -400,6 +494,9 @@ const wss =
 global.websocketClients =
     new Set();
 
+global.sistemaStatus.websocket =
+    true;
+
 wss.on(
     "connection",
     (socket) => {
@@ -412,21 +509,37 @@ wss.on(
             socket
         );
 
-        socket.send(
-            JSON.stringify({
+        try {
 
-                tipo: "status",
+            socket.send(
+                JSON.stringify({
 
-                sistema:
-                    "BetVision AI",
+                    tipo: "status",
 
-                online: true,
+                    sistema:
+                        "BetVision AI",
 
-                horario:
-                    new Date()
+                    online: true,
 
-            })
-        );
+                    banco:
+                        global.sistemaStatus.banco,
+
+                    horario:
+                        new Date()
+
+                })
+            );
+
+        }
+
+        catch (erro) {
+
+            console.error(
+                "🔴 Erro envio WebSocket:",
+                erro.message
+            );
+
+        }
 
         socket.on(
             "close",
@@ -517,46 +630,36 @@ app.get(
                 "BetVision AI",
 
             servidor:
-                "online",
+                global.sistemaStatus.servidor
+                    ? "online"
+                    : "iniciando",
 
             banco:
-                "PostgreSQL NeonDB",
+                global.sistemaStatus.banco
+                    ? "online"
+                    : "aguardando",
+
+            sincronizacao:
+                global.sistemaStatus.sincronizacao
+                    ? "ativa"
+                    : "aguardando",
 
             websocket:
-                "ativo",
+                global.sistemaStatus.websocket
+                    ? "ativo"
+                    : "inativo",
 
             ambiente:
                 process.env.NODE_ENV ||
                 "development",
 
+            porta:
+                PORT,
+
             horario:
                 new Date()
 
         });
-
-    }
-);
-
-// ==================================================
-// HEALTH CHECK
-// ==================================================
-
-app.get(
-    "/health",
-    (req, res) => {
-
-        res.status(200)
-            .json({
-
-                status: "ok",
-
-                sistema:
-                    "BetVision AI",
-
-                horario:
-                    new Date()
-
-            });
 
     }
 );
@@ -615,11 +718,21 @@ app.use(
     (erro, req, res, next) => {
 
         console.error(
-            "ERRO SERVIDOR:",
+            "🔴 ERRO SERVIDOR:",
             erro
         );
 
-        res.status(500)
+        if (
+            res.headersSent
+        ) {
+
+            return next(
+                erro
+            );
+
+        }
+
+        return res.status(500)
             .json({
 
                 sucesso: false,
@@ -633,14 +746,158 @@ app.use(
 );
 
 // ==================================================
-// INICIAR SERVIDOR
+// FUNÇÃO DE INICIALIZAÇÃO DO BANCO
+//
+// IMPORTANTE:
+// É executada DEPOIS que o servidor já está ouvindo.
 // ==================================================
 
-servidor.listen(
-    PORT,
-    () => {
+async function inicializarBanco() {
 
-        console.log(`
+    console.log(
+        "🔄 Iniciando conexão PostgreSQL..."
+    );
+
+    try {
+
+        await conectarBanco();
+
+        global.sistemaStatus.banco =
+            true;
+
+        console.log(
+            "🟢 PostgreSQL conectado"
+        );
+
+    }
+
+    catch (erro) {
+
+        global.sistemaStatus.banco =
+            false;
+
+        console.error(
+            "🔴 Erro PostgreSQL:",
+            erro.message
+        );
+
+        console.error(
+            "⚠️ Servidor continuará online."
+        );
+
+        console.error(
+            "⚠️ O sistema tentará utilizar o banco novamente quando aplicável."
+        );
+
+    }
+
+}
+
+// ==================================================
+// FUNÇÃO DE INICIALIZAÇÃO DA SINCRONIZAÇÃO
+// ==================================================
+
+async function inicializarSincronizacao() {
+
+    if (
+        !global.sistemaStatus.banco
+    ) {
+
+        console.log(
+            "⚠️ Sincronização aguardando PostgreSQL."
+        );
+
+        return;
+
+    }
+
+    console.log(
+        "🔄 Iniciando sincronização..."
+    );
+
+    try {
+
+        await iniciarSincronizacao();
+
+        global.sistemaStatus.sincronizacao =
+            true;
+
+        console.log(
+            "🟢 Sincronização inicial concluída"
+        );
+
+        try {
+
+            ativarAgendamento();
+
+            console.log(
+                "🟢 Agendamento da sincronização ativo"
+            );
+
+        }
+
+        catch (erro) {
+
+            console.error(
+                "🔴 Erro ao ativar agendamento:",
+                erro.message
+            );
+
+        }
+
+    }
+
+    catch (erro) {
+
+        global.sistemaStatus.sincronizacao =
+            false;
+
+        console.error(
+            "🔴 Erro sincronização:",
+            erro.message
+        );
+
+        console.error(
+            "⚠️ Servidor continuará online."
+        );
+
+    }
+
+}
+
+// ==================================================
+// INICIALIZAÇÃO DO SISTEMA
+//
+// PRIMEIRO:
+// servidor HTTP
+//
+// DEPOIS:
+// PostgreSQL
+//
+// DEPOIS:
+// sincronização
+//
+// Isso evita o timeout do Render.
+// ==================================================
+
+async function iniciarServidor() {
+
+    return new Promise(
+        (resolve, reject) => {
+
+            servidor.listen(
+                PORT,
+                HOST,
+                () => {
+
+                    global.sistemaStatus.servidor =
+                        true;
+
+                    global.sistemaStatus.iniciadoEm =
+                        new Date();
+
+                    console.log(`
+
 ================================================
 
 🤖 BETVISION AI
@@ -651,6 +908,9 @@ servidor.listen(
 
 🚀 Porta:
 ${PORT}
+
+🌐 Host:
+${HOST}
 
 🌐 Ambiente:
 ${process.env.NODE_ENV || "development"}
@@ -671,8 +931,286 @@ Ativo
 ⚽ Jogos:
  /api/jogos
 
+🏆 Campeonatos:
+ /api/campeonatos
+
+📊 Dashboard:
+ /api/dashboard
+
+❤️ Health:
+ /health
+
+📡 Ping:
+ /api/ping
+
 ================================================
+
+                    `);
+
+                    resolve();
+
+                }
+            );
+
+            servidor.on(
+                "error",
+                (erro) => {
+
+                    console.error(
+                        "🔴 Erro servidor HTTP:",
+                        erro
+                    );
+
+                    reject(
+                        erro
+                    );
+
+                }
+            );
+
+        }
+    );
+
+}
+
+// ==================================================
+// INICIALIZAÇÃO PRINCIPAL
+//
+// ATENÇÃO:
+//
+// NÃO colocamos await conectarBanco()
+// antes do listen().
+//
+// O Render precisa detectar a porta primeiro.
+// ==================================================
+
+async function iniciarSistema() {
+
+    try {
+
+        // ------------------------------------------
+        // 1. SUBIR SERVIDOR IMEDIATAMENTE
+        // ------------------------------------------
+
+        await iniciarServidor();
+
+        console.log(
+            "🟢 Porta detectada pelo Render"
+        );
+
+        // ------------------------------------------
+        // 2. BANCO
+        // ------------------------------------------
+
+        await inicializarBanco();
+
+        // ------------------------------------------
+        // 3. SINCRONIZAÇÃO
+        // ------------------------------------------
+
+        await inicializarSincronizacao();
+
+        // ------------------------------------------
+        // 4. STATUS FINAL
+        // ------------------------------------------
+
+        console.log(`
+
+================================================
+
+📋 STATUS FINAL DO BETVISION AI
+
+Servidor:
+${global.sistemaStatus.servidor ? "🟢 ONLINE" : "🔴 OFFLINE"}
+
+PostgreSQL:
+${global.sistemaStatus.banco ? "🟢 CONECTADO" : "🔴 INDISPONÍVEL"}
+
+Sincronização:
+${global.sistemaStatus.sincronizacao ? "🟢 ATIVA" : "🟡 AGUARDANDO"}
+
+WebSocket:
+${global.sistemaStatus.websocket ? "🟢 ATIVO" : "🔴 INATIVO"}
+
+================================================
+
         `);
 
     }
+
+    catch (erro) {
+
+        console.error(
+            "🔴 Erro crítico na inicialização:",
+            erro
+        );
+
+        // ------------------------------------------
+        // IMPORTANTE:
+        //
+        // Não encerramos automaticamente o processo
+        // se o servidor HTTP já estiver funcionando.
+        // ------------------------------------------
+
+        if (
+            global.sistemaStatus.servidor
+        ) {
+
+            console.error(
+                "⚠️ Servidor HTTP permanece online."
+            );
+
+        }
+
+        else {
+
+            console.error(
+                "🔴 Servidor HTTP não conseguiu iniciar."
+            );
+
+            process.exit(1);
+
+        }
+
+    }
+
+}
+
+// ==================================================
+// TRATAMENTO DE ERROS NÃO CAPTURADOS
+// ==================================================
+
+process.on(
+    "unhandledRejection",
+    (erro) => {
+
+        console.error(
+            "🔴 UNHANDLED REJECTION:",
+            erro
+        );
+
+        console.error(
+            "⚠️ O servidor continuará executando."
+        );
+
+    }
 );
+
+process.on(
+    "uncaughtException",
+    (erro) => {
+
+        console.error(
+            "🔴 UNCAUGHT EXCEPTION:",
+            erro
+        );
+
+        console.error(
+            "⚠️ Verifique o erro acima."
+        );
+
+    }
+);
+
+// ==================================================
+// DESLIGAMENTO GRACIOSO
+// ==================================================
+
+async function desligarServidor(
+    sinal
+) {
+
+    console.log(
+        `\n🛑 Recebido ${sinal}. Encerrando servidor...`
+    );
+
+    try {
+
+        wss.clients.forEach(
+            (cliente) => {
+
+                try {
+
+                    cliente.close();
+
+                }
+
+                catch (erro) {
+
+                    console.error(
+                        "Erro fechando WebSocket:",
+                        erro.message
+                    );
+
+                }
+
+            }
+        );
+
+        servidor.close(
+            () => {
+
+                console.log(
+                    "🟢 Servidor HTTP encerrado."
+                );
+
+                process.exit(0);
+
+            }
+        );
+
+        setTimeout(
+            () => {
+
+                console.error(
+                    "⚠️ Encerramento forçado."
+                );
+
+                process.exit(1);
+
+            },
+            10000
+        );
+
+    }
+
+    catch (erro) {
+
+        console.error(
+            "🔴 Erro no desligamento:",
+            erro.message
+        );
+
+        process.exit(1);
+
+    }
+
+}
+
+process.on(
+    "SIGTERM",
+    () => {
+
+        desligarServidor(
+            "SIGTERM"
+        );
+
+    }
+);
+
+process.on(
+    "SIGINT",
+    () => {
+
+        desligarServidor(
+            "SIGINT"
+        );
+
+    }
+);
+
+// ==================================================
+// INICIAR
+// ==================================================
+
+iniciarSistema();
