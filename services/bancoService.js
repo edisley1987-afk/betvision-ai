@@ -1,4 +1,4 @@
-// ==================================================
+// ==========================================================
 // BETVISION AI
 // services/bancoService.js
 //
@@ -18,47 +18,41 @@
 // REGRAS:
 //
 // JOGOS:
-//
-// - HOJE
-// - AMANHÃ
+//   HOJE + AMANHÃ
 //
 // ANÁLISES:
-//
-// - SOMENTE HOJE NO DASHBOARD
+//   DASHBOARD = SOMENTE HOJE
 //
 // HISTÓRICO:
+//   PERMANECE NO BANCO
 //
-// - NÃO É APAGADO
-// - CONTINUA DISPONÍVEL PARA IA
+// IA:
+//   PODE USAR HISTÓRICO
 //
-// VÍNCULO:
-//
-// jogos.api_id
-//        ↓
-// analises.api_id
+// API ID:
+//   INTEGER
 //
 // TIMEZONE:
+//   America/Sao_Paulo
 //
-// America/Sao_Paulo
-//
-// ==================================================
+// ==========================================================
 
 import {
     query
 } from "../database/database.js";
 
 
-// ==================================================
+// ==========================================================
 // CONFIGURAÇÃO
-// ==================================================
+// ==========================================================
 
 const TIMEZONE =
     "America/Sao_Paulo";
 
 
-// ==================================================
-// DATA DE HOJE
-// ==================================================
+// ==========================================================
+// DATA HOJE
+// ==========================================================
 
 function obterDataHojeBrasil() {
 
@@ -83,142 +77,57 @@ function obterDataHojeBrasil() {
             new Date()
         );
 
-    }
-    catch (erro) {
+    } catch (erro) {
 
         console.error(
-            "❌ Erro obtendo data Brasil:",
+            "❌ Erro data Brasil:",
             erro.message
         );
 
-        return null;
-
+        return new Date()
+            .toISOString()
+            .slice(0, 10);
     }
-
 }
 
 
-// ==================================================
-// DATA DE AMANHÃ
-// ==================================================
+// ==========================================================
+// DATA AMANHÃ
+// ==========================================================
 
 function obterDataAmanhaBrasil() {
 
-    try {
+    const hoje =
+        obterDataHojeBrasil();
 
-        const hoje =
-            obterDataHojeBrasil();
-
-
-        if (!hoje) {
-
-            return null;
-
-        }
+    const partes =
+        hoje.split("-");
 
 
-        const partes =
-            hoje.split("-");
-
-
-        const ano =
-            Number(
-                partes[0]
-            );
-
-
-        const mes =
-            Number(
-                partes[1]
-            ) - 1;
-
-
-        const dia =
-            Number(
-                partes[2]
-            );
-
-
-        const data =
-            new Date(
-                Date.UTC(
-                    ano,
-                    mes,
-                    dia
-                )
-            );
-
-
-        data.setUTCDate(
-            data.getUTCDate() + 1
+    const data =
+        new Date(
+            Date.UTC(
+                Number(partes[0]),
+                Number(partes[1]) - 1,
+                Number(partes[2])
+            )
         );
 
 
-        return data
-            .toISOString()
-            .slice(
-                0,
-                10
-            );
+    data.setUTCDate(
+        data.getUTCDate() + 1
+    );
 
-    }
-    catch (erro) {
 
-        console.error(
-            "❌ Erro obtendo amanhã:",
-            erro.message
-        );
-
-        return null;
-
-    }
-
+    return data
+        .toISOString()
+        .slice(0, 10);
 }
 
 
-// ==================================================
-// NORMALIZAR API ID
-// ==================================================
-
-function normalizarApiId(
-    valor
-) {
-
-    if (
-        valor === null ||
-        valor === undefined ||
-        valor === ""
-    ) {
-
-        return null;
-
-    }
-
-
-    const numero =
-        Number(
-            valor
-        );
-
-
-    if (
-        !Number.isInteger(numero) ||
-        numero <= 0
-    ) {
-
-        return null;
-
-    }
-
-
-    return numero;
-
-}
-
-
-// ==================================================
+// ==========================================================
 // NORMALIZAR ID
-// ==================================================
+// ==========================================================
 
 function normalizarId(
     valor
@@ -231,55 +140,63 @@ function normalizarId(
     ) {
 
         return null;
-
     }
 
 
-    const numero =
-        Number(
-            valor
-        );
+    const n =
+        Number(valor);
 
 
     if (
-        !Number.isInteger(numero) ||
-        numero <= 0
+        !Number.isInteger(n) ||
+        n <= 0
     ) {
 
         return null;
-
     }
 
 
-    return numero;
-
+    return n;
 }
 
 
-// ==================================================
+// ==========================================================
+// NORMALIZAR API ID
+// ==========================================================
+
+function normalizarApiId(
+    valor
+) {
+
+    return normalizarId(
+        valor
+    );
+}
+
+
+// ==========================================================
 // CAMPEONATOS
-// ==================================================
+// ==========================================================
 
 export async function listarCampeonatos() {
 
     try {
 
         const resultado =
-            await query(`
-
+            await query(
+                `
                 SELECT *
 
                 FROM campeonatos
 
                 ORDER BY nome ASC
+                `
+            );
 
-            `);
 
+        return resultado.rows || [];
 
-        return resultado.rows;
-
-    }
-    catch (erro) {
+    } catch (erro) {
 
         console.error(
             "❌ Erro listar campeonatos:",
@@ -287,15 +204,13 @@ export async function listarCampeonatos() {
         );
 
         return [];
-
     }
-
 }
 
 
-// ==================================================
-// INSERIR / ATUALIZAR CAMPEONATO
-// ==================================================
+// ==========================================================
+// INSERIR CAMPEONATO
+// ==========================================================
 
 export async function inserirCampeonato(
     campeonato
@@ -306,54 +221,34 @@ export async function inserirCampeonato(
         throw new Error(
             "Campeonato não informado"
         );
-
     }
 
 
-    const {
-
-        id,
-        nome,
-        pais,
-        continente,
-        temporada,
-        api_id,
-        logo,
-        ativo
-
-    } = campeonato;
-
-
-    const campeonatoId =
+    const id =
         normalizarId(
-            id
+            campeonato.id
         );
-
 
     const apiId =
         normalizarApiId(
-            api_id
+            campeonato.api_id
         );
 
 
-    if (!campeonatoId) {
+    if (!id) {
 
         throw new Error(
             "ID do campeonato inválido"
         );
-
     }
 
 
     const resultado =
         await query(
-
             `
-
             INSERT INTO campeonatos
 
             (
-
                 id,
                 nome,
                 pais,
@@ -362,13 +257,11 @@ export async function inserirCampeonato(
                 api_id,
                 logo,
                 ativo
-
             )
 
             VALUES
 
             (
-
                 $1::integer,
                 $2::text,
                 $3::text,
@@ -376,11 +269,7 @@ export async function inserirCampeonato(
                 $5::text,
                 $6::integer,
                 $7::text,
-                COALESCE(
-                    $8::boolean,
-                    true
-                )
-
+                COALESCE($8::boolean, true)
             )
 
             ON CONFLICT(id)
@@ -409,29 +298,31 @@ export async function inserirCampeonato(
                     EXCLUDED.ativo
 
             RETURNING *
-
             `,
-
             [
 
-                campeonatoId,
+                id,
 
-                nome ?? null,
+                campeonato.nome ??
+                    null,
 
-                pais ?? null,
+                campeonato.pais ??
+                    null,
 
-                continente ?? null,
+                campeonato.continente ??
+                    null,
 
-                temporada ?? null,
+                campeonato.temporada ??
+                    null,
 
                 apiId,
 
-                logo ?? null,
+                campeonato.logo ??
+                    null,
 
-                ativo ?? true
-
+                campeonato.ativo ??
+                    true
             ]
-
         );
 
 
@@ -439,34 +330,32 @@ export async function inserirCampeonato(
         resultado.rows[0] ||
         null
     );
-
 }
 
 
-// ==================================================
+// ==========================================================
 // TIMES
-// ==================================================
+// ==========================================================
 
 export async function listarTimes() {
 
     try {
 
         const resultado =
-            await query(`
-
+            await query(
+                `
                 SELECT *
 
                 FROM times
 
                 ORDER BY nome ASC
+                `
+            );
 
-            `);
 
+        return resultado.rows || [];
 
-        return resultado.rows;
-
-    }
-    catch (erro) {
+    } catch (erro) {
 
         console.error(
             "❌ Erro listar times:",
@@ -474,15 +363,13 @@ export async function listarTimes() {
         );
 
         return [];
-
     }
-
 }
 
 
-// ==================================================
-// INSERIR / ATUALIZAR TIME
-// ==================================================
+// ==========================================================
+// INSERIR TIME
+// ==========================================================
 
 export async function inserirTime(
     time
@@ -493,101 +380,83 @@ export async function inserirTime(
         throw new Error(
             "Time não informado"
         );
-
     }
 
 
-    const {
-
-        id,
-        campeonato_id,
-        nome,
-        pais
-
-    } = time;
-
-
-    const timeId =
+    const id =
         normalizarId(
-            id
+            time.id
         );
 
 
-    const campeonatoId =
-        campeonato_id === null ||
-        campeonato_id === undefined ||
-        campeonato_id === ""
-            ? null
-            : normalizarId(
-                campeonato_id
-            );
-
-
-    if (!timeId) {
+    if (!id) {
 
         throw new Error(
             "ID do time inválido"
         );
-
     }
+
+
+    const campeonatoId =
+        time.campeonato_id === null ||
+        time.campeonato_id === undefined ||
+        time.campeonato_id === ""
+
+            ? null
+
+            : normalizarId(
+                time.campeonato_id
+            );
 
 
     const resultado =
         await query(
-
             `
-
             INSERT INTO times
 
             (
-
                 id,
                 campeonato_id,
                 nome,
                 pais
-
             )
 
             VALUES
 
             (
-
                 $1::integer,
                 $2::integer,
                 $3::text,
                 $4::text
-
             )
 
             ON CONFLICT(id)
 
             DO UPDATE SET
 
-                nome =
-                    EXCLUDED.nome,
-
                 campeonato_id =
                     EXCLUDED.campeonato_id,
+
+                nome =
+                    EXCLUDED.nome,
 
                 pais =
                     EXCLUDED.pais
 
             RETURNING *
-
             `,
-
             [
 
-                timeId,
+                id,
 
                 campeonatoId,
 
-                nome ?? null,
+                time.nome ??
+                    null,
 
-                pais ?? null
-
+                time.pais ??
+                    null
             ]
-
         );
 
 
@@ -595,13 +464,12 @@ export async function inserirTime(
         resultado.rows[0] ||
         null
     );
-
 }
 
 
-// ==================================================
-// JOGOS DE HOJE
-// ==================================================
+// ==========================================================
+// JOGOS HOJE
+// ==========================================================
 
 export async function listarJogosHoje() {
 
@@ -613,9 +481,7 @@ export async function listarJogosHoje() {
 
         const resultado =
             await query(
-
                 `
-
                 SELECT *
 
                 FROM jogos
@@ -627,54 +493,40 @@ export async function listarJogosHoje() {
                     AND
 
                     (
-
                         data_jogo
                         AT TIME ZONE
                         $1
-
                     )::date
 
-                    =
-
-                    $2::date
+                    = $2::date
 
                 ORDER BY
-
                     data_jogo ASC
-
                 `,
-
                 [
-
                     TIMEZONE,
-
                     hoje
-
                 ]
-
             );
 
 
-        return resultado.rows;
+        return resultado.rows || [];
 
-    }
-    catch (erro) {
+    } catch (erro) {
 
         console.error(
-            "❌ Erro listar jogos de hoje:",
+            "❌ Erro jogos hoje:",
             erro.message
         );
 
         return [];
-
     }
-
 }
 
 
-// ==================================================
-// JOGOS DE AMANHÃ
-// ==================================================
+// ==========================================================
+// JOGOS AMANHÃ
+// ==========================================================
 
 export async function listarJogosAmanha() {
 
@@ -686,9 +538,7 @@ export async function listarJogosAmanha() {
 
         const resultado =
             await query(
-
                 `
-
                 SELECT *
 
                 FROM jogos
@@ -700,60 +550,42 @@ export async function listarJogosAmanha() {
                     AND
 
                     (
-
                         data_jogo
                         AT TIME ZONE
                         $1
-
                     )::date
 
-                    =
-
-                    $2::date
+                    = $2::date
 
                 ORDER BY
-
                     data_jogo ASC
-
                 `,
-
                 [
-
                     TIMEZONE,
-
                     amanha
-
                 ]
-
             );
 
 
-        return resultado.rows;
+        return resultado.rows || [];
 
-    }
-    catch (erro) {
+    } catch (erro) {
 
         console.error(
-            "❌ Erro listar jogos de amanhã:",
+            "❌ Erro jogos amanhã:",
             erro.message
         );
 
         return [];
-
     }
-
 }
 
 
-// ==================================================
+// ==========================================================
 // JOGOS DISPONÍVEIS
 //
-// SOMENTE:
-//
-// HOJE + AMANHÃ
-//
-// Não apaga histórico.
-// ==================================================
+// SOMENTE HOJE + AMANHÃ
+// ==========================================================
 
 export async function listarJogosDisponiveis() {
 
@@ -762,16 +594,13 @@ export async function listarJogosDisponiveis() {
         const hoje =
             obterDataHojeBrasil();
 
-
         const amanha =
             obterDataAmanhaBrasil();
 
 
         const resultado =
             await query(
-
                 `
-
                 SELECT *
 
                 FROM jogos
@@ -783,92 +612,70 @@ export async function listarJogosDisponiveis() {
                     AND
 
                     (
-
                         data_jogo
                         AT TIME ZONE
                         $1
-
                     )::date
 
                     BETWEEN
-
                     $2::date
-
                     AND
-
                     $3::date
 
                 ORDER BY
-
                     data_jogo ASC
-
                 `,
-
                 [
-
                     TIMEZONE,
-
                     hoje,
-
                     amanha
-
                 ]
-
             );
 
 
         console.log(
-            `⚽ ${resultado.rows.length} ` +
-            `jogos disponíveis: hoje + amanhã`
+            `⚽ ${resultado.rows.length} jogos encontrados hoje + amanhã`
         );
 
 
-        return resultado.rows;
+        return resultado.rows || [];
 
-    }
-    catch (erro) {
+    } catch (erro) {
 
         console.error(
-            "❌ Erro listar jogos disponíveis:",
+            "❌ Erro jogos disponíveis:",
             erro.message
         );
 
         return [];
-
     }
-
 }
 
 
-// ==================================================
+// ==========================================================
 // ALIAS
-// ==================================================
+// ==========================================================
 
 export async function listarJogosHojeEAmanha() {
 
-    return listarJogosDisponiveis();
-
+    return await listarJogosDisponiveis();
 }
 
 
-// ==================================================
+// ==========================================================
 // BUSCAR JOGO POR ID
-// ==================================================
+// ==========================================================
 
 export async function buscarJogoPorId(
     id
 ) {
 
     const jogoId =
-        normalizarId(
-            id
-        );
+        normalizarId(id);
 
 
     if (!jogoId) {
-
         return null;
-
     }
 
 
@@ -876,24 +683,18 @@ export async function buscarJogoPorId(
 
         const resultado =
             await query(
-
                 `
-
                 SELECT *
 
                 FROM jogos
 
-                WHERE id =
-                    $1::integer
+                WHERE id = $1::integer
 
                 LIMIT 1
-
                 `,
-
                 [
                     jogoId
                 ]
-
             );
 
 
@@ -902,39 +703,34 @@ export async function buscarJogoPorId(
             null
         );
 
-    }
-    catch (erro) {
+    } catch (erro) {
 
         console.error(
-            "❌ Erro buscar jogo por ID:",
+            "❌ Erro buscar jogo:",
             erro.message
         );
 
         return null;
-
     }
-
 }
 
 
-// ==================================================
+// ==========================================================
 // BUSCAR JOGO POR API ID
-// ==================================================
+// ==========================================================
 
 export async function buscarJogoPorApiId(
     api_id
 ) {
 
-    const apiIdNumero =
+    const apiId =
         normalizarApiId(
             api_id
         );
 
 
-    if (!apiIdNumero) {
-
+    if (!apiId) {
         return null;
-
     }
 
 
@@ -942,24 +738,18 @@ export async function buscarJogoPorApiId(
 
         const resultado =
             await query(
-
                 `
-
                 SELECT *
 
                 FROM jogos
 
-                WHERE api_id =
-                    $1::integer
+                WHERE api_id = $1::integer
 
                 LIMIT 1
-
                 `,
-
                 [
-                    apiIdNumero
+                    apiId
                 ]
-
             );
 
 
@@ -968,43 +758,34 @@ export async function buscarJogoPorApiId(
             null
         );
 
-    }
-    catch (erro) {
+    } catch (erro) {
 
         console.error(
-            `❌ Erro buscando jogo API ${apiIdNumero}:`,
+            "❌ Erro buscar jogo API:",
             erro.message
         );
 
         return null;
-
     }
-
 }
 
 
-// ==================================================
+// ==========================================================
 // BUSCAR ANÁLISE POR ID
 //
-// Pode consultar histórico.
-//
-// Não aplica filtro de hoje.
-// ==================================================
+// USADA PELO /api/analises/:id
+// ==========================================================
 
 export async function buscarAnalisePorId(
     id
 ) {
 
     const analiseId =
-        normalizarId(
-            id
-        );
+        normalizarId(id);
 
 
     if (!analiseId) {
-
         return null;
-
     }
 
 
@@ -1012,9 +793,7 @@ export async function buscarAnalisePorId(
 
         const resultado =
             await query(
-
                 `
-
                 SELECT
 
                     a.*,
@@ -1039,22 +818,16 @@ export async function buscarAnalisePorId(
 
                 LEFT JOIN jogos j
 
-                    ON j.api_id =
-                       a.api_id
+                    ON j.api_id = a.api_id
 
                 WHERE
-
-                    a.id =
-                    $1::integer
+                    a.id = $1::integer
 
                 LIMIT 1
-
                 `,
-
                 [
                     analiseId
                 ]
-
             );
 
 
@@ -1063,8 +836,7 @@ export async function buscarAnalisePorId(
             null
         );
 
-    }
-    catch (erro) {
+    } catch (erro) {
 
         console.error(
             "❌ Erro buscar análise por ID:",
@@ -1072,30 +844,26 @@ export async function buscarAnalisePorId(
         );
 
         return null;
-
     }
-
 }
 
 
-// ==================================================
+// ==========================================================
 // BUSCAR ANÁLISE POR API ID
-// ==================================================
+// ==========================================================
 
 export async function buscarAnalisePorApiId(
     api_id
 ) {
 
-    const apiIdNumero =
+    const apiId =
         normalizarApiId(
             api_id
         );
 
 
-    if (!apiIdNumero) {
-
+    if (!apiId) {
         return null;
-
     }
 
 
@@ -1103,126 +871,12 @@ export async function buscarAnalisePorApiId(
 
         const resultado =
             await query(
-
                 `
-
-                SELECT
-
-                    a.*,
-
-                    j.id AS jogo_id,
-
-                    j.api_id AS jogo_api_id,
-
-                    j.data_jogo,
-
-                    j.campeonato,
-
-                    j.time_casa,
-
-                    j.time_fora,
-
-                    j.estadio,
-
-                    j.status
-
-                FROM analises a
-
-                LEFT JOIN jogos j
-
-                    ON j.api_id =
-                       a.api_id
-
-                WHERE
-
-                    a.api_id =
-                    $1::integer
-
-                ORDER BY
-
-                    a.criado_em DESC,
-
-                    a.id DESC
-
-                LIMIT 1
-
-                `,
-
-                [
-                    apiIdNumero
-                ]
-
-            );
-
-
-        return (
-            resultado.rows[0] ||
-            null
-        );
-
-    }
-    catch (erro) {
-
-        console.error(
-            `❌ Erro buscando análise API ${apiIdNumero}:`,
-            erro.message
-        );
-
-        return null;
-
-    }
-
-}
-
-
-// ==================================================
-// BUSCAR ANÁLISE POR NOME
-//
-// Somente compatibilidade.
-//
-// Registros sem API ID.
-// ==================================================
-
-export async function buscarAnalisePorNome(
-    jogo
-) {
-
-    if (
-        typeof jogo !== "string" ||
-        !jogo.trim()
-    ) {
-
-        return null;
-
-    }
-
-
-    try {
-
-        const resultado =
-            await query(
-
-                `
-
                 SELECT *
 
                 FROM analises
 
-                WHERE
-
-                    api_id IS NULL
-
-                    AND
-
-                    LOWER(
-                        TRIM(jogo)
-                    )
-
-                    =
-
-                    LOWER(
-                        TRIM($1::text)
-                    )
+                WHERE api_id = $1::integer
 
                 ORDER BY
 
@@ -1231,13 +885,10 @@ export async function buscarAnalisePorNome(
                     id DESC
 
                 LIMIT 1
-
                 `,
-
                 [
-                    jogo.trim()
+                    apiId
                 ]
-
             );
 
 
@@ -1246,149 +897,100 @@ export async function buscarAnalisePorNome(
             null
         );
 
-    }
-    catch (erro) {
+    } catch (erro) {
 
         console.error(
-            "❌ Erro buscando análise antiga:",
+            "❌ Erro buscar análise API:",
             erro.message
         );
 
         return null;
-
     }
-
 }
 
 
-// ==================================================
-// SALVAR ANÁLISE SEM API ID
-//
-// Compatibilidade com registros antigos.
-// ==================================================
+// ==========================================================
+// BUSCAR ANÁLISE POR NOME
+// ==========================================================
 
-async function salvarAnaliseSemApiId(
-    analise
+export async function buscarAnalisePorNome(
+    jogo
 ) {
 
-    const {
+    if (
+        !jogo ||
+        typeof jogo !== "string"
+    ) {
 
-        jogo,
-
-        probabilidade_casa,
-        probabilidade_empate,
-        probabilidade_fora,
-
-        gols_esperados,
-        placar_previsto,
-
-        value_bet,
-        confianca,
-        algoritmo
-
-    } = analise;
+        return null;
+    }
 
 
-    const resultado =
-        await query(
+    try {
 
-            `
+        const resultado =
+            await query(
+                `
+                SELECT *
 
-            INSERT INTO analises
+                FROM analises
 
-            (
+                WHERE
 
-                jogo,
+                    api_id IS NULL
 
-                probabilidade_casa,
-                probabilidade_empate,
-                probabilidade_fora,
+                    AND LOWER(TRIM(jogo))
+                    =
+                    LOWER(TRIM($1::text))
 
-                gols_esperados,
-                placar_previsto,
+                ORDER BY
 
-                value_bet,
-                confianca,
-                algoritmo,
+                    criado_em DESC,
 
-                api_id
+                    id DESC
 
-            )
+                LIMIT 1
+                `,
+                [
+                    jogo
+                ]
+            );
 
-            VALUES
 
-            (
-
-                $1::text,
-
-                $2::numeric,
-                $3::numeric,
-                $4::numeric,
-
-                $5::numeric,
-                $6::text,
-
-                COALESCE(
-                    $7::boolean,
-                    false
-                ),
-
-                $8::text,
-                $9::text,
-
-                NULL
-
-            )
-
-            RETURNING *
-
-            `,
-
-            [
-
-                jogo ?? null,
-
-                probabilidade_casa ?? null,
-
-                probabilidade_empate ?? null,
-
-                probabilidade_fora ?? null,
-
-                gols_esperados ?? null,
-
-                placar_previsto ?? null,
-
-                value_bet ?? false,
-
-                confianca ?? null,
-
-                algoritmo ??
-                    "BetVision Statistical AI v7"
-
-            ]
-
+        return (
+            resultado.rows[0] ||
+            null
         );
 
+    } catch (erro) {
 
-    return (
-        resultado.rows[0] ||
-        null
-    );
+        console.error(
+            "❌ Erro análise por nome:",
+            erro.message
+        );
 
+        return null;
+    }
 }
 
 
-// ==================================================
+// ==========================================================
 // SALVAR ANÁLISE
 //
-// API ID = referência principal.
+// Compatível com:
 //
-// Se já existir:
+// {
+//   api_id,
+//   jogo,
+//   probabilidades,
+//   golsEsperados,
+//   placarPrevisto,
+//   confianca
+// }
 //
-// NÃO cria outra.
+// E também com formato antigo.
 //
-// Isso evita duplicações.
-// ==================================================
+// ==========================================================
 
 export async function salvarAnalise(
     analise
@@ -1402,91 +1004,130 @@ export async function salvarAnalise(
         throw new Error(
             "Dados da análise inválidos"
         );
-
     }
 
 
-    const {
-
-        api_id,
-        jogo,
-
-        probabilidade_casa,
-        probabilidade_empate,
-        probabilidade_fora,
-
-        gols_esperados,
-        placar_previsto,
-
-        value_bet,
-        confianca,
-        algoritmo
-
-    } = analise;
-
-
-    const apiIdNumero =
+    const apiId =
         normalizarApiId(
-            api_id
+            analise.api_id ??
+            analise.apiId ??
+            analise.jogo_api_id
         );
 
 
-    // ----------------------------------------------
+    const nomeJogo =
+        typeof analise.jogo === "string"
+
+            ? analise.jogo
+
+            : analise.jogo?.nome ??
+              (
+                analise.jogo?.casa &&
+                analise.jogo?.fora
+
+                    ? `${analise.jogo.casa} x ` +
+                      `${analise.jogo.fora}`
+
+                    : null
+              );
+
+
+    const probabilidades =
+        analise.probabilidades ||
+        {};
+
+
+    const gols =
+        analise.golsEsperados ||
+        {};
+
+
+    const valorValueBet =
+        Array.isArray(
+            analise.valueBets
+        )
+        &&
+        analise.valueBets.length > 0;
+
+
+    const valueBet =
+        analise.value_bet ??
+        valorValueBet;
+
+
+    const probCasa =
+        analise.probabilidade_casa ??
+        probabilidades.casa ??
+        null;
+
+
+    const probEmpate =
+        analise.probabilidade_empate ??
+        probabilidades.empate ??
+        null;
+
+
+    const probFora =
+        analise.probabilidade_fora ??
+        probabilidades.fora ??
+        null;
+
+
+    const golsEsperados =
+        analise.gols_esperados ??
+        gols.total ??
+        null;
+
+
+    const placarPrevisto =
+        analise.placar_previsto ??
+        analise.placarPrevisto ??
+        null;
+
+
+    const confianca =
+        analise.confianca?.percentual ??
+        analise.confianca ??
+        null;
+
+
+    const algoritmo =
+        analise.algoritmo ??
+        "BetVision AI Motor Estatístico v8";
+
+
+    if (!nomeJogo) {
+
+        throw new Error(
+            "Jogo não informado"
+        );
+    }
+
+
+    // ======================================================
     // SEM API ID
-    // ----------------------------------------------
+    // ======================================================
 
-    if (
-        apiIdNumero === null
-    ) {
+    if (!apiId) {
 
-        return salvarAnaliseSemApiId(
-            analise
-        );
-
-    }
+        const existente =
+            await buscarAnalisePorNome(
+                nomeJogo
+            );
 
 
-    // ----------------------------------------------
-    // PROCURAR EXISTENTE
-    // ----------------------------------------------
+        if (existente) {
 
-    const existente =
-        await buscarAnalisePorApiId(
-            apiIdNumero
-        );
+            return existente;
+        }
 
-
-    if (
-        existente
-    ) {
-
-        console.log(
-            `♻️ Análise já existe | ` +
-            `API ${apiIdNumero} | ` +
-            `ID ${existente.id}`
-        );
-
-
-        return existente;
-
-    }
-
-
-    // ----------------------------------------------
-    // INSERIR COM PROTEÇÃO
-    // ----------------------------------------------
-
-    try {
 
         const resultado =
             await query(
-
                 `
-
                 INSERT INTO analises
 
                 (
-
                     jogo,
 
                     probabilidade_casa,
@@ -1501,11 +1142,11 @@ export async function salvarAnalise(
                     algoritmo,
 
                     api_id
-
                 )
 
-                SELECT
+                VALUES
 
+                (
                     $1::text,
 
                     $2::numeric,
@@ -1515,58 +1156,137 @@ export async function salvarAnalise(
                     $5::numeric,
                     $6::text,
 
-                    COALESCE(
-                        $7::boolean,
-                        false
-                    ),
+                    COALESCE($7::boolean, false),
 
-                    $8::text,
+                    $8::numeric,
+
                     $9::text,
 
-                    $10::integer
-
-                WHERE NOT EXISTS (
-
-                    SELECT 1
-
-                    FROM analises
-
-                    WHERE
-
-                        api_id =
-                        $10::integer
-
+                    NULL
                 )
 
                 RETURNING *
-
                 `,
-
                 [
 
-                    jogo ?? null,
+                    nomeJogo,
 
-                    probabilidade_casa ?? null,
+                    probCasa,
+                    probEmpate,
+                    probFora,
 
-                    probabilidade_empate ?? null,
+                    golsEsperados,
+                    placarPrevisto,
 
-                    probabilidade_fora ?? null,
+                    valueBet,
 
-                    gols_esperados ?? null,
+                    confianca,
 
-                    placar_previsto ?? null,
-
-                    value_bet ?? false,
-
-                    confianca ?? null,
-
-                    algoritmo ??
-                        "BetVision Statistical AI v7",
-
-                    apiIdNumero
-
+                    algoritmo
                 ]
+            );
 
+
+        return (
+            resultado.rows[0] ||
+            null
+        );
+    }
+
+
+    // ======================================================
+    // PROTEÇÃO DUPLICAÇÃO
+    // ======================================================
+
+    const existente =
+        await buscarAnalisePorApiId(
+            apiId
+        );
+
+
+    if (existente) {
+
+        console.log(
+            `♻️ Análise já existe API ${apiId}`
+        );
+
+
+        return existente;
+    }
+
+
+    // ======================================================
+    // INSERIR
+    // ======================================================
+
+    try {
+
+        const resultado =
+            await query(
+                `
+                INSERT INTO analises
+
+                (
+                    jogo,
+
+                    probabilidade_casa,
+                    probabilidade_empate,
+                    probabilidade_fora,
+
+                    gols_esperados,
+                    placar_previsto,
+
+                    value_bet,
+                    confianca,
+                    algoritmo,
+
+                    api_id
+                )
+
+                VALUES
+
+                (
+                    $1::text,
+
+                    $2::numeric,
+                    $3::numeric,
+                    $4::numeric,
+
+                    $5::numeric,
+                    $6::text,
+
+                    COALESCE($7::boolean, false),
+
+                    $8::numeric,
+
+                    $9::text,
+
+                    $10::integer
+                )
+
+                ON CONFLICT DO NOTHING
+
+                RETURNING *
+                `,
+                [
+
+                    nomeJogo,
+
+                    probCasa,
+                    probEmpate,
+                    probFora,
+
+                    golsEsperados,
+                    placarPrevisto,
+
+                    valueBet,
+
+                    confianca,
+
+                    algoritmo,
+
+                    apiId
+                ]
             );
 
 
@@ -1575,43 +1295,31 @@ export async function salvarAnalise(
         ) {
 
             console.log(
-                `💾 Análise salva | ` +
-                `API ${apiIdNumero} | ` +
+                `💾 Análise salva API ${apiId} ` +
                 `ID ${resultado.rows[0].id}`
             );
 
 
             return resultado.rows[0];
-
         }
 
 
-        // ------------------------------------------
-        // Outra requisição pode ter inserido
-        // ------------------------------------------
-
-        const depois =
+        const recuperada =
             await buscarAnalisePorApiId(
-                apiIdNumero
+                apiId
             );
 
 
-        if (
-            depois
-        ) {
-
-            return depois;
-
+        if (recuperada) {
+            return recuperada;
         }
 
 
         throw new Error(
-            `Não foi possível salvar análise ` +
-            `para API ${apiIdNumero}`
+            `Não foi possível salvar análise API ${apiId}`
         );
 
-    }
-    catch (erro) {
+    } catch (erro) {
 
         if (
             erro?.code === "23505"
@@ -1619,42 +1327,32 @@ export async function salvarAnalise(
 
             const recuperada =
                 await buscarAnalisePorApiId(
-                    apiIdNumero
+                    apiId
                 );
 
 
-            if (
-                recuperada
-            ) {
-
+            if (recuperada) {
                 return recuperada;
-
             }
-
         }
 
 
         console.error(
-            `❌ Erro salvando análise API ` +
-            `${apiIdNumero}:`,
+            "❌ Erro salvando análise:",
             erro.message
         );
 
 
         throw erro;
-
     }
-
 }
 
 
-// ==================================================
+// ==========================================================
 // LISTAR TODAS AS ANÁLISES
 //
-// HISTÓRICO COMPLETO.
-//
-// NÃO É USADO PELO DASHBOARD DE HOJE.
-// ==================================================
+// HISTÓRICO COMPLETO
+// ==========================================================
 
 export async function listarAnalises() {
 
@@ -1662,49 +1360,23 @@ export async function listarAnalises() {
 
         const resultado =
             await query(
-
                 `
+                SELECT *
 
-                SELECT
-
-                    a.*,
-
-                    j.id AS jogo_id,
-
-                    j.data_jogo,
-
-                    j.campeonato,
-
-                    j.time_casa,
-
-                    j.time_fora,
-
-                    j.estadio,
-
-                    j.status
-
-                FROM analises a
-
-                LEFT JOIN jogos j
-
-                    ON j.api_id =
-                       a.api_id
+                FROM analises
 
                 ORDER BY
 
-                    a.criado_em DESC,
+                    criado_em DESC,
 
-                    a.id DESC
-
+                    id DESC
                 `
-
             );
 
 
-        return resultado.rows;
+        return resultado.rows || [];
 
-    }
-    catch (erro) {
+    } catch (erro) {
 
         console.error(
             "❌ Erro listar análises:",
@@ -1712,38 +1384,19 @@ export async function listarAnalises() {
         );
 
         return [];
-
     }
-
 }
 
 
-// ==================================================
+// ==========================================================
 // LISTAR ANÁLISES DE HOJE
 //
-// REGRA CRÍTICA:
+// REGRA ABSOLUTA:
 //
-// A DATA OFICIAL É:
+// somente jogos cuja data brasileira
+// seja exatamente hoje.
 //
-//      jogos.data_jogo
-//
-// Não usa a data de criação da análise.
-//
-// Assim:
-//
-// análise criada ontem
-// para jogo de hoje
-// → APARECE.
-//
-// análise criada hoje
-// para jogo de amanhã
-// → NÃO APARECE.
-//
-// análise antiga
-// para jogo de ontem
-// → NÃO APARECE.
-//
-// ==================================================
+// ==========================================================
 
 export async function listarAnalisesHoje() {
 
@@ -1753,11 +1406,14 @@ export async function listarAnalisesHoje() {
             obterDataHojeBrasil();
 
 
+        console.log(
+            `📅 Buscando análises de hoje: ${hoje}`
+        );
+
+
         const resultado =
             await query(
-
                 `
-
                 SELECT
 
                     a.*,
@@ -1782,10 +1438,7 @@ export async function listarAnalisesHoje() {
 
                 INNER JOIN jogos j
 
-                    ON
-
-                    j.api_id =
-                    a.api_id
+                    ON j.api_id = a.api_id
 
                 WHERE
 
@@ -1794,70 +1447,48 @@ export async function listarAnalisesHoje() {
                     AND
 
                     (
-
                         j.data_jogo
                         AT TIME ZONE
                         $1
-
                     )::date
 
-                    =
-
-                    $2::date
+                    = $2::date
 
                 ORDER BY
 
                     j.data_jogo ASC,
 
-                    a.criado_em DESC,
-
                     a.id DESC
-
                 `,
-
                 [
-
                     TIMEZONE,
-
                     hoje
-
                 ]
-
             );
 
 
         console.log(
-            `🤖 ${resultado.rows.length} ` +
-            `análises de jogos de hoje`
+            `🤖 ${resultado.rows.length} análises retornadas para hoje`
         );
 
 
-        return resultado.rows;
+        return resultado.rows || [];
 
-    }
-    catch (erro) {
+    } catch (erro) {
 
         console.error(
-            "❌ Erro listar análises de hoje:",
+            "❌ Erro listar análises hoje:",
             erro.message
         );
 
         return [];
-
     }
-
 }
 
 
-// ==================================================
+// ==========================================================
 // LISTAR ANÁLISES HOJE + AMANHÃ
-//
-// Mantido para compatibilidade.
-//
-// NÃO é utilizado pelo endpoint principal
-// /api/analises.
-//
-// ==================================================
+// ==========================================================
 
 export async function listarAnalisesDisponiveis() {
 
@@ -1866,16 +1497,13 @@ export async function listarAnalisesDisponiveis() {
         const hoje =
             obterDataHojeBrasil();
 
-
         const amanha =
             obterDataAmanhaBrasil();
 
 
         const resultado =
             await query(
-
                 `
-
                 SELECT
 
                     a.*,
@@ -1900,10 +1528,7 @@ export async function listarAnalisesDisponiveis() {
 
                 INNER JOIN jogos j
 
-                    ON
-
-                    j.api_id =
-                    a.api_id
+                    ON j.api_id = a.api_id
 
                 WHERE
 
@@ -1912,64 +1537,47 @@ export async function listarAnalisesDisponiveis() {
                     AND
 
                     (
-
                         j.data_jogo
                         AT TIME ZONE
                         $1
-
                     )::date
 
                     BETWEEN
-
                     $2::date
-
                     AND
-
                     $3::date
 
                 ORDER BY
 
                     j.data_jogo ASC,
 
-                    a.criado_em DESC,
-
                     a.id DESC
-
                 `,
-
                 [
-
                     TIMEZONE,
-
                     hoje,
-
                     amanha
-
                 ]
-
             );
 
 
-        return resultado.rows;
+        return resultado.rows || [];
 
-    }
-    catch (erro) {
+    } catch (erro) {
 
         console.error(
-            "❌ Erro listar análises disponíveis:",
+            "❌ Erro análises disponíveis:",
             erro.message
         );
 
         return [];
-
     }
-
 }
 
 
-// ==================================================
+// ==========================================================
 // SALVAR VALUE BET
-// ==================================================
+// ==========================================================
 
 export async function salvarValueBet(
     valueBet
@@ -1981,121 +1589,85 @@ export async function salvarValueBet(
     ) {
 
         return null;
-
     }
 
 
-    const {
+    const jogoId =
+        valueBet.jogo_id === null ||
+        valueBet.jogo_id === undefined ||
+        valueBet.jogo_id === ""
 
-        jogo_id,
-        mercado,
-        selecao,
-        odd_mercado,
-        probabilidade,
-        valor_estimado,
-        ativo
-
-    } = valueBet;
-
-
-    const jogoIdNumero =
-        jogo_id === null ||
-        jogo_id === undefined ||
-        jogo_id === ""
             ? null
+
             : normalizarId(
-                jogo_id
+                valueBet.jogo_id
             );
 
 
     if (
-        jogoIdNumero !== null &&
-        !jogoIdNumero
+        valueBet.jogo_id !== null &&
+        valueBet.jogo_id !== undefined &&
+        valueBet.jogo_id !== "" &&
+        !jogoId
     ) {
 
         throw new Error(
             "jogo_id inválido"
         );
-
     }
 
 
     const resultado =
         await query(
-
             `
-
             INSERT INTO value_bets
 
             (
-
                 jogo_id,
-
                 mercado,
-
                 selecao,
-
                 odd_mercado,
-
                 probabilidade,
-
                 valor_estimado,
-
                 ativo
-
             )
 
             VALUES
 
             (
-
                 $1::integer,
-
                 $2::text,
-
                 $3::text,
-
                 $4::numeric,
-
                 $5::numeric,
-
                 $6::numeric,
-
-                COALESCE(
-                    $7::boolean,
-                    true
-                )
-
+                COALESCE($7::boolean, true)
             )
 
             RETURNING *
-
             `,
-
             [
 
-                jogoIdNumero,
+                jogoId,
 
-                mercado ??
+                valueBet.mercado ??
                     "N/A",
 
-                selecao ??
+                valueBet.selecao ??
                     null,
 
-                odd_mercado ??
+                valueBet.odd_mercado ??
                     null,
 
-                probabilidade ??
+                valueBet.probabilidade ??
                     null,
 
-                valor_estimado ??
+                valueBet.valor_estimado ??
                     null,
 
-                ativo ??
+                valueBet.ativo ??
                     true
-
             ]
-
         );
 
 
@@ -2103,15 +1675,14 @@ export async function salvarValueBet(
         resultado.rows[0] ||
         null
     );
-
 }
 
 
-// ==================================================
+// ==========================================================
 // VALUE BETS DISPONÍVEIS
 //
 // HOJE + AMANHÃ
-// ==================================================
+// ==========================================================
 
 export async function listarValueBetsDisponiveis() {
 
@@ -2120,16 +1691,13 @@ export async function listarValueBetsDisponiveis() {
         const hoje =
             obterDataHojeBrasil();
 
-
         const amanha =
             obterDataAmanhaBrasil();
 
 
         const resultado =
             await query(
-
                 `
-
                 SELECT
 
                     vb.*,
@@ -2152,35 +1720,25 @@ export async function listarValueBetsDisponiveis() {
 
                 INNER JOIN jogos j
 
-                    ON
-
-                    j.id =
-                    vb.jogo_id
+                    ON j.id = vb.jogo_id
 
                 WHERE
 
                     vb.ativo = true
 
-                    AND
-
-                    j.data_jogo IS NOT NULL
+                    AND j.data_jogo IS NOT NULL
 
                     AND
 
                     (
-
                         j.data_jogo
                         AT TIME ZONE
                         $1
-
                     )::date
 
                     BETWEEN
-
                     $2::date
-
                     AND
-
                     $3::date
 
                 ORDER BY
@@ -2190,42 +1748,32 @@ export async function listarValueBetsDisponiveis() {
                     j.data_jogo ASC
 
                 LIMIT 100
-
                 `,
-
                 [
-
                     TIMEZONE,
-
                     hoje,
-
                     amanha
-
                 ]
-
             );
 
 
-        return resultado.rows;
+        return resultado.rows || [];
 
-    }
-    catch (erro) {
+    } catch (erro) {
 
         console.error(
-            "❌ Erro listar Value Bets:",
+            "❌ Erro Value Bets:",
             erro.message
         );
 
         return [];
-
     }
-
 }
 
 
-// ==================================================
+// ==========================================================
 // DASHBOARD
-// ==================================================
+// ==========================================================
 
 export async function buscarDashboard() {
 
@@ -2233,15 +1781,11 @@ export async function buscarDashboard() {
 
         const resultado =
             await query(
-
                 `
-
                 SELECT *
 
                 FROM dashboard_status
-
                 `
-
             );
 
 
@@ -2250,24 +1794,21 @@ export async function buscarDashboard() {
             null
         );
 
-    }
-    catch (erro) {
+    } catch (erro) {
 
         console.error(
-            "❌ Erro buscar dashboard:",
+            "❌ Erro dashboard:",
             erro.message
         );
 
         return null;
-
     }
-
 }
 
 
-// ==================================================
+// ==========================================================
 // ESTATÍSTICAS DO BANCO
-// ==================================================
+// ==========================================================
 
 export async function estatisticasBanco() {
 
@@ -2276,49 +1817,32 @@ export async function estatisticasBanco() {
         const hoje =
             obterDataHojeBrasil();
 
-
         const amanha =
             obterDataAmanhaBrasil();
 
 
         const resultado =
             await query(
-
                 `
-
                 SELECT
 
                     (
-
                         SELECT COUNT(*)
-
                         FROM campeonatos
-
                     ) AS campeonatos,
 
-
                     (
-
                         SELECT COUNT(*)
-
                         FROM times
-
                     ) AS times,
 
-
                     (
-
                         SELECT COUNT(*)
-
                         FROM jogos
-
                     ) AS jogos_historico,
 
-
                     (
-
                         SELECT COUNT(*)
-
                         FROM jogos
 
                         WHERE
@@ -2328,24 +1852,17 @@ export async function estatisticasBanco() {
                             AND
 
                             (
-
                                 data_jogo
                                 AT TIME ZONE
                                 $1
-
                             )::date
 
-                            =
-
-                            $2::date
+                            = $2::date
 
                     ) AS jogos_hoje,
 
-
                     (
-
                         SELECT COUNT(*)
-
                         FROM jogos
 
                         WHERE
@@ -2355,83 +1872,32 @@ export async function estatisticasBanco() {
                             AND
 
                             (
-
                                 data_jogo
                                 AT TIME ZONE
                                 $1
-
                             )::date
 
-                            =
-
-                            $3::date
+                            = $3::date
 
                     ) AS jogos_amanha,
 
-
                     (
-
                         SELECT COUNT(*)
-
                         FROM analises
-
                     ) AS analises,
 
-
                     (
-
                         SELECT COUNT(*)
-
-                        FROM analises a
-
-                        INNER JOIN jogos j
-
-                            ON j.api_id =
-                               a.api_id
-
-                        WHERE
-
-                            j.data_jogo IS NOT NULL
-
-                            AND
-
-                            (
-
-                                j.data_jogo
-                                AT TIME ZONE
-                                $1
-
-                            )::date
-
-                            =
-
-                            $2::date
-
-                    ) AS analises_hoje,
-
-
-                    (
-
-                        SELECT COUNT(*)
-
                         FROM value_bets
 
                         WHERE ativo = true
-
                     ) AS valuebets_ativas
-
                 `,
-
                 [
-
                     TIMEZONE,
-
                     hoje,
-
                     amanha
-
                 ]
-
             );
 
 
@@ -2440,8 +1906,7 @@ export async function estatisticasBanco() {
             null
         );
 
-    }
-    catch (erro) {
+    } catch (erro) {
 
         console.error(
             "❌ Erro estatísticas banco:",
@@ -2449,15 +1914,13 @@ export async function estatisticasBanco() {
         );
 
         return null;
-
     }
-
 }
 
 
-// ==================================================
+// ==========================================================
 // EXPORT DEFAULT
-// ==================================================
+// ==========================================================
 
 export default {
 
