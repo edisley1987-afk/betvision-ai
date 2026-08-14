@@ -2,27 +2,32 @@
 // BETVISION AI
 // services/inteligenciaService.js
 //
-// MOTOR ESTATÍSTICO v8.0
+// MOTOR ESTATÍSTICO v9.0
 //
-// CORREÇÕES:
+// CORREÇÕES v9:
 //
-// - gerarAnaliseInteligente EXISTE
-// - gerarAnaliseIA mantida para compatibilidade
-// - aceita STRING ou OBJETO de jogo
-// - nunca analisa jogo vazio
 // - histórico real PostgreSQL
 // - H2H real PostgreSQL
-// - somente histórico anterior ao jogo
+// - normalização forte de nomes
+// - suporta diferenças de acentos
+// - suporta diferenças de pontuação
+// - somente jogos anteriores ao jogo analisado
+// - ignora o próprio jogo pelo api_id
+// - somente jogos com placar válido
+// - evita histórico fictício
+// - 0 jogos = 0 estatísticas reais
+// - fallback estatístico somente dentro do modelo
 // - Poisson
 // - 1X2
-// - Gols esperados
-// - Placar provável
-// - Over / Under
-// - Ambas Marcam
-// - Value Bet
-// - Confiança
-// - Sem Math.random()
+// - gols esperados
+// - placar provável
+// - over / under
+// - ambas marcam
+// - value bet
+// - confiança ajustada pela qualidade dos dados
 // - America/Sao_Paulo
+// - gerarAnaliseIA mantida
+// - gerarAnaliseInteligente mantida
 //
 // ==========================================================
 
@@ -135,6 +140,70 @@ function texto(
 
 
 // ==========================================================
+// NORMALIZAR NOME DE EQUIPE
+//
+// Exemplo:
+//
+// "Sporting Clube de Portugal"
+// "SPORTING CLUBE DE PORTUGAL"
+// "Sporting Clube de Portugal "
+//
+// tornam-se comparáveis.
+//
+// Também remove acentos e caracteres especiais.
+// ==========================================================
+
+function normalizarNomeEquipe(
+    valor
+) {
+
+    return texto(valor)
+        .normalize("NFD")
+        .replace(
+            /[\u0300-\u036f]/g,
+            ""
+        )
+        .toLowerCase()
+        .replace(
+            /[^a-z0-9]/g,
+            ""
+        );
+
+}
+
+
+// ==========================================================
+// EXPRESSÃO SQL PARA NORMALIZAR NOMES
+//
+// Não depende da extensão unaccent.
+//
+// ==========================================================
+
+const SQL_NORMALIZAR_NOME = `
+
+    regexp_replace(
+
+        translate(
+
+            lower(
+                trim(%COLUNA%)
+            ),
+
+            'áàãâäéèêëíìîïóòõôöúùûüçñ',
+            'aaaaaeeeeiiiiooooouuuucn'
+
+        ),
+
+        '[^a-z0-9]',
+        '',
+        'g'
+
+    )
+
+`;
+
+
+// ==========================================================
 // DATA BRASIL
 // ==========================================================
 
@@ -188,11 +257,14 @@ function normalizarDataJogo(
     ];
 
     for (
-        const valor of candidatos
+        const valor
+        of candidatos
     ) {
 
         if (!valor) {
+
             continue;
+
         }
 
         const data =
@@ -217,20 +289,6 @@ function normalizarDataJogo(
 
 // ==========================================================
 // EXTRAIR EQUIPES
-//
-// Aceita:
-//
-// "Palmeiras x Flamengo"
-//
-// ou:
-//
-// {
-//   time_casa: "...",
-//   time_fora: "..."
-// }
-//
-// ou formatos da API.
-//
 // ==========================================================
 
 function extrairEquipes(
@@ -304,7 +362,7 @@ function extrairEquipes(
 
 
 // ==========================================================
-// SEPARAR JOGO STRING
+// SEPARAR JOGO
 // ==========================================================
 
 function separarJogo(
@@ -533,13 +591,19 @@ function calcularMedia(
 // ==========================================================
 // HISTÓRICO DA EQUIPE
 //
-// IMPORTANTE:
-// somente jogos anteriores ao jogo analisado.
+// Somente partidas:
+// - anteriores ao jogo
+// - com data válida
+// - com gols válidos
+// - preferencialmente finalizadas
+//
+// Também exclui o próprio api_id.
 // ==========================================================
 
 async function buscarHistoricoEquipe(
     nomeEquipe,
-    dataJogo = null
+    dataJogo = null,
+    apiIdAtual = null
 ) {
 
     if (!nomeEquipe) {
@@ -551,144 +615,188 @@ async function buscarHistoricoEquipe(
 
     try {
 
-        let resultado;
+        const expressaoCasa =
+            SQL_NORMALIZAR_NOME
+                .replace(
+                    "%COLUNA%",
+                    "time_casa"
+                );
+
+        const expressaoFora =
+            SQL_NORMALIZAR_NOME
+                .replace(
+                    "%COLUNA%",
+                    "time_fora"
+                );
+
+
+        const parametros = [
+            nomeEquipe,
+            LIMITE_HISTORICO
+        ];
+
+
+        let condicaoData = `
+            data_jogo IS NOT NULL
+        `;
 
 
         if (
             dataJogo
         ) {
 
-            resultado =
-                await query(
+            parametros.splice(
+                1,
+                0,
+                dataJogo
+            );
 
-                    `
-                    SELECT
-
-                        id,
-
-                        api_id,
-
-                        time_casa,
-                        time_fora,
-
-                        gols_casa,
-                        gols_fora,
-
-                        data_jogo,
-                        status
-
-                    FROM jogos
-
-                    WHERE
-
-                        (
-
-                            LOWER(
-                                TRIM(time_casa)
-                            )
-                            =
-                            LOWER(
-                                TRIM($1)
-                            )
-
-                            OR
-
-                            LOWER(
-                                TRIM(time_fora)
-                            )
-                            =
-                            LOWER(
-                                TRIM($1)
-                            )
-
-                        )
-
-                        AND data_jogo IS NOT NULL
-
-                        AND data_jogo < $2
-
-                    ORDER BY
-                        data_jogo DESC
-
-                    LIMIT $3
-                    `,
-
-                    [
-                        nomeEquipe,
-                        dataJogo,
-                        LIMITE_HISTORICO
-                    ]
-
-                );
+            condicaoData = `
+                data_jogo IS NOT NULL
+                AND data_jogo < $2
+            `;
 
         }
-
         else {
 
-            resultado =
-                await query(
-
-                    `
-                    SELECT
-
-                        id,
-
-                        api_id,
-
-                        time_casa,
-                        time_fora,
-
-                        gols_casa,
-                        gols_fora,
-
-                        data_jogo,
-                        status
-
-                    FROM jogos
-
-                    WHERE
-
-                        (
-
-                            LOWER(
-                                TRIM(time_casa)
-                            )
-                            =
-                            LOWER(
-                                TRIM($1)
-                            )
-
-                            OR
-
-                            LOWER(
-                                TRIM(time_fora)
-                            )
-                            =
-                            LOWER(
-                                TRIM($1)
-                            )
-
-                        )
-
-                        AND data_jogo IS NOT NULL
-
-                        AND data_jogo <
-                        CURRENT_TIMESTAMP
-
-                    ORDER BY
-                        data_jogo DESC
-
-                    LIMIT $2
-                    `,
-
-                    [
-                        nomeEquipe,
-                        LIMITE_HISTORICO
-                    ]
-
-                );
+            condicaoData = `
+                data_jogo IS NOT NULL
+                AND data_jogo < CURRENT_TIMESTAMP
+            `;
 
         }
+
+
+        let parametroLimite;
+
+        if (
+            dataJogo
+        ) {
+
+            parametroLimite =
+                "$3";
+
+        }
+        else {
+
+            parametroLimite =
+                "$2";
+
+        }
+
+
+        const condicaoApiId =
+            apiIdAtual
+                ? `
+                    AND (
+                        api_id IS NULL
+                        OR api_id <> $${parametros.length + 1}
+                    )
+                `
+                : "";
+
+
+        if (
+            apiIdAtual
+        ) {
+
+            parametros.push(
+                apiIdAtual
+            );
+
+        }
+
+
+        const sql = `
+
+            SELECT
+
+                id,
+                api_id,
+
+                time_casa,
+                time_fora,
+
+                gols_casa,
+                gols_fora,
+
+                data_jogo,
+                status
+
+            FROM jogos
+
+            WHERE
+
+                (
+
+                    ${expressaoCasa}
+                    =
+                    regexp_replace(
+
+                        translate(
+
+                            lower(
+                                trim($1)
+                            ),
+
+                            'áàãâäéèêëíìîïóòõôöúùûüçñ',
+                            'aaaaaeeeeiiiiooooouuuucn'
+
+                        ),
+
+                        '[^a-z0-9]',
+                        '',
+                        'g'
+
+                    )
+
+                    OR
+
+                    ${expressaoFora}
+                    =
+                    regexp_replace(
+
+                        translate(
+
+                            lower(
+                                trim($1)
+                            ),
+
+                            'áàãâäéèêëíìîïóòõôöúùûüçñ',
+                            'aaaaaeeeeiiiiooooouuuucn'
+
+                        ),
+
+                        '[^a-z0-9]',
+                        '',
+                        'g'
+
+                    )
+
+                )
+
+                AND
+
+                ${condicaoData}
+
+                ${condicaoApiId}
+
+                AND gols_casa IS NOT NULL
+                AND gols_fora IS NOT NULL
+
+            ORDER BY
+                data_jogo DESC
+
+            LIMIT ${parametroLimite}
+
+        `;
+
+
+        const resultado =
+            await query(
+                sql,
+                parametros
+            );
 
 
         const linhas =
@@ -728,8 +836,11 @@ function jogoHistoricoValido(
 ) {
 
     if (!jogo) {
+
         return false;
+
     }
+
 
     const golsCasa =
         Number(
@@ -741,6 +852,7 @@ function jogoHistoricoValido(
             jogo.gols_fora
         );
 
+
     if (
         !Number.isFinite(golsCasa) ||
         !Number.isFinite(golsFora)
@@ -750,6 +862,7 @@ function jogoHistoricoValido(
 
     }
 
+
     if (
         golsCasa < 0 ||
         golsFora < 0
@@ -758,6 +871,16 @@ function jogoHistoricoValido(
         return false;
 
     }
+
+
+    if (
+        !jogo.data_jogo
+    ) {
+
+        return false;
+
+    }
+
 
     return true;
 
@@ -780,6 +903,7 @@ function filtrarHistoricoValido(
 
     }
 
+
     return historico.filter(
         jogo =>
             jogoHistoricoValido(
@@ -792,6 +916,14 @@ function filtrarHistoricoValido(
 
 // ==========================================================
 // ESTATÍSTICAS DA EQUIPE
+//
+// IMPORTANTE:
+//
+// Se não houver histórico,
+// não inventa 50% nem 1 gol.
+//
+// Retorna ZERO.
+//
 // ==========================================================
 
 function calcularEstatisticasEquipe(
@@ -813,9 +945,9 @@ function calcularEstatisticasEquipe(
 
             jogos: 0,
 
-            golsMarcados: 1,
+            golsMarcados: 0,
 
-            golsSofridos: 1,
+            golsSofridos: 0,
 
             vitorias: 0,
 
@@ -823,9 +955,9 @@ function calcularEstatisticasEquipe(
 
             derrotas: 0,
 
-            aproveitamento: 0.5,
+            aproveitamento: 0,
 
-            forma: 0.5
+            forma: 0
 
         };
 
@@ -841,12 +973,14 @@ function calcularEstatisticasEquipe(
 
 
     const nomeEquipe =
-        texto(equipe)
-            .toLowerCase();
+        normalizarNomeEquipe(
+            equipe
+        );
 
 
     for (
-        const jogo of jogos
+        const jogo
+        of jogos
     ) {
 
         const casa =
@@ -871,13 +1005,17 @@ function calcularEstatisticasEquipe(
             );
 
 
-        const ehCasa =
-            casa.toLowerCase()
+        const equipeEhCasa =
+            normalizarNomeEquipe(
+                casa
+            )
             ===
             nomeEquipe;
 
 
-        if (ehCasa) {
+        if (
+            equipeEhCasa
+        ) {
 
             golsMarcados.push(
                 golsCasa
@@ -909,7 +1047,6 @@ function calcularEstatisticasEquipe(
             }
 
         }
-
         else {
 
             golsMarcados.push(
@@ -965,17 +1102,15 @@ function calcularEstatisticasEquipe(
 
 
     for (
-        const jogo of jogos
+        const jogo
+        of jogos
     ) {
 
-        const casa =
-            texto(
+        const equipeEhCasa =
+            normalizarNomeEquipe(
                 jogo.time_casa
             )
-            .toLowerCase();
-
-        const equipeEhCasa =
-            casa ===
+            ===
             nomeEquipe;
 
 
@@ -990,11 +1125,12 @@ function calcularEstatisticasEquipe(
             );
 
 
-        let pontos =
-            0;
+        let pontos = 0;
 
 
-        if (equipeEhCasa) {
+        if (
+            equipeEhCasa
+        ) {
 
             if (
                 gc > gf
@@ -1087,12 +1223,15 @@ function calcularEstatisticasEquipe(
 
 // ==========================================================
 // H2H
+//
+// Agora usa nomes normalizados.
 // ==========================================================
 
 async function buscarH2H(
     casa,
     fora,
-    dataJogo = null
+    dataJogo = null,
+    apiIdAtual = null
 ) {
 
     if (
@@ -1107,202 +1246,235 @@ async function buscarH2H(
 
     try {
 
-        let resultado;
+        const expressaoCasa =
+            SQL_NORMALIZAR_NOME
+                .replace(
+                    "%COLUNA%",
+                    "time_casa"
+                );
+
+        const expressaoFora =
+            SQL_NORMALIZAR_NOME
+                .replace(
+                    "%COLUNA%",
+                    "time_fora"
+                );
+
+
+        let parametros = [
+            casa,
+            fora
+        ];
+
+
+        let condicaoData;
 
 
         if (
             dataJogo
         ) {
 
-            resultado =
-                await query(
+            parametros.push(
+                dataJogo
+            );
 
-                    `
-                    SELECT
-
-                        id,
-
-                        api_id,
-
-                        time_casa,
-                        time_fora,
-
-                        gols_casa,
-                        gols_fora,
-
-                        data_jogo,
-                        status
-
-                    FROM jogos
-
-                    WHERE
-
-                        (
-
-                            (
-
-                                LOWER(
-                                    TRIM(time_casa)
-                                )
-                                =
-                                LOWER(
-                                    TRIM($1)
-                                )
-
-                                AND
-
-                                LOWER(
-                                    TRIM(time_fora)
-                                )
-                                =
-                                LOWER(
-                                    TRIM($2)
-                                )
-
-                            )
-
-                            OR
-
-                            (
-
-                                LOWER(
-                                    TRIM(time_casa)
-                                )
-                                =
-                                LOWER(
-                                    TRIM($2)
-                                )
-
-                                AND
-
-                                LOWER(
-                                    TRIM(time_fora)
-                                )
-                                =
-                                LOWER(
-                                    TRIM($1)
-                                )
-
-                            )
-
-                        )
-
-                        AND data_jogo IS NOT NULL
-
-                        AND data_jogo < $3
-
-                    ORDER BY
-                        data_jogo DESC
-
-                    LIMIT $4
-                    `,
-
-                    [
-                        casa,
-                        fora,
-                        dataJogo,
-                        LIMITE_H2H
-                    ]
-
-                );
+            condicaoData = `
+                AND data_jogo IS NOT NULL
+                AND data_jogo < $3
+            `;
 
         }
-
         else {
 
-            resultado =
-                await query(
+            condicaoData = `
+                AND data_jogo IS NOT NULL
+                AND data_jogo < CURRENT_TIMESTAMP
+            `;
 
-                    `
-                    SELECT
+        }
 
-                        id,
 
-                        api_id,
+        let condicaoApiId =
+            "";
 
-                        time_casa,
-                        time_fora,
 
-                        gols_casa,
-                        gols_fora,
+        if (
+            apiIdAtual
+        ) {
 
-                        data_jogo,
-                        status
+            parametros.push(
+                apiIdAtual
+            );
 
-                    FROM jogos
+            condicaoApiId = `
+                AND (
+                    api_id IS NULL
+                    OR api_id <> $${parametros.length}
+                )
+            `;
 
-                    WHERE
+        }
 
-                        (
 
-                            (
+        const limiteParametro =
+            parametros.length + 1;
 
-                                LOWER(
-                                    TRIM(time_casa)
-                                )
-                                =
-                                LOWER(
-                                    TRIM($1)
-                                )
 
-                                AND
+        parametros.push(
+            LIMITE_H2H
+        );
 
-                                LOWER(
-                                    TRIM(time_fora)
-                                )
-                                =
-                                LOWER(
-                                    TRIM($2)
-                                )
 
-                            )
+        const sql = `
 
-                            OR
+            SELECT
 
-                            (
+                id,
+                api_id,
 
-                                LOWER(
-                                    TRIM(time_casa)
-                                )
-                                =
-                                LOWER(
-                                    TRIM($2)
-                                )
+                time_casa,
+                time_fora,
 
-                                AND
+                gols_casa,
+                gols_fora,
 
-                                LOWER(
-                                    TRIM(time_fora)
-                                )
-                                =
-                                LOWER(
-                                    TRIM($1)
-                                )
+                data_jogo,
+                status
 
-                            )
+            FROM jogos
+
+            WHERE
+
+                (
+
+                    (
+
+                        ${expressaoCasa}
+
+                        =
+
+                        regexp_replace(
+
+                            translate(
+
+                                lower(
+                                    trim($1)
+                                ),
+
+                                'áàãâäéèêëíìîïóòõôöúùûüçñ',
+                                'aaaaaeeeeiiiiooooouuuucn'
+
+                            ),
+
+                            '[^a-z0-9]',
+                            '',
+                            'g'
 
                         )
 
-                        AND data_jogo IS NOT NULL
+                        AND
 
-                        AND data_jogo <
-                        CURRENT_TIMESTAMP
+                        ${expressaoFora}
 
-                    ORDER BY
-                        data_jogo DESC
+                        =
 
-                    LIMIT $3
-                    `,
+                        regexp_replace(
 
-                    [
-                        casa,
-                        fora,
-                        LIMITE_H2H
-                    ]
+                            translate(
 
-                );
+                                lower(
+                                    trim($2)
+                                ),
 
-        }
+                                'áàãâäéèêëíìîïóòõôöúùûüçñ',
+                                'aaaaaeeeeiiiiooooouuuucn'
+
+                            ),
+
+                            '[^a-z0-9]',
+                            '',
+                            'g'
+
+                        )
+
+                    )
+
+                    OR
+
+                    (
+
+                        ${expressaoCasa}
+
+                        =
+
+                        regexp_replace(
+
+                            translate(
+
+                                lower(
+                                    trim($2)
+                                ),
+
+                                'áàãâäéèêëíìîïóòõôöúùûüçñ',
+                                'aaaaaeeeeiiiiooooouuuucn'
+
+                            ),
+
+                            '[^a-z0-9]',
+                            '',
+                            'g'
+
+                        )
+
+                        AND
+
+                        ${expressaoFora}
+
+                        =
+
+                        regexp_replace(
+
+                            translate(
+
+                                lower(
+                                    trim($1)
+                                ),
+
+                                'áàãâäéèêëíìîïóòõôöúùûüçñ',
+                                'aaaaaeeeeiiiiooooouuuucn'
+
+                            ),
+
+                            '[^a-z0-9]',
+                            '',
+                            'g'
+
+                        )
+
+                    )
+
+                )
+
+                ${condicaoData}
+
+                ${condicaoApiId}
+
+                AND gols_casa IS NOT NULL
+                AND gols_fora IS NOT NULL
+
+            ORDER BY
+                data_jogo DESC
+
+            LIMIT $${limiteParametro}
+
+        `;
+
+
+        const resultado =
+            await query(
+                sql,
+                parametros
+            );
 
 
         const linhas =
@@ -1360,12 +1532,19 @@ function calcularEstatisticasH2H(
     const golsFora = [];
 
 
+    const nomeCasaAtual =
+        normalizarNomeEquipe(
+            casa
+        );
+
+
     for (
-        const jogo of jogos
+        const jogo
+        of jogos
     ) {
 
         const nomeCasa =
-            texto(
+            normalizarNomeEquipe(
                 jogo.time_casa
             );
 
@@ -1383,25 +1562,36 @@ function calcularEstatisticasH2H(
 
         const casaFoiMandante =
             nomeCasa
-                .toLowerCase()
-                ===
-                texto(casa)
-                    .toLowerCase();
+            ===
+            nomeCasaAtual;
 
 
-        if (casaFoiMandante) {
+        if (
+            casaFoiMandante
+        ) {
 
             golsCasa.push(gc);
             golsFora.push(gf);
 
-            if (gc > gf) {
+
+            if (
+                gc > gf
+            ) {
+
                 vitoriasCasa++;
+
             }
-            else if (gc === gf) {
+            else if (
+                gc === gf
+            ) {
+
                 empates++;
+
             }
             else {
+
                 vitoriasFora++;
+
             }
 
         }
@@ -1410,14 +1600,25 @@ function calcularEstatisticasH2H(
             golsCasa.push(gf);
             golsFora.push(gc);
 
-            if (gf > gc) {
+
+            if (
+                gf > gc
+            ) {
+
                 vitoriasCasa++;
+
             }
-            else if (gf === gc) {
+            else if (
+                gf === gc
+            ) {
+
                 empates++;
+
             }
             else {
+
                 vitoriasFora++;
+
             }
 
         }
@@ -1461,6 +1662,11 @@ function calcularEstatisticasH2H(
 
 // ==========================================================
 // FORÇA OFENSIVA
+//
+// O histórico continua sendo zero quando não existe.
+//
+// O fallback 1.0 é utilizado SOMENTE pelo modelo,
+// nunca nas estatísticas apresentadas.
 // ==========================================================
 
 function calcularForcaOfensiva(
@@ -1488,11 +1694,6 @@ function calcularForcaOfensiva(
 
 // ==========================================================
 // FORÇA DEFENSIVA
-//
-// Aqui usamos gols sofridos como referência.
-//
-// Quanto maior o número de gols sofridos,
-// maior a vulnerabilidade defensiva.
 // ==========================================================
 
 function calcularForcaDefensiva(
@@ -1568,10 +1769,8 @@ function calcularGolsEsperados(
 
 
     // ======================================================
-    // PEQUENO AJUSTE H2H
-    //
-    // Somente quando existem confrontos válidos.
-    // Peso baixo para não dominar o modelo.
+    // H2H
+    // Somente se houver pelo menos 3 confrontos reais.
     // ======================================================
 
     if (
@@ -1622,10 +1821,6 @@ function calcularGolsEsperados(
     lambdaFora *=
         0.95;
 
-
-    // ======================================================
-    // LIMITES
-    // ======================================================
 
     lambdaCasa =
         limitar(
@@ -1984,6 +2179,8 @@ function calcularAmbasMarcam(
 
 // ==========================================================
 // CONFIANÇA
+//
+// Agora a confiança é reduzida quando não existe histórico.
 // ==========================================================
 
 function calcularConfianca(
@@ -2041,7 +2238,7 @@ function calcularConfianca(
 
 
     let confianca =
-        35;
+        25;
 
 
     confianca +=
@@ -2076,6 +2273,13 @@ function calcularConfianca(
         confianca += 3;
 
     }
+    else if (
+        amostra === 0
+    ) {
+
+        confianca -= 8;
+
+    }
 
 
     if (
@@ -2093,6 +2297,25 @@ function calcularConfianca(
             20,
             95
         );
+
+
+    // ======================================================
+    // SEM HISTÓRICO SUFICIENTE:
+    // nunca classificar como Alta.
+    // ======================================================
+
+    if (
+        amostra <
+        MINIMO_JOGOS_HISTORICO
+    ) {
+
+        confianca =
+            Math.min(
+                confianca,
+                59
+            );
+
+    }
 
 
     let nivel =
@@ -2306,10 +2529,6 @@ export async function analisarMercado(
     dados = {}
 ) {
 
-    // ======================================================
-    // ACEITAR OBJETO OU STRING
-    // ======================================================
-
     const equipes =
         extrairEquipes(
             jogo
@@ -2341,6 +2560,13 @@ export async function analisarMercado(
         );
 
 
+    const apiIdAtual =
+        jogo?.api_id ??
+        jogo?.apiId ??
+        jogo?.fixture?.id ??
+        null;
+
+
     console.log(
         "=================================================="
     );
@@ -2358,33 +2584,55 @@ export async function analisarMercado(
     );
 
     console.log(
+        `🆔 API ID atual: ${apiIdAtual || "não informado"}`
+    );
+
+    if (
+        dataJogo
+    ) {
+
+        console.log(
+            `📅 Data do jogo: ${dataJogo.toISOString()}`
+        );
+
+    }
+
+    console.log(
         "=================================================="
     );
 
 
     // ======================================================
-    // HISTÓRICO
+    // HISTÓRICO CASA
     // ======================================================
 
     console.log(
         `📚 Consultando histórico do time: ${equipes.casa}`
     );
 
+
     const historicoCasa =
         await buscarHistoricoEquipe(
             equipes.casa,
-            dataJogo
+            dataJogo,
+            apiIdAtual
         );
 
+
+    // ======================================================
+    // HISTÓRICO FORA
+    // ======================================================
 
     console.log(
         `📚 Consultando histórico do time: ${equipes.fora}`
     );
 
+
     const historicoFora =
         await buscarHistoricoEquipe(
             equipes.fora,
-            dataJogo
+            dataJogo,
+            apiIdAtual
         );
 
 
@@ -2392,6 +2640,7 @@ export async function analisarMercado(
         filtrarHistoricoValido(
             historicoCasa
         );
+
 
     const historicoForaValido =
         filtrarHistoricoValido(
@@ -2403,6 +2652,7 @@ export async function analisarMercado(
         `📊 ${equipes.casa}: ` +
         `${historicoCasaValido.length} jogos históricos válidos`
     );
+
 
     console.log(
         `📊 ${equipes.fora}: ` +
@@ -2423,7 +2673,8 @@ export async function analisarMercado(
         await buscarH2H(
             equipes.casa,
             equipes.fora,
-            dataJogo
+            dataJogo,
+            apiIdAtual
         );
 
 
@@ -2438,6 +2689,7 @@ export async function analisarMercado(
     console.log(
         `⚔️ H2H válido: ${h2h.jogos} confrontos`
     );
+
 
     console.log(
         `⚔️ H2H: ${h2h.jogos} confrontos | ` +
@@ -2607,6 +2859,10 @@ export async function analisarMercado(
         );
 
 
+    // ======================================================
+    // VALUE BET
+    // ======================================================
+
     const valueCasa =
         calcularValueBet(
             probabilidades.casa,
@@ -2740,6 +2996,76 @@ export async function analisarMercado(
 
 
     // ======================================================
+    // QUALIDADE DOS DADOS
+    // ======================================================
+
+    let qualidadeDados =
+        "Limitada";
+
+
+    if (
+        amostra >= 5 &&
+        h2h.jogos >= 3
+    ) {
+
+        qualidadeDados =
+            "Excelente";
+
+    }
+    else if (
+        amostra >= 5
+    ) {
+
+        qualidadeDados =
+            "Boa";
+
+    }
+    else if (
+        amostra >= 3
+    ) {
+
+        qualidadeDados =
+            "Moderada";
+
+    }
+
+
+    // ======================================================
+    // AVISO DE HISTÓRICO
+    // ======================================================
+
+    let avisoHistorico =
+        null;
+
+
+    if (
+        estatisticasCasa.jogos === 0 &&
+        estatisticasFora.jogos === 0
+    ) {
+
+        avisoHistorico =
+            "Nenhum histórico válido encontrado para os dois times.";
+
+    }
+    else if (
+        estatisticasCasa.jogos === 0
+    ) {
+
+        avisoHistorico =
+            `Nenhum histórico válido encontrado para ${equipes.casa}.`;
+
+    }
+    else if (
+        estatisticasFora.jogos === 0
+    ) {
+
+        avisoHistorico =
+            `Nenhum histórico válido encontrado para ${equipes.fora}.`;
+
+    }
+
+
+    // ======================================================
     // RESULTADO
     // ======================================================
 
@@ -2749,7 +3075,7 @@ export async function analisarMercado(
             true,
 
         algoritmo:
-            "BetVision AI Motor Estatístico v8.0",
+            "BetVision AI Motor Estatístico v9.0",
 
         jogo: {
 
@@ -2763,9 +3089,7 @@ export async function analisarMercado(
                 equipes.fora,
 
             api_id:
-                jogo?.api_id ??
-                jogo?.apiId ??
-                null,
+                apiIdAtual,
 
             data_jogo:
                 jogo?.data_jogo ??
@@ -2894,11 +3218,9 @@ export async function analisarMercado(
 
         confianca,
 
-        qualidadeDados:
-            amostra >=
-            MINIMO_JOGOS_HISTORICO
-                ? "Boa"
-                : "Limitada"
+        qualidadeDados,
+
+        avisoHistorico
 
     };
 
@@ -2907,9 +3229,6 @@ export async function analisarMercado(
 
 // ==========================================================
 // GERAR ANÁLISE IA
-//
-// Compatibilidade antiga.
-//
 // ==========================================================
 
 export async function gerarAnaliseIA(
@@ -2927,9 +3246,6 @@ export async function gerarAnaliseIA(
 
 // ==========================================================
 // GERAR ANÁLISE INTELIGENTE
-//
-// ESTA É A FUNÇÃO QUE routes/analises.js IMPORTA.
-//
 // ==========================================================
 
 export async function gerarAnaliseInteligente(
@@ -2959,10 +3275,7 @@ export async function gerarAnaliseInteligente(
 // ==========================================================
 // LISTAR ANÁLISES
 //
-// Compatibilidade de serviço.
-//
-// SOMENTE HOJE + AMANHÃ.
-//
+// SOMENTE HOJE + AMANHÃ
 // ==========================================================
 
 export async function listarAnalises() {
