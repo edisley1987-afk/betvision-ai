@@ -2,7 +2,7 @@
 // BETVISION AI
 // services/historicoService.js
 //
-// VERSÃO 10.0
+// VERSÃO 11.0
 // MOTOR DE HISTÓRICO ESTATÍSTICO
 // PostgreSQL / NeonDB
 //
@@ -15,22 +15,27 @@
 // - Nunca criar jogos fictícios
 // - Nunca usar jogos futuros como histórico
 // - Nunca usar jogos de hoje como histórico
+// - Somente jogos com resultado real
 // - Compatível com PostgreSQL / NeonDB
 // - api_id tratado como INTEGER
 // - Timezone: America/Sao_Paulo
 //
-// CORREÇÕES:
+// CORREÇÕES V11:
 //
-// 1. Histórico usa somente partidas já realizadas
-// 2. Jogos futuros são ignorados
-// 3. Jogos de hoje ainda não encerrados são ignorados
-// 4. H2H é calculado a partir do banco real
-// 5. Nomes dos times são comparados de forma segura
-// 6. Evita duplicação de partidas
-// 7. Retorna estrutura compatível com routes/jogos.js
-// 8. Não depende de jogo_id
-// 9. Não apaga histórico
-// 10. Não cria dados artificiais
+// 1. Não transforma ausência de placar em 0 x 0
+// 2. Somente jogos com resultado real entram nas estatísticas
+// 3. Jogos futuros são ignorados
+// 4. Jogos de hoje são ignorados
+// 5. Jogos em andamento são ignorados
+// 6. H2H usa somente partidas concluídas
+// 7. Normalização de nomes mais robusta
+// 8. Evita duplicação
+// 9. Não depende de jogo_id
+// 10. api_id é preservado
+// 11. Limite é aplicado depois dos filtros
+// 12. Compatível com routes/jogos.js
+// 13. Não cria dados artificiais
+// 14. Não apaga histórico
 // ==========================================================
 
 import {
@@ -46,30 +51,34 @@ const TIMEZONE =
     "America/Sao_Paulo";
 
 
-// Quantidade máxima de jogos históricos
-// utilizados pela IA para cada time.
-//
-// 20 é suficiente para manter o processamento
-// rápido e ainda fornecer histórico relevante.
-
 const LIMITE_HISTORICO =
     20;
 
-
-// Limite máximo de H2H
 
 const LIMITE_H2H =
     20;
 
 
+// Quantidade maior buscada inicialmente.
+// Depois os registros inválidos são removidos.
+// Isso evita que jogos sem placar ocupem o limite.
+const LIMITE_BUSCA_HISTORICO =
+    100;
+
+
+const LIMITE_BUSCA_H2H =
+    100;
+
+
 // ==========================================================
-// DATA/HORA ATUAL
+// DATA ATUAL
 // ==========================================================
 
 function obterAgora() {
 
     const agora =
         new Date();
+
 
     if (
         Number.isNaN(
@@ -81,17 +90,63 @@ function obterAgora() {
 
     }
 
+
     return agora;
 
 }
 
 
 // ==========================================================
-// NORMALIZAR NOME DO TIME
+// DATA DE HOJE NO BRASIL
+// ==========================================================
+
+function obterDataHojeBrasil() {
+
+    try {
+
+        return new Intl.DateTimeFormat(
+            "en-CA",
+            {
+                timeZone:
+                    TIMEZONE,
+
+                year:
+                    "numeric",
+
+                month:
+                    "2-digit",
+
+                day:
+                    "2-digit"
+            }
+        ).format(
+            new Date()
+        );
+
+    }
+
+    catch (
+        erro
+    ) {
+
+        console.error(
+            "❌ Erro data Brasil:",
+            erro.message
+        );
+
+        return null;
+
+    }
+
+}
+
+
+// ==========================================================
+// NORMALIZAR NOME
 //
-// Serve apenas para comparação.
+// Usado somente para comparação.
 //
-// NÃO altera o nome salvo no banco.
+// Não altera o nome original salvo no banco.
 // ==========================================================
 
 function normalizarNomeTime(
@@ -107,6 +162,7 @@ function normalizarNomeTime(
 
     }
 
+
     return String(
         nome
     )
@@ -115,13 +171,20 @@ function normalizarNomeTime(
             /\s+/g,
             " "
         )
+        .normalize(
+            "NFD"
+        )
+        .replace(
+            /[\u0300-\u036f]/g,
+            ""
+        )
         .toLowerCase();
 
 }
 
 
 // ==========================================================
-// VALIDAR NOME DO TIME
+// VALIDAR NOME
 // ==========================================================
 
 function nomeTimeValido(
@@ -154,7 +217,9 @@ function nomeTimeValido(
         "time a",
         "time b",
         "null",
-        "undefined"
+        "undefined",
+        "n/a",
+        "na"
 
     ];
 
@@ -218,24 +283,205 @@ function numeroSeguro(
     padrao = 0
 ) {
 
+    if (
+        valor === undefined ||
+        valor === null ||
+        valor === ""
+    ) {
+
+        return padrao;
+
+    }
+
+
     const numero =
         Number(
             valor
         );
 
 
+    return Number.isFinite(
+        numero
+    )
+        ? numero
+        : padrao;
+
+}
+
+
+// ==========================================================
+// OBTER DATA DO JOGO
+// ==========================================================
+
+function obterDataJogo(
+    jogo
+) {
+
     if (
-        Number.isFinite(
-            numero
-        )
+        !jogo
     ) {
 
-        return numero;
+        return null;
 
     }
 
 
-    return padrao;
+    return (
+
+        jogo.data_jogo ??
+
+        jogo.dataJogo ??
+
+        jogo.utcDate ??
+
+        jogo.horario ??
+
+        jogo.data ??
+
+        jogo.fixture?.date ??
+
+        null
+
+    );
+
+}
+
+
+// ==========================================================
+// OBTER STATUS
+// ==========================================================
+
+function obterStatus(
+    jogo
+) {
+
+    if (
+        !jogo
+    ) {
+
+        return "";
+
+    }
+
+
+    const status =
+        jogo.status;
+
+
+    if (
+        typeof status ===
+        "string"
+    ) {
+
+        return status
+            .trim()
+            .toUpperCase();
+
+    }
+
+
+    if (
+        status &&
+        typeof status ===
+        "object"
+    ) {
+
+        return String(
+
+            status.short ??
+            status.type ??
+            status.long ??
+            ""
+
+        )
+            .trim()
+            .toUpperCase();
+
+    }
+
+
+    return String(
+
+        jogo.status_short ??
+        jogo.statusShort ??
+        jogo.status_type ??
+        ""
+
+    )
+        .trim()
+        .toUpperCase();
+
+}
+
+
+// ==========================================================
+// OBTER TIMES
+// ==========================================================
+
+function obterTimeCasa(
+    jogo
+) {
+
+    if (
+        !jogo
+    ) {
+
+        return null;
+
+    }
+
+
+    return (
+
+        jogo.time_casa ??
+
+        jogo.timeCasa ??
+
+        jogo.casa ??
+
+        jogo.home_team ??
+
+        jogo.homeTeam?.name ??
+
+        jogo.teams?.home?.name ??
+
+        null
+
+    );
+
+}
+
+
+function obterTimeFora(
+    jogo
+) {
+
+    if (
+        !jogo
+    ) {
+
+        return null;
+
+    }
+
+
+    return (
+
+        jogo.time_fora ??
+
+        jogo.timeFora ??
+
+        jogo.fora ??
+
+        jogo.away_team ??
+
+        jogo.awayTeam?.name ??
+
+        jogo.teams?.away?.name ??
+
+        null
+
+    );
 
 }
 
@@ -243,8 +489,11 @@ function numeroSeguro(
 // ==========================================================
 // OBTER GOLS
 //
-// Compatível com diferentes formatos existentes
-// no banco/API.
+// IMPORTANTE:
+//
+// Esta função retorna null quando o placar NÃO existe.
+//
+// Nunca converte ausência de placar para 0 x 0.
 // ==========================================================
 
 function obterGols(
@@ -257,62 +506,391 @@ function obterGols(
 
         return {
 
-            casa: 0,
+            possui:
+                false,
 
-            fora: 0
+            casa:
+                null,
+
+            fora:
+                null
 
         };
 
     }
 
 
-    const golsCasa =
-        numeroSeguro(
+    // ======================================================
+    // FORMATO DIRETO
+    // ======================================================
 
-            jogo.gols_casa ??
-            jogo.golsCasa ??
-            jogo.home_goals ??
-            jogo.homeGoals ??
-            jogo.placar?.casa ??
-            jogo.placar?.home ??
-            jogo.score?.fullTime?.home ??
-            jogo.score?.fulltime?.home ??
-            jogo.score?.home ??
-            0
+    const camposDiretos = [
 
-        );
+        [
+            jogo.gols_casa,
+            jogo.gols_fora
+        ],
+
+        [
+            jogo.golsCasa,
+            jogo.golsFora
+        ],
+
+        [
+            jogo.home_goals,
+            jogo.away_goals
+        ],
+
+        [
+            jogo.homeGoals,
+            jogo.awayGoals
+        ]
+
+    ];
 
 
-    const golsFora =
-        numeroSeguro(
+    for (
+        const [
+            casa,
+            fora
+        ]
+        of camposDiretos
+    ) {
 
-            jogo.gols_fora ??
-            jogo.golsFora ??
-            jogo.away_goals ??
-            jogo.awayGoals ??
-            jogo.placar?.fora ??
-            jogo.placar?.away ??
-            jogo.score?.fullTime?.away ??
-            jogo.score?.fulltime?.away ??
-            jogo.score?.away ??
-            0
+        if (
 
-        );
+            casa !== undefined &&
+            casa !== null &&
+            casa !== "" &&
 
+            fora !== undefined &&
+            fora !== null &&
+            fora !== ""
+
+        ) {
+
+            const golsCasa =
+                Number(
+                    casa
+                );
+
+
+            const golsFora =
+                Number(
+                    fora
+                );
+
+
+            if (
+
+                Number.isFinite(
+                    golsCasa
+                )
+
+                &&
+
+                Number.isFinite(
+                    golsFora
+                )
+
+                &&
+
+                golsCasa >= 0
+
+                &&
+
+                golsFora >= 0
+
+            ) {
+
+                return {
+
+                    possui:
+                        true,
+
+                    casa:
+                        golsCasa,
+
+                    fora:
+                        golsFora
+
+                };
+
+            }
+
+        }
+
+    }
+
+
+    // ======================================================
+    // PLACAR
+    // ======================================================
+
+    const placar =
+        jogo.placar;
+
+
+    if (
+        placar
+    ) {
+
+        const casa =
+            placar.casa ??
+            placar.home;
+
+
+        const fora =
+            placar.fora ??
+            placar.away;
+
+
+        if (
+
+            casa !== undefined &&
+            casa !== null &&
+
+            fora !== undefined &&
+            fora !== null
+
+        ) {
+
+            const golsCasa =
+                Number(
+                    casa
+                );
+
+
+            const golsFora =
+                Number(
+                    fora
+                );
+
+
+            if (
+
+                Number.isFinite(
+                    golsCasa
+                )
+
+                &&
+
+                Number.isFinite(
+                    golsFora
+                )
+
+                &&
+
+                golsCasa >= 0
+
+                &&
+
+                golsFora >= 0
+
+            ) {
+
+                return {
+
+                    possui:
+                        true,
+
+                    casa:
+                        golsCasa,
+
+                    fora:
+                        golsFora
+
+                };
+
+            }
+
+        }
+
+    }
+
+
+    // ======================================================
+    // SCORE
+    // ======================================================
+
+    const score =
+        jogo.score;
+
+
+    if (
+        score
+    ) {
+
+        const fullTime =
+            score.fullTime ??
+            score.fulltime ??
+            null;
+
+
+        if (
+            fullTime
+        ) {
+
+            const casa =
+                fullTime.home;
+
+
+            const fora =
+                fullTime.away;
+
+
+            if (
+
+                casa !== undefined &&
+                casa !== null &&
+
+                fora !== undefined &&
+                fora !== null
+
+            ) {
+
+                const golsCasa =
+                    Number(
+                        casa
+                    );
+
+
+                const golsFora =
+                    Number(
+                        fora
+                    );
+
+
+                if (
+
+                    Number.isFinite(
+                        golsCasa
+                    )
+
+                    &&
+
+                    Number.isFinite(
+                        golsFora
+                    )
+
+                    &&
+
+                    golsCasa >= 0
+
+                    &&
+
+                    golsFora >= 0
+
+                ) {
+
+                    return {
+
+                        possui:
+                            true,
+
+                        casa:
+                            golsCasa,
+
+                        fora:
+                            golsFora
+
+                    };
+
+                }
+
+            }
+
+        }
+
+
+        // Alguns formatos
+
+        const casa =
+            score.home;
+
+
+        const fora =
+            score.away;
+
+
+        if (
+
+            casa !== undefined &&
+            casa !== null &&
+
+            fora !== undefined &&
+            fora !== null
+
+        ) {
+
+            const golsCasa =
+                Number(
+                    casa
+                );
+
+
+            const golsFora =
+                Number(
+                    fora
+                );
+
+
+            if (
+
+                Number.isFinite(
+                    golsCasa
+                )
+
+                &&
+
+                Number.isFinite(
+                    golsFora
+                )
+
+                &&
+
+                golsCasa >= 0
+
+                &&
+
+                golsFora >= 0
+
+            ) {
+
+                return {
+
+                    possui:
+                        true,
+
+                    casa:
+                        golsCasa,
+
+                    fora:
+                        golsFora
+
+                };
+
+            }
+
+        }
+
+    }
+
+
+    // ======================================================
+    // NÃO EXISTE RESULTADO
+    // ======================================================
 
     return {
 
+        possui:
+            false,
+
         casa:
-            Math.max(
-                0,
-                golsCasa
-            ),
+            null,
 
         fora:
-            Math.max(
-                0,
-                golsFora
-            )
+            null
 
     };
 
@@ -320,37 +898,25 @@ function obterGols(
 
 
 // ==========================================================
-// VERIFICAR SE O JOGO JÁ FOI REALIZADO
-//
-// REGRA MUITO IMPORTANTE:
-//
-// O histórico da IA NÃO pode usar:
-//
-// - jogos futuros
-// - jogos de amanhã
-// - jogos ainda não iniciados
-//
-// Somente partidas cuja data já passou entram
-// automaticamente no histórico.
-//
+// VERIFICAR DATA
 // ==========================================================
 
-function jogoJaRealizado(
-    jogo
+function obterTimestamp(
+    valor
 ) {
 
     if (
-        !jogo?.data_jogo
+        !valor
     ) {
 
-        return false;
+        return null;
 
     }
 
 
     const data =
         new Date(
-            jogo.data_jogo
+            valor
         );
 
 
@@ -358,6 +924,36 @@ function jogoJaRealizado(
         Number.isNaN(
             data.getTime()
         )
+    ) {
+
+        return null;
+
+    }
+
+
+    return data.getTime();
+
+}
+
+
+// ==========================================================
+// JOGO É ANTERIOR A AGORA
+// ==========================================================
+
+function jogoJaRealizado(
+    jogo
+) {
+
+    const data =
+        obterTimestamp(
+            obterDataJogo(
+                jogo
+            )
+        );
+
+
+    if (
+        data === null
     ) {
 
         return false;
@@ -379,7 +975,7 @@ function jogoJaRealizado(
 
 
     return (
-        data.getTime() <
+        data <
         agora.getTime()
     );
 
@@ -387,20 +983,21 @@ function jogoJaRealizado(
 
 
 // ==========================================================
-// VERIFICAR STATUS DO JOGO
-//
-// Alguns provedores retornam partidas futuras com
-// horários anteriores por problemas de timezone.
-// Por isso também verificamos status.
-//
+// VERIFICAR SE É HOJE NO BRASIL
 // ==========================================================
 
-function statusPermiteHistorico(
+function jogoEhHoje(
     jogo
 ) {
 
+    const valor =
+        obterDataJogo(
+            jogo
+        );
+
+
     if (
-        !jogo
+        !valor
     ) {
 
         return false;
@@ -408,21 +1005,84 @@ function statusPermiteHistorico(
     }
 
 
-    const status =
-        String(
+    const data =
+        new Date(
+            valor
+        );
 
-            jogo.status ??
-            jogo.status_short ??
-            jogo.statusShort ??
-            ""
 
+    if (
+        Number.isNaN(
+            data.getTime()
         )
-        .trim()
-        .toUpperCase();
+    ) {
+
+        return false;
+
+    }
 
 
-    // Se não houver status, a data será a principal
-    // proteção.
+    const hoje =
+        obterDataHojeBrasil();
+
+
+    if (
+        !hoje
+    ) {
+
+        return false;
+
+    }
+
+
+    const dataLocal =
+        new Intl.DateTimeFormat(
+            "en-CA",
+            {
+                timeZone:
+                    TIMEZONE,
+
+                year:
+                    "numeric",
+
+                month:
+                    "2-digit",
+
+                day:
+                    "2-digit"
+            }
+        ).format(
+            data
+        );
+
+
+    return (
+        dataLocal ===
+        hoje
+    );
+
+}
+
+
+// ==========================================================
+// STATUS PERMITE HISTÓRICO
+// ==========================================================
+
+function statusPermiteHistorico(
+    jogo
+) {
+
+    const status =
+        obterStatus(
+            jogo
+        );
+
+
+    // ======================================================
+    // SEM STATUS
+    //
+    // A data + resultado serão as proteções.
+    // ======================================================
 
     if (
         !status
@@ -441,7 +1101,13 @@ function statusPermiteHistorico(
         "SCHEDULED",
         "TIMED",
         "NOT_STARTED",
-        "UPCOMING"
+        "UPCOMING",
+        "POSTPONED",
+        "CANCELLED",
+        "CANCELED",
+        "PST",
+        "CANC",
+        "ABD"
 
     ];
 
@@ -457,37 +1123,6 @@ function statusPermiteHistorico(
     }
 
 
-    // Status normalmente encerrados
-
-    const encerrados = [
-
-        "FT",
-        "AET",
-        "PEN",
-        "FINISHED",
-        "ENDED",
-        "COMPLETE",
-        "COMPLETED"
-
-    ];
-
-
-    if (
-        encerrados.includes(
-            status
-        )
-    ) {
-
-        return true;
-
-    }
-
-
-    // Estados de partida em andamento.
-    //
-    // Como o histórico estatístico precisa de
-    // resultado final, não usamos jogos ao vivo.
-
     const aoVivo = [
 
         "LIVE",
@@ -501,7 +1136,8 @@ function statusPermiteHistorico(
         "PAUSED",
         "INT",
         "2ND_HALF",
-        "FIRST_HALF"
+        "FIRST_HALF",
+        "BREAK"
 
     ];
 
@@ -517,11 +1153,36 @@ function statusPermiteHistorico(
     }
 
 
-    // Para status desconhecido, a data precisa
-    // estar no passado.
+    const encerrados = [
+
+        "FT",
+        "AET",
+        "PEN",
+        "FINISHED",
+        "ENDED",
+        "COMPLETE",
+        "COMPLETED",
+        "FINAL",
+        "FULL_TIME"
+
+    ];
+
+
+    if (
+        encerrados.includes(
+            status
+        )
+    ) {
+
+        return true;
+
+    }
+
+
+    // Status desconhecido:
     //
-    // Não bloqueamos automaticamente porque bancos
-    // antigos podem não possuir status padronizado.
+    // A data passada + placar real serão
+    // suficientes para permitir o jogo.
 
     return true;
 
@@ -529,17 +1190,14 @@ function statusPermiteHistorico(
 
 
 // ==========================================================
-// VERIFICAR SE POSSUI RESULTADO
-//
-// Evita considerar jogo futuro sem placar.
+// NORMALIZAR JOGO HISTÓRICO
 //
 // IMPORTANTE:
 //
-// 0 x 0 é resultado válido.
-//
+// NÃO cria gols_casa/gols_fora artificiais.
 // ==========================================================
 
-function possuiResultado(
+function normalizarJogoHistorico(
     jogo
 ) {
 
@@ -547,81 +1205,98 @@ function possuiResultado(
         !jogo
     ) {
 
-        return false;
+        return null;
 
     }
 
 
-    // Se houver campos explícitos de gols,
-    // consideramos que existe resultado.
+    const apiId =
+        normalizarApiId(
 
-    const campos = [
+            jogo.api_id ??
 
-        jogo.gols_casa,
-        jogo.gols_fora,
-        jogo.golsCasa,
-        jogo.golsFora,
-        jogo.home_goals,
-        jogo.away_goals,
-        jogo.homeGoals,
-        jogo.awayGoals
+            jogo.apiId ??
 
-    ];
+            jogo.fixture?.id ??
 
+            null
+
+        );
+
+
+    const casa =
+        obterTimeCasa(
+            jogo
+        );
+
+
+    const fora =
+        obterTimeFora(
+            jogo
+        );
+
+
+    const data =
+        obterDataJogo(
+            jogo
+        );
+
+
+    const gols =
+        obterGols(
+            jogo
+        );
+
+
+    const resultado = {
+
+        ...jogo,
+
+        id:
+            jogo.id ??
+            null,
+
+        api_id:
+            apiId,
+
+        time_casa:
+            casa,
+
+        time_fora:
+            fora,
+
+        data_jogo:
+            data,
+
+        status:
+            obterStatus(
+                jogo
+            ) || "FINISHED",
+
+        possui_resultado:
+            gols.possui
+
+    };
+
+
+    // ======================================================
+    // Somente adiciona gols se eles realmente existem.
+    // ======================================================
 
     if (
-        campos.some(
-            valor =>
-                valor !== undefined &&
-                valor !== null &&
-                valor !== ""
-        )
+        gols.possui
     ) {
 
-        return true;
+        resultado.gols_casa =
+            gols.casa;
+
+        resultado.gols_fora =
+            gols.fora;
 
     }
 
 
-    // Verificar objetos de placar
-
-    const placar =
-        jogo.placar;
-
-
-    if (
-        placar &&
-        (
-            placar.casa !== undefined ||
-            placar.fora !== undefined ||
-            placar.home !== undefined ||
-            placar.away !== undefined
-        )
-    ) {
-
-        return true;
-
-    }
-
-
-    const score =
-        jogo.score;
-
-
-    if (
-        score?.fullTime &&
-        (
-            score.fullTime.home !== undefined ||
-            score.fullTime.away !== undefined
-        )
-    ) {
-
-        return true;
-
-    }
-
-
-    return false;
+    return resultado;
 
 }
 
@@ -644,19 +1319,15 @@ function jogoHistoricoValido(
 
 
     const casa =
-        jogo.time_casa ??
-        jogo.casa ??
-        jogo.home_team ??
-        jogo.homeTeam?.name ??
-        "";
+        obterTimeCasa(
+            jogo
+        );
 
 
     const fora =
-        jogo.time_fora ??
-        jogo.fora ??
-        jogo.away_team ??
-        jogo.awayTeam?.name ??
-        "";
+        obterTimeFora(
+            jogo
+        );
 
 
     if (
@@ -687,6 +1358,16 @@ function jogoHistoricoValido(
 
 
     if (
+        !casaNormalizada ||
+        !foraNormalizada
+    ) {
+
+        return false;
+
+    }
+
+
+    if (
         casaNormalizada ===
         foraNormalizada
     ) {
@@ -696,8 +1377,16 @@ function jogoHistoricoValido(
     }
 
 
+    const data =
+        obterTimestamp(
+            obterDataJogo(
+                jogo
+            )
+        );
+
+
     if (
-        !jogo.data_jogo
+        data === null
     ) {
 
         return false;
@@ -705,11 +1394,24 @@ function jogoHistoricoValido(
     }
 
 
-    // ==================================================
-    // REGRA PRINCIPAL
-    //
-    // O jogo obrigatoriamente precisa estar no passado.
-    // ==================================================
+    // ======================================================
+    // NUNCA USAR JOGO DE HOJE
+    // ======================================================
+
+    if (
+        jogoEhHoje(
+            jogo
+        )
+    ) {
+
+        return false;
+
+    }
+
+
+    // ======================================================
+    // NUNCA USAR FUTURO
+    // ======================================================
 
     if (
         !jogoJaRealizado(
@@ -722,9 +1424,9 @@ function jogoHistoricoValido(
     }
 
 
-    // ==================================================
-    // NÃO usar partidas em andamento/futuras
-    // ==================================================
+    // ======================================================
+    // NUNCA USAR JOGO NÃO ENCERRADO
+    // ======================================================
 
     if (
         !statusPermiteHistorico(
@@ -737,79 +1439,11 @@ function jogoHistoricoValido(
     }
 
 
-    // ==================================================
-    // Resultado
+    // ======================================================
+    // RESULTADO REAL OBRIGATÓRIO
     //
-    // Não exigimos placar obrigatoriamente para manter
-    // compatibilidade com bancos antigos.
-    //
-    // Porém, para estatísticas, jogos sem resultado
-    // serão ignorados posteriormente.
-    // ==================================================
-
-    return true;
-
-}
-
-
-// ==========================================================
-// NORMALIZAR JOGO HISTÓRICO
-// ==========================================================
-
-function normalizarJogoHistorico(
-    jogo
-) {
-
-    if (
-        !jogo
-    ) {
-
-        return null;
-
-    }
-
-
-    const apiId =
-        normalizarApiId(
-
-            jogo.api_id ??
-            jogo.apiId ??
-            jogo.fixture?.id ??
-            jogo.id
-
-        );
-
-
-    const casa =
-
-        jogo.time_casa ??
-        jogo.casa ??
-        jogo.home_team ??
-        jogo.homeTeam?.name ??
-        jogo.teams?.home?.name ??
-        null;
-
-
-    const fora =
-
-        jogo.time_fora ??
-        jogo.fora ??
-        jogo.away_team ??
-        jogo.awayTeam?.name ??
-        jogo.teams?.away?.name ??
-        null;
-
-
-    const data =
-
-        jogo.data_jogo ??
-        jogo.dataJogo ??
-        jogo.utcDate ??
-        jogo.horario ??
-        jogo.data ??
-        jogo.fixture?.date ??
-        null;
-
+    // Essa é uma das principais correções.
+    // ======================================================
 
     const gols =
         obterGols(
@@ -817,37 +1451,16 @@ function normalizarJogoHistorico(
         );
 
 
-    return {
+    if (
+        !gols.possui
+    ) {
 
-        ...jogo,
+        return false;
 
-        id:
-            jogo.id ??
-            null,
+    }
 
-        api_id:
-            apiId,
 
-        time_casa:
-            casa,
-
-        time_fora:
-            fora,
-
-        data_jogo:
-            data,
-
-        gols_casa:
-            gols.casa,
-
-        gols_fora:
-            gols.fora,
-
-        status:
-            jogo.status ??
-            "FINISHED"
-
-    };
+    return true;
 
 }
 
@@ -859,7 +1472,7 @@ function normalizarJogoHistorico(
 //
 // 1. api_id
 // 2. id
-// 3. combinação de times + data
+// 3. times + data
 // ==========================================================
 
 function removerDuplicados(
@@ -913,7 +1526,8 @@ function removerDuplicados(
         }
 
         else if (
-            jogo.id
+            jogo.id !== undefined &&
+            jogo.id !== null
         ) {
 
             chave =
@@ -935,15 +1549,22 @@ function removerDuplicados(
                 );
 
 
-            const data =
-                String(
-                    jogo.data_jogo ??
-                    ""
+            const timestamp =
+                obterTimestamp(
+                    jogo.data_jogo
                 );
 
 
             chave =
-                `${casa}|${fora}|${data}`;
+                [
+                    casa,
+                    fora,
+                    timestamp ??
+                    jogo.data_jogo ??
+                    ""
+                ].join(
+                    "|"
+                );
 
         }
 
@@ -981,6 +1602,17 @@ function ordenarHistorico(
     jogos = []
 ) {
 
+    if (
+        !Array.isArray(
+            jogos
+        )
+    ) {
+
+        return [];
+
+    }
+
+
     return [
 
         ...jogos
@@ -993,15 +1625,17 @@ function ordenarHistorico(
             ) => {
 
                 const dataA =
-                    new Date(
+                    obterTimestamp(
                         a?.data_jogo
-                    ).getTime();
+                    ) ??
+                    0;
 
 
                 const dataB =
-                    new Date(
+                    obterTimestamp(
                         b?.data_jogo
-                    ).getTime();
+                    ) ??
+                    0;
 
 
                 return (
@@ -1016,7 +1650,7 @@ function ordenarHistorico(
 
 
 // ==========================================================
-// FILTRAR HISTÓRICO COM RESULTADO
+// FILTRAR PARA ESTATÍSTICA
 // ==========================================================
 
 function filtrarParaEstatistica(
@@ -1038,29 +1672,9 @@ function filtrarParaEstatistica(
 
         jogo => {
 
-            if (
-                !jogoHistoricoValido(
-                    jogo
-                )
-            ) {
-
-                return false;
-
-            }
-
-
-            if (
-                !possuiResultado(
-                    jogo
-                )
-            ) {
-
-                return false;
-
-            }
-
-
-            return true;
+            return jogoHistoricoValido(
+                jogo
+            );
 
         }
 
@@ -1070,15 +1684,7 @@ function filtrarParaEstatistica(
 
 
 // ==========================================================
-// BUSCAR TODOS OS JOGOS DO TIME
-//
-// IMPORTANTE:
-//
-// A consulta traz somente partidas anteriores
-// ao momento atual.
-//
-// O filtro final também é feito em JavaScript
-// como segunda camada de proteção.
+// BUSCAR HISTÓRICO DO TIME
 // ==========================================================
 
 async function buscarHistoricoTime(
@@ -1115,6 +1721,14 @@ async function buscarHistoricoTime(
             return [];
 
         }
+
+
+        console.log(
+
+            `📚 Consultando histórico ` +
+            `do time: ${nomeOriginal}`
+
+        );
 
 
         const resultado =
@@ -1175,14 +1789,14 @@ async function buscarHistoricoTime(
 
                     nomeOriginal,
 
-                    LIMITE_HISTORICO * 3
+                    LIMITE_BUSCA_HISTORICO
 
                 ]
 
             );
 
 
-        const jogos =
+        const rows =
             Array.isArray(
                 resultado?.rows
             )
@@ -1190,9 +1804,21 @@ async function buscarHistoricoTime(
                 : [];
 
 
+        console.log(
+
+            `📚 Banco retornou ` +
+            `${rows.length} registros para ${nomeOriginal}`
+
+        );
+
+
+        // ==================================================
+        // NORMALIZA
+        // ==================================================
+
         const normalizados =
 
-            jogos
+            rows
 
                 .map(
                     normalizarJogoHistorico
@@ -1203,6 +1829,10 @@ async function buscarHistoricoTime(
                 );
 
 
+        // ==================================================
+        // FILTRA SOMENTE HISTÓRICO REAL
+        // ==================================================
+
         const validos =
 
             filtrarParaEstatistica(
@@ -1210,11 +1840,19 @@ async function buscarHistoricoTime(
             );
 
 
+        // ==================================================
+        // REMOVE DUPLICADOS
+        // ==================================================
+
         const unicos =
             removerDuplicados(
                 validos
             );
 
+
+        // ==================================================
+        // ORDENA
+        // ==================================================
 
         const ordenados =
             ordenarHistorico(
@@ -1222,14 +1860,32 @@ async function buscarHistoricoTime(
             );
 
 
-        return ordenados.slice(
-            0,
-            LIMITE_HISTORICO
+        // ==================================================
+        // LIMITE FINAL
+        // ==================================================
+
+        const finais =
+            ordenados.slice(
+                0,
+                LIMITE_HISTORICO
+            );
+
+
+        console.log(
+
+            `📊 Histórico válido ${nomeOriginal}: ` +
+            `${finais.length} jogos`
+
         );
+
+
+        return finais;
 
     }
 
-    catch (erro) {
+    catch (
+        erro
+    ) {
 
         console.error(
 
@@ -1250,8 +1906,6 @@ async function buscarHistoricoTime(
 
 // ==========================================================
 // BUSCAR H2H
-//
-// Retorna somente jogos já realizados entre os dois times.
 // ==========================================================
 
 async function buscarH2H(
@@ -1299,6 +1953,14 @@ async function buscarH2H(
             return [];
 
         }
+
+
+        console.log(
+
+            `⚔️ Consultando H2H: ` +
+            `${casaOriginal} x ${foraOriginal}`
+
+        );
 
 
         const resultado =
@@ -1395,14 +2057,14 @@ async function buscarH2H(
 
                     foraOriginal,
 
-                    LIMITE_H2H * 2
+                    LIMITE_BUSCA_H2H
 
                 ]
 
             );
 
 
-        const jogos =
+        const rows =
             Array.isArray(
                 resultado?.rows
             )
@@ -1410,9 +2072,17 @@ async function buscarH2H(
                 : [];
 
 
+        console.log(
+
+            `⚔️ H2H banco: ` +
+            `${rows.length} registros encontrados`
+
+        );
+
+
         const normalizados =
 
-            jogos
+            rows
 
                 .map(
                     normalizarJogoHistorico
@@ -1442,14 +2112,28 @@ async function buscarH2H(
             );
 
 
-        return ordenados.slice(
-            0,
-            LIMITE_H2H
+        const finais =
+            ordenados.slice(
+                0,
+                LIMITE_H2H
+            );
+
+
+        console.log(
+
+            `⚔️ H2H válido: ` +
+            `${finais.length} confrontos`
+
         );
+
+
+        return finais;
 
     }
 
-    catch (erro) {
+    catch (
+        erro
+    ) {
 
         console.error(
 
@@ -1480,17 +2164,23 @@ function calcularResumoH2H(
 
     const resultado = {
 
-        jogos: 0,
+        jogos:
+            0,
 
-        vitoriasCasa: 0,
+        vitoriasCasa:
+            0,
 
-        empates: 0,
+        empates:
+            0,
 
-        vitoriasFora: 0,
+        vitoriasFora:
+            0,
 
-        golsCasa: 0,
+        golsCasa:
+            0,
 
-        golsFora: 0
+        golsFora:
+            0
 
     };
 
@@ -1524,36 +2214,40 @@ function calcularResumoH2H(
 
         const casaJogo =
             normalizarNomeTime(
-                jogo.time_casa
+                obterTimeCasa(
+                    jogo
+                )
             );
 
 
         const foraJogo =
             normalizarNomeTime(
-                jogo.time_fora
+                obterTimeFora(
+                    jogo
+                )
             );
 
 
         const confrontoNormal =
 
             casaJogo ===
-                casaNormalizada
+            casaNormalizada
 
             &&
 
             foraJogo ===
-                foraNormalizada;
+            foraNormalizada;
 
 
         const confrontoInvertido =
 
             casaJogo ===
-                foraNormalizada
+            foraNormalizada
 
             &&
 
             foraJogo ===
-                casaNormalizada;
+            casaNormalizada;
 
 
         if (
@@ -1572,8 +2266,21 @@ function calcularResumoH2H(
             );
 
 
+        if (
+            !gols.possui
+        ) {
+
+            continue;
+
+        }
+
+
         resultado.jogos++;
 
+
+        // ==================================================
+        // CONFRONTO NORMAL
+        // ==================================================
 
         if (
             confrontoNormal
@@ -1581,6 +2288,7 @@ function calcularResumoH2H(
 
             resultado.golsCasa +=
                 gols.casa;
+
 
             resultado.golsFora +=
                 gols.fora;
@@ -1612,13 +2320,15 @@ function calcularResumoH2H(
 
         }
 
-        else {
+        // ==================================================
+        // CONFRONTO INVERTIDO
+        // ==================================================
 
-            // Jogo antigo foi disputado com
-            // os mandos invertidos.
+        else {
 
             resultado.golsCasa +=
                 gols.fora;
+
 
             resultado.golsFora +=
                 gols.casa;
@@ -1659,15 +2369,9 @@ function calcularResumoH2H(
 
 
 // ==========================================================
-// BUSCAR HISTÓRICO COMPLETO DO CONFRONTO
+// BUSCAR HISTÓRICO COMPLETO DO JOGO
 //
-// FUNÇÃO PRINCIPAL USADA POR routes/jogos.js
-//
-// Retorna:
-//
-// historicoCasa
-// historicoFora
-// confrontoDireto
+// FUNÇÃO UTILIZADA POR routes/jogos.js
 // ==========================================================
 
 export async function buscarHistoricoJogo(
@@ -1692,23 +2396,31 @@ export async function buscarHistoricoJogo(
 
         return {
 
-            historicoCasa: [],
+            historicoCasa:
+                [],
 
-            historicoFora: [],
+            historicoFora:
+                [],
 
             confrontoDireto: {
 
-                jogos: 0,
+                jogos:
+                    0,
 
-                vitoriasCasa: 0,
+                vitoriasCasa:
+                    0,
 
-                empates: 0,
+                empates:
+                    0,
 
-                vitoriasFora: 0,
+                vitoriasFora:
+                    0,
 
-                golsCasa: 0,
+                golsCasa:
+                    0,
 
-                golsFora: 0
+                golsFora:
+                    0
 
             }
 
@@ -1718,18 +2430,37 @@ export async function buscarHistoricoJogo(
 
 
     console.log(
+        "=================================================="
+    );
 
-        `📊 Buscando histórico: ` +
+
+    console.log(
+
+        `📊 BUSCANDO HISTÓRICO REAL: ` +
         `${timeCasa} x ${timeFora}`
 
     );
 
 
-    try {
+    console.log(
 
-        // ==================================================
-        // BUSCAS PARALELAS
-        // ==================================================
+        `📅 Data Brasil: ` +
+        `${obterDataHojeBrasil()}`
+
+    );
+
+
+    console.log(
+        `🌎 Fuso: ${TIMEZONE}`
+    );
+
+
+    console.log(
+        "=================================================="
+    );
+
+
+    try {
 
         const [
 
@@ -1770,7 +2501,7 @@ export async function buscarHistoricoJogo(
         console.log(
 
             `📊 ${timeCasa}: ` +
-            `${historicoCasa.length} jogos históricos`
+            `${historicoCasa.length} jogos históricos válidos`
 
         );
 
@@ -1778,7 +2509,7 @@ export async function buscarHistoricoJogo(
         console.log(
 
             `📊 ${timeFora}: ` +
-            `${historicoFora.length} jogos históricos`
+            `${historicoFora.length} jogos históricos válidos`
 
         );
 
@@ -1786,9 +2517,63 @@ export async function buscarHistoricoJogo(
         console.log(
 
             `⚔️ H2H: ` +
-            `${resumoH2H.jogos} confrontos`
+            `${resumoH2H.jogos} confrontos válidos`
 
         );
+
+
+        // ==================================================
+        // MOSTRAR ÚLTIMOS JOGOS NO LOG
+        // ==================================================
+
+        if (
+            historicoCasa.length > 0
+        ) {
+
+            const ultimo =
+                historicoCasa[0];
+
+
+            const gols =
+                obterGols(
+                    ultimo
+                );
+
+
+            console.log(
+
+                `📝 Último ${timeCasa}: ` +
+                `${ultimo.time_casa} ${gols.casa} x ` +
+                `${gols.fora} ${ultimo.time_fora}`
+
+            );
+
+        }
+
+
+        if (
+            historicoFora.length > 0
+        ) {
+
+            const ultimo =
+                historicoFora[0];
+
+
+            const gols =
+                obterGols(
+                    ultimo
+                );
+
+
+            console.log(
+
+                `📝 Último ${timeFora}: ` +
+                `${ultimo.time_casa} ${gols.casa} x ` +
+                `${gols.fora} ${ultimo.time_fora}`
+
+            );
+
+        }
 
 
         return {
@@ -1816,7 +2601,9 @@ export async function buscarHistoricoJogo(
 
     }
 
-    catch (erro) {
+    catch (
+        erro
+    ) {
 
         console.error(
 
@@ -1830,33 +2617,45 @@ export async function buscarHistoricoJogo(
 
         return {
 
-            historicoCasa: [],
+            historicoCasa:
+                [],
 
-            historicoFora: [],
+            historicoFora:
+                [],
 
             confrontoDireto: {
 
-                jogos: 0,
+                jogos:
+                    0,
 
-                vitoriasCasa: 0,
+                vitoriasCasa:
+                    0,
 
-                empates: 0,
+                empates:
+                    0,
 
-                vitoriasFora: 0,
+                vitoriasFora:
+                    0,
 
-                golsCasa: 0,
+                golsCasa:
+                    0,
 
-                golsFora: 0
+                golsFora:
+                    0
 
             },
 
-            h2hJogos: 0,
+            h2hJogos:
+                0,
 
-            h2hVitoriasCasa: 0,
+            h2hVitoriasCasa:
+                0,
 
-            h2hEmpates: 0,
+            h2hEmpates:
+                0,
 
-            h2hVitoriasFora: 0
+            h2hVitoriasFora:
+                0
 
         };
 
@@ -1868,7 +2667,7 @@ export async function buscarHistoricoJogo(
 // ==========================================================
 // BUSCAR HISTÓRICO DE UM TIME
 //
-// Função pública para outras partes do sistema.
+// FUNÇÃO PÚBLICA
 // ==========================================================
 
 export async function buscarHistoricoTimePublico(
@@ -1918,9 +2717,7 @@ export async function buscarConfrontosDiretos(
 
 
 // ==========================================================
-// ESTATÍSTICAS DE UM TIME
-//
-// Retorna estatísticas básicas para o motor IA.
+// CALCULAR ESTATÍSTICAS HISTÓRICAS
 // ==========================================================
 
 export async function calcularEstatisticasHistoricas(
@@ -1939,44 +2736,67 @@ export async function calcularEstatisticasHistoricas(
 
         return {
 
-            jogos: 0,
+            jogos:
+                0,
 
-            vitorias: 0,
+            vitorias:
+                0,
 
-            empates: 0,
+            empates:
+                0,
 
-            derrotas: 0,
+            derrotas:
+                0,
 
-            pontos: 0,
+            pontos:
+                0,
 
-            golsMarcados: 0,
+            golsMarcados:
+                0,
 
-            golsSofridos: 0,
+            golsSofridos:
+                0,
 
-            mediaGolsMarcados: 0,
+            mediaGolsMarcados:
+                0,
 
-            mediaGolsSofridos: 0,
+            mediaGolsSofridos:
+                0,
 
-            aproveitamento: 0
+            aproveitamento:
+                0
 
         };
 
     }
 
 
-    let vitorias = 0;
+    let vitorias =
+        0;
 
-    let empates = 0;
 
-    let derrotas = 0;
+    let empates =
+        0;
 
-    let pontos = 0;
 
-    let golsMarcados = 0;
+    let derrotas =
+        0;
 
-    let golsSofridos = 0;
 
-    let processados = 0;
+    let pontos =
+        0;
+
+
+    let golsMarcados =
+        0;
+
+
+    let golsSofridos =
+        0;
+
+
+    let processados =
+        0;
 
 
     const nomeNormalizado =
@@ -1991,19 +2811,30 @@ export async function calcularEstatisticasHistoricas(
 
         const casa =
             normalizarNomeTime(
-                jogo.time_casa
+                obterTimeCasa(
+                    jogo
+                )
             );
 
 
         const fora =
             normalizarNomeTime(
-                jogo.time_fora
+                obterTimeFora(
+                    jogo
+                )
             );
 
 
         if (
-            casa !== nomeNormalizado &&
-            fora !== nomeNormalizado
+
+            casa !==
+            nomeNormalizado
+
+            &&
+
+            fora !==
+            nomeNormalizado
+
         ) {
 
             continue;
@@ -2017,20 +2848,37 @@ export async function calcularEstatisticasHistoricas(
             );
 
 
+        // Segurança adicional
+
+        if (
+            !gols.possui
+        ) {
+
+            continue;
+
+        }
+
+
         const ehCasa =
             casa ===
             nomeNormalizado;
 
 
         const golsTime =
+
             ehCasa
+
                 ? gols.casa
+
                 : gols.fora;
 
 
         const golsAdversario =
+
             ehCasa
+
                 ? gols.fora
+
                 : gols.casa;
 
 
@@ -2052,7 +2900,8 @@ export async function calcularEstatisticasHistoricas(
 
             vitorias++;
 
-            pontos += 3;
+            pontos +=
+                3;
 
         }
 
@@ -2063,7 +2912,8 @@ export async function calcularEstatisticasHistoricas(
 
             empates++;
 
-            pontos += 1;
+            pontos +=
+                1;
 
         }
 
@@ -2082,25 +2932,35 @@ export async function calcularEstatisticasHistoricas(
 
         return {
 
-            jogos: 0,
+            jogos:
+                0,
 
-            vitorias: 0,
+            vitorias:
+                0,
 
-            empates: 0,
+            empates:
+                0,
 
-            derrotas: 0,
+            derrotas:
+                0,
 
-            pontos: 0,
+            pontos:
+                0,
 
-            golsMarcados: 0,
+            golsMarcados:
+                0,
 
-            golsSofridos: 0,
+            golsSofridos:
+                0,
 
-            mediaGolsMarcados: 0,
+            mediaGolsMarcados:
+                0,
 
-            mediaGolsSofridos: 0,
+            mediaGolsSofridos:
+                0,
 
-            aproveitamento: 0
+            aproveitamento:
+                0
 
         };
 
@@ -2125,33 +2985,53 @@ export async function calcularEstatisticasHistoricas(
         golsSofridos,
 
         mediaGolsMarcados:
+
             Number(
+
                 (
                     golsMarcados /
                     processados
-                ).toFixed(2)
+                ).toFixed(
+                    2
+                )
+
             ),
 
         mediaGolsSofridos:
+
             Number(
+
                 (
                     golsSofridos /
                     processados
-                ).toFixed(2)
+                ).toFixed(
+                    2
+                )
+
             ),
 
         aproveitamento:
+
             Number(
+
                 (
+
                     (
                         pontos /
                         (
                             processados *
                             3
                         )
-                    ) *
+                    )
+
+                    *
+
                     100
-                ).toFixed(2)
+
+                ).toFixed(
+                    2
+                )
+
             )
 
     };
@@ -2180,6 +3060,7 @@ export async function verificarHistorico(
         possuiHistorico:
 
             (
+
                 dados.historicoCasa.length >
                 0
 
@@ -2187,13 +3068,22 @@ export async function verificarHistorico(
 
                 dados.historicoFora.length >
                 0
+
             ),
 
         possuiH2H:
 
             (
-                dados.confrontoDireto?.jogos >
+
+                (
+                    dados.confrontoDireto?.jogos ??
+                    0
+                )
+
+                >
+
                 0
+
             ),
 
         jogosCasa:
@@ -2215,11 +3105,10 @@ export async function verificarHistorico(
 
 
 // ==========================================================
-// LIMPEZA DE CACHE
+// LIMPAR CACHE
 //
 // Mantido por compatibilidade.
-//
-// O serviço não utiliza cache atualmente.
+// Atualmente não existe cache.
 // ==========================================================
 
 export function limparCacheHistorico() {
