@@ -2,24 +2,27 @@
 // BETVISION AI
 // services/inteligenciaService.js
 //
-// MOTOR ESTATÍSTICO v8
+// MOTOR ESTATÍSTICO v8.0
 //
 // CORREÇÕES:
 //
-// - Aceita jogo STRING ou OBJETO
-// - Compatibilidade gerarAnaliseInteligente()
-// - Histórico real PostgreSQL
-// - H2H
-// - Probabilidades 1X2
-// - xG
-// - Placar
-// - Over/Under
+// - gerarAnaliseInteligente EXISTE
+// - gerarAnaliseIA mantida para compatibilidade
+// - aceita STRING ou OBJETO de jogo
+// - nunca analisa jogo vazio
+// - histórico real PostgreSQL
+// - H2H real PostgreSQL
+// - somente histórico anterior ao jogo
+// - Poisson
+// - 1X2
+// - Gols esperados
+// - Placar provável
+// - Over / Under
 // - Ambas Marcam
 // - Value Bet
 // - Confiança
 // - Sem Math.random()
-// - api_id preservado
-// - data_jogo preservada
+// - America/Sao_Paulo
 //
 // ==========================================================
 
@@ -35,14 +38,17 @@ import {
 const TIMEZONE =
     "America/Sao_Paulo";
 
-const MAX_HISTORICO =
-    10;
-
-const MAX_H2H =
-    10;
-
-const MINIMO_HISTORICO =
+const MINIMO_JOGOS_HISTORICO =
     3;
+
+const LIMITE_HISTORICO =
+    10;
+
+const LIMITE_H2H =
+    10;
+
+const MAX_GOLS_POISSON =
+    10;
 
 
 // ==========================================================
@@ -54,12 +60,23 @@ function numero(
     padrao = 0
 ) {
 
+    if (
+        valor === null ||
+        valor === undefined ||
+        valor === ""
+    ) {
+
+        return padrao;
+
+    }
+
     const n =
         Number(valor);
 
     return Number.isFinite(n)
         ? n
         : padrao;
+
 }
 
 
@@ -73,9 +90,10 @@ function limitar(
         maximo,
         Math.max(
             minimo,
-            valor
+            numero(valor)
         )
     );
+
 }
 
 
@@ -84,14 +102,35 @@ function arredondar(
     casas = 2
 ) {
 
+    const n =
+        numero(valor);
+
     const fator =
         10 ** casas;
 
-    return (
-        Math.round(
-            numero(valor) * fator
-        ) / fator
-    );
+    return Math.round(
+        n * fator
+    ) / fator;
+
+}
+
+
+function texto(
+    valor
+) {
+
+    if (
+        valor === null ||
+        valor === undefined
+    ) {
+
+        return "";
+
+    }
+
+    return String(valor)
+        .trim();
+
 }
 
 
@@ -101,107 +140,102 @@ function arredondar(
 
 function obterDataHojeBrasil() {
 
-    try {
+    return new Intl.DateTimeFormat(
+        "en-CA",
+        {
+            timeZone:
+                TIMEZONE,
 
-        return new Intl.DateTimeFormat(
-            "en-CA",
-            {
-                timeZone:
-                    TIMEZONE,
+            year:
+                "numeric",
 
-                year:
-                    "numeric",
+            month:
+                "2-digit",
 
-                month:
-                    "2-digit",
+            day:
+                "2-digit"
+        }
+    ).format(
+        new Date()
+    );
 
-                day:
-                    "2-digit"
-            }
-        ).format(
-            new Date()
-        );
-
-    } catch {
-
-        return new Date()
-            .toISOString()
-            .slice(0, 10);
-    }
 }
 
 
 // ==========================================================
-// EXTRAIR INFORMAÇÕES DO JOGO
-//
-// ACEITA:
-//
-// "Palmeiras x Flamengo"
-//
-// OU:
-//
-// {
-//    api_id,
-//    time_casa,
-//    time_fora,
-//    data_jogo
-// }
+// NORMALIZAR DATA PARA SQL
 // ==========================================================
 
-function normalizarJogo(
+function normalizarDataJogo(
     jogo
 ) {
 
-    if (
-        typeof jogo === "string"
+    const candidatos = [
+
+        jogo?.data_jogo,
+        jogo?.dataJogo,
+        jogo?.jogo_data,
+
+        jogo?.data,
+        jogo?.inicio,
+        jogo?.kickoff,
+
+        jogo?.date,
+        jogo?.datetime,
+
+        jogo?.fixture?.date
+
+    ];
+
+    for (
+        const valor of candidatos
     ) {
 
-        const texto =
-            jogo.trim();
-
-        if (!texto) {
-
-            throw new Error(
-                "Jogo não informado"
-            );
+        if (!valor) {
+            continue;
         }
 
+        const data =
+            new Date(valor);
 
-        const partes =
-            separarJogo(
-                texto
-            );
+        if (
+            !Number.isNaN(
+                data.getTime()
+            )
+        ) {
 
+            return data;
 
-        return {
+        }
 
-            nome:
-                texto,
-
-            casa:
-                partes.casa,
-
-            fora:
-                partes.fora,
-
-            api_id:
-                null,
-
-            data_jogo:
-                null,
-
-            campeonato:
-                null,
-
-            status:
-                null,
-
-            odds:
-                {}
-
-        };
     }
 
+    return null;
+
+}
+
+
+// ==========================================================
+// EXTRAIR EQUIPES
+//
+// Aceita:
+//
+// "Palmeiras x Flamengo"
+//
+// ou:
+//
+// {
+//   time_casa: "...",
+//   time_fora: "..."
+// }
+//
+// ou formatos da API.
+//
+// ==========================================================
+
+function extrairEquipes(
+    jogo
+) {
 
     if (
         jogo &&
@@ -209,170 +243,86 @@ function normalizarJogo(
     ) {
 
         const casa =
-            jogo.time_casa ??
-            jogo.casa ??
-            jogo.home_team ??
-            jogo.homeTeam ??
-            jogo.jogo?.time_casa ??
-            jogo.jogo?.casa ??
-            "";
+            texto(
+                jogo.time_casa ??
+                jogo.casa ??
+                jogo.home_team ??
+                jogo.homeTeam ??
+                jogo.home ??
+                jogo.equipe_casa ??
+                jogo.equipeCasa ??
+                jogo.fixture?.teams?.home?.name
+            );
 
         const fora =
-            jogo.time_fora ??
-            jogo.fora ??
-            jogo.away_team ??
-            jogo.awayTeam ??
-            jogo.jogo?.time_fora ??
-            jogo.jogo?.fora ??
-            "";
-
-
-        let nome =
-            jogo.jogo_nome ??
-            jogo.nome ??
-            jogo.jogo ??
-            jogo.name ??
-            jogo.fixture_name ??
-            "";
-
+            texto(
+                jogo.time_fora ??
+                jogo.fora ??
+                jogo.away_team ??
+                jogo.awayTeam ??
+                jogo.away ??
+                jogo.equipe_fora ??
+                jogo.equipeFora ??
+                jogo.fixture?.teams?.away?.name
+            );
 
         if (
-            typeof nome !== "string"
-        ) {
-
-            nome = "";
-        }
-
-
-        if (
-            !nome.trim() &&
             casa &&
             fora
         ) {
 
-            nome =
-                `${casa} x ${fora}`;
+            return {
+                casa,
+                fora
+            };
+
         }
 
-
-        if (
-            !casa ||
-            !fora
-        ) {
-
-            if (nome) {
-
-                const partes =
-                    separarJogo(
-                        nome
-                    );
-
-                return {
-
-                    nome:
-                        nome.trim(),
-
-                    casa:
-                        partes.casa,
-
-                    fora:
-                        partes.fora,
-
-                    api_id:
-                        jogo.api_id ??
-                        jogo.apiId ??
-                        jogo.id_api ??
-                        jogo.fixture_id ??
-                        jogo.jogo?.api_id ??
-                        null,
-
-                    data_jogo:
-                        jogo.data_jogo ??
-                        jogo.dataJogo ??
-                        jogo.date ??
-                        jogo.kickoff ??
-                        jogo.jogo?.data_jogo ??
-                        null,
-
-                    campeonato:
-                        jogo.campeonato ??
-                        jogo.league_name ??
-                        null,
-
-                    status:
-                        jogo.status ??
-                        null,
-
-                    odds:
-                        jogo.odds ??
-                        {}
-                };
-            }
-
-
-            throw new Error(
-                "Jogo não informado"
+        const nome =
+            texto(
+                jogo.jogo ??
+                jogo.nome ??
+                jogo.name
             );
+
+        if (nome) {
+
+            return separarJogo(
+                nome
+            );
+
         }
 
-
-        return {
-
-            nome:
-                `${String(casa).trim()} x ` +
-                `${String(fora).trim()}`,
-
-            casa:
-                String(casa).trim(),
-
-            fora:
-                String(fora).trim(),
-
-            api_id:
-                jogo.api_id ??
-                jogo.apiId ??
-                jogo.id_api ??
-                jogo.fixture_id ??
-                jogo.jogo?.api_id ??
-                null,
-
-            data_jogo:
-                jogo.data_jogo ??
-                jogo.dataJogo ??
-                jogo.date ??
-                jogo.kickoff ??
-                jogo.jogo?.data_jogo ??
-                null,
-
-            campeonato:
-                jogo.campeonato ??
-                jogo.league_name ??
-                null,
-
-            status:
-                jogo.status ??
-                null,
-
-            odds:
-                jogo.odds ??
-                {}
-        };
     }
 
 
-    throw new Error(
-        "Jogo não informado"
+    return separarJogo(
+        texto(jogo)
     );
+
 }
 
 
 // ==========================================================
-// SEPARAR JOGO
+// SEPARAR JOGO STRING
 // ==========================================================
 
 function separarJogo(
     jogo
 ) {
+
+    const valor =
+        texto(jogo);
+
+    if (!valor) {
+
+        return {
+            casa: "",
+            fora: ""
+        };
+
+    }
+
 
     const separadores = [
 
@@ -381,6 +331,7 @@ function separarJogo(
 
         " vs ",
         " VS ",
+        " Vs ",
 
         " v ",
         " V ",
@@ -396,43 +347,70 @@ function separarJogo(
     ) {
 
         if (
-            jogo.includes(
+            valor.includes(
                 separador
             )
         ) {
 
             const partes =
-                jogo.split(
+                valor.split(
                     separador
                 );
 
+            const casa =
+                texto(
+                    partes.shift()
+                );
+
+            const fora =
+                texto(
+                    partes.join(
+                        separador
+                    )
+                );
 
             return {
-
-                casa:
-                    partes[0]
-                        ?.trim() || "",
-
-                fora:
-                    partes
-                        .slice(1)
-                        .join(
-                            separador
-                        )
-                        .trim() || ""
+                casa,
+                fora
             };
+
         }
+
     }
 
 
     return {
-
-        casa:
-            jogo.trim(),
-
-        fora:
-            ""
+        casa: valor,
+        fora: ""
     };
+
+}
+
+
+// ==========================================================
+// NOME DO JOGO
+// ==========================================================
+
+function montarNomeJogo(
+    casa,
+    fora
+) {
+
+    if (
+        casa &&
+        fora
+    ) {
+
+        return `${casa} x ${fora}`;
+
+    }
+
+    return (
+        casa ||
+        fora ||
+        ""
+    );
+
 }
 
 
@@ -440,13 +418,20 @@ function separarJogo(
 // POISSON
 // ==========================================================
 
-function fatorial(n) {
+function fatorial(
+    n
+) {
 
-    if (n <= 1) {
+    if (
+        n <= 1
+    ) {
+
         return 1;
+
     }
 
-    let resultado = 1;
+    let resultado =
+        1;
 
     for (
         let i = 2;
@@ -455,9 +440,11 @@ function fatorial(n) {
     ) {
 
         resultado *= i;
+
     }
 
     return resultado;
+
 }
 
 
@@ -466,139 +453,259 @@ function poisson(
     lambda
 ) {
 
+    const k =
+        Number(gols);
+
+    const media =
+        numero(lambda);
+
     if (
-        gols < 0 ||
-        lambda <= 0
+        !Number.isInteger(k) ||
+        k < 0 ||
+        media <= 0
     ) {
 
         return 0;
+
     }
 
     return (
-        Math.exp(-lambda) *
-        Math.pow(lambda, gols)
+        Math.exp(-media) *
+        Math.pow(media, k)
     ) /
-    fatorial(gols);
+    fatorial(k);
+
+}
+
+
+// ==========================================================
+// MÉDIA
+// ==========================================================
+
+function calcularMedia(
+    valores
+) {
+
+    if (
+        !Array.isArray(valores) ||
+        valores.length === 0
+    ) {
+
+        return 0;
+
+    }
+
+    const lista =
+        valores
+            .map(
+                valor =>
+                    numero(valor)
+            )
+            .filter(
+                valor =>
+                    Number.isFinite(valor)
+            );
+
+    if (
+        lista.length === 0
+    ) {
+
+        return 0;
+
+    }
+
+    return (
+        lista.reduce(
+            (
+                total,
+                valor
+            ) =>
+                total + valor,
+            0
+        )
+        /
+        lista.length
+    );
+
 }
 
 
 // ==========================================================
 // HISTÓRICO DA EQUIPE
 //
-// Somente jogos já encerrados
-// e com placar válido.
+// IMPORTANTE:
+// somente jogos anteriores ao jogo analisado.
 // ==========================================================
 
 async function buscarHistoricoEquipe(
-    nomeEquipe
+    nomeEquipe,
+    dataJogo = null
 ) {
 
     if (!nomeEquipe) {
+
         return [];
+
     }
 
 
     try {
 
+        let resultado;
+
+
+        if (
+            dataJogo
+        ) {
+
+            resultado =
+                await query(
+
+                    `
+                    SELECT
+
+                        id,
+
+                        api_id,
+
+                        time_casa,
+                        time_fora,
+
+                        gols_casa,
+                        gols_fora,
+
+                        data_jogo,
+                        status
+
+                    FROM jogos
+
+                    WHERE
+
+                        (
+
+                            LOWER(
+                                TRIM(time_casa)
+                            )
+                            =
+                            LOWER(
+                                TRIM($1)
+                            )
+
+                            OR
+
+                            LOWER(
+                                TRIM(time_fora)
+                            )
+                            =
+                            LOWER(
+                                TRIM($1)
+                            )
+
+                        )
+
+                        AND data_jogo IS NOT NULL
+
+                        AND data_jogo < $2
+
+                    ORDER BY
+                        data_jogo DESC
+
+                    LIMIT $3
+                    `,
+
+                    [
+                        nomeEquipe,
+                        dataJogo,
+                        LIMITE_HISTORICO
+                    ]
+
+                );
+
+        }
+
+        else {
+
+            resultado =
+                await query(
+
+                    `
+                    SELECT
+
+                        id,
+
+                        api_id,
+
+                        time_casa,
+                        time_fora,
+
+                        gols_casa,
+                        gols_fora,
+
+                        data_jogo,
+                        status
+
+                    FROM jogos
+
+                    WHERE
+
+                        (
+
+                            LOWER(
+                                TRIM(time_casa)
+                            )
+                            =
+                            LOWER(
+                                TRIM($1)
+                            )
+
+                            OR
+
+                            LOWER(
+                                TRIM(time_fora)
+                            )
+                            =
+                            LOWER(
+                                TRIM($1)
+                            )
+
+                        )
+
+                        AND data_jogo IS NOT NULL
+
+                        AND data_jogo <
+                        CURRENT_TIMESTAMP
+
+                    ORDER BY
+                        data_jogo DESC
+
+                    LIMIT $2
+                    `,
+
+                    [
+                        nomeEquipe,
+                        LIMITE_HISTORICO
+                    ]
+
+                );
+
+        }
+
+
+        const linhas =
+            resultado?.rows || [];
+
+
         console.log(
-            `📚 Consultando histórico do time: ${nomeEquipe}`
+            `📚 Banco retornou ${linhas.length} ` +
+            `registros para ${nomeEquipe}`
         );
 
 
-        const resultado =
-            await query(
-                `
-                SELECT
+        return linhas;
 
-                    id,
+    }
 
-                    api_id,
-
-                    time_casa,
-
-                    time_fora,
-
-                    gols_casa,
-
-                    gols_fora,
-
-                    data_jogo,
-
-                    status
-
-                FROM jogos
-
-                WHERE
-
-                    (
-                        LOWER(TRIM(time_casa))
-                        =
-                        LOWER(TRIM($1))
-
-                        OR
-
-                        LOWER(TRIM(time_fora))
-                        =
-                        LOWER(TRIM($1))
-                    )
-
-                    AND gols_casa IS NOT NULL
-
-                    AND gols_fora IS NOT NULL
-
-                    AND data_jogo IS NOT NULL
-
-                    AND data_jogo < CURRENT_TIMESTAMP
-
-                ORDER BY
-                    data_jogo DESC
-
-                LIMIT $2
-                `,
-                [
-                    nomeEquipe,
-                    MAX_HISTORICO
-                ]
-            );
-
-
-        console.log(
-            `📚 Banco retornou ${resultado.rows.length} registros para ${nomeEquipe}`
-        );
-
-
-        const validos =
-            resultado.rows.filter(
-                jogo => {
-
-                    const gc =
-                        Number(
-                            jogo.gols_casa
-                        );
-
-                    const gf =
-                        Number(
-                            jogo.gols_fora
-                        );
-
-                    return (
-                        Number.isFinite(gc) &&
-                        Number.isFinite(gf) &&
-                        gc >= 0 &&
-                        gf >= 0
-                    );
-                }
-            );
-
-
-        console.log(
-            `📊 Histórico válido ${nomeEquipe}: ${validos.length} jogos`
-        );
-
-
-        return validos;
-
-    } catch (erro) {
+    catch (erro) {
 
         console.error(
             `❌ Erro histórico ${nomeEquipe}:`,
@@ -606,141 +713,80 @@ async function buscarHistoricoEquipe(
         );
 
         return [];
+
     }
+
 }
 
 
 // ==========================================================
-// H2H
+// VALIDAR HISTÓRICO
 // ==========================================================
 
-async function buscarH2H(
-    casa,
-    fora
+function jogoHistoricoValido(
+    jogo
 ) {
 
-    if (!casa || !fora) {
-        return [];
+    if (!jogo) {
+        return false;
     }
 
-
-    try {
-
-        console.log(
-            `⚔️ Consultando H2H: ${casa} x ${fora}`
+    const golsCasa =
+        Number(
+            jogo.gols_casa
         );
 
-
-        const resultado =
-            await query(
-                `
-                SELECT
-
-                    id,
-
-                    api_id,
-
-                    time_casa,
-
-                    time_fora,
-
-                    gols_casa,
-
-                    gols_fora,
-
-                    data_jogo,
-
-                    status
-
-                FROM jogos
-
-                WHERE
-
-                    (
-
-                        (
-                            LOWER(TRIM(time_casa))
-                            =
-                            LOWER(TRIM($1))
-
-                            AND
-
-                            LOWER(TRIM(time_fora))
-                            =
-                            LOWER(TRIM($2))
-                        )
-
-                        OR
-
-                        (
-                            LOWER(TRIM(time_casa))
-                            =
-                            LOWER(TRIM($2))
-
-                            AND
-
-                            LOWER(TRIM(time_fora))
-                            =
-                            LOWER(TRIM($1))
-                        )
-
-                    )
-
-                    AND gols_casa IS NOT NULL
-
-                    AND gols_fora IS NOT NULL
-
-                    AND data_jogo IS NOT NULL
-
-                    AND data_jogo < CURRENT_TIMESTAMP
-
-                ORDER BY
-                    data_jogo DESC
-
-                LIMIT $3
-                `,
-                [
-                    casa,
-                    fora,
-                    MAX_H2H
-                ]
-            );
-
-
-        console.log(
-            `⚔️ H2H banco: ${resultado.rows.length} registros encontrados`
+    const golsFora =
+        Number(
+            jogo.gols_fora
         );
 
+    if (
+        !Number.isFinite(golsCasa) ||
+        !Number.isFinite(golsFora)
+    ) {
 
-        return resultado.rows.filter(
-            jogo => {
+        return false;
 
-                const gc =
-                    Number(
-                        jogo.gols_casa
-                    );
+    }
 
-                const gf =
-                    Number(
-                        jogo.gols_fora
-                    );
+    if (
+        golsCasa < 0 ||
+        golsFora < 0
+    ) {
 
-                return (
-                    Number.isFinite(gc) &&
-                    Number.isFinite(gf)
-                );
-            }
-        );
+        return false;
 
-    } catch (erro) {
+    }
 
-        console.error(
-            "❌ Erro H2H:",
-            erro.message
-        );
+    return true;
+
+}
+
+
+// ==========================================================
+// FILTRAR HISTÓRICO VÁLIDO
+// ==========================================================
+
+function filtrarHistoricoValido(
+    historico
+) {
+
+    if (
+        !Array.isArray(historico)
+    ) {
 
         return [];
+
     }
+
+    return historico.filter(
+        jogo =>
+            jogoHistoricoValido(
+                jogo
+            )
+    );
+
 }
 
 
@@ -753,71 +799,184 @@ function calcularEstatisticasEquipe(
     equipe
 ) {
 
+    const jogos =
+        filtrarHistoricoValido(
+            historico
+        );
+
+
     if (
-        !Array.isArray(historico) ||
-        historico.length === 0
+        jogos.length === 0
     ) {
 
         return {
 
-            jogos:
-                0,
+            jogos: 0,
 
-            golsMarcados:
-                1,
+            golsMarcados: 1,
 
-            golsSofridos:
-                1,
+            golsSofridos: 1,
 
-            vitorias:
-                0,
+            vitorias: 0,
 
-            empates:
-                0,
+            empates: 0,
 
-            derrotas:
-                0,
+            derrotas: 0,
 
-            aproveitamento:
-                0.5,
+            aproveitamento: 0.5,
 
-            forma:
-                50
+            forma: 0.5
+
         };
+
     }
 
 
-    let golsMarcados = 0;
-    let golsSofridos = 0;
+    const golsMarcados = [];
+    const golsSofridos = [];
 
     let vitorias = 0;
     let empates = 0;
     let derrotas = 0;
 
 
-    const nome =
-        String(equipe)
-            .trim()
+    const nomeEquipe =
+        texto(equipe)
             .toLowerCase();
 
 
     for (
-        const jogo of historico
+        const jogo of jogos
     ) {
 
         const casa =
-            String(
-                jogo.time_casa || ""
-            )
-            .trim()
-            .toLowerCase();
+            texto(
+                jogo.time_casa
+            );
 
         const fora =
-            String(
-                jogo.time_fora || ""
+            texto(
+                jogo.time_fora
+            );
+
+
+        const golsCasa =
+            numero(
+                jogo.gols_casa
+            );
+
+        const golsFora =
+            numero(
+                jogo.gols_fora
+            );
+
+
+        const ehCasa =
+            casa.toLowerCase()
+            ===
+            nomeEquipe;
+
+
+        if (ehCasa) {
+
+            golsMarcados.push(
+                golsCasa
+            );
+
+            golsSofridos.push(
+                golsFora
+            );
+
+
+            if (
+                golsCasa > golsFora
+            ) {
+
+                vitorias++;
+
+            }
+            else if (
+                golsCasa === golsFora
+            ) {
+
+                empates++;
+
+            }
+            else {
+
+                derrotas++;
+
+            }
+
+        }
+
+        else {
+
+            golsMarcados.push(
+                golsFora
+            );
+
+            golsSofridos.push(
+                golsCasa
+            );
+
+
+            if (
+                golsFora > golsCasa
+            ) {
+
+                vitorias++;
+
+            }
+            else if (
+                golsFora === golsCasa
+            ) {
+
+                empates++;
+
+            }
+            else {
+
+                derrotas++;
+
+            }
+
+        }
+
+    }
+
+
+    const totalJogos =
+        jogos.length;
+
+
+    const aproveitamento =
+        (
+            vitorias * 3 +
+            empates
+        )
+        /
+        (
+            totalJogos * 3
+        );
+
+
+    const pontosForma = [];
+
+
+    for (
+        const jogo of jogos
+    ) {
+
+        const casa =
+            texto(
+                jogo.time_casa
             )
-            .trim()
             .toLowerCase();
+
+        const equipeEhCasa =
+            casa ===
+            nomeEquipe;
 
 
         const gc =
@@ -831,86 +990,73 @@ function calcularEstatisticasEquipe(
             );
 
 
-        if (casa === nome) {
-
-            golsMarcados += gc;
-
-            golsSofridos += gf;
+        let pontos =
+            0;
 
 
-            if (gc > gf) {
+        if (equipeEhCasa) {
 
-                vitorias++;
+            if (
+                gc > gf
+            ) {
 
-            } else if (gc === gf) {
+                pontos = 1;
 
-                empates++;
+            }
+            else if (
+                gc === gf
+            ) {
 
-            } else {
+                pontos = 0.5;
 
-                derrotas++;
             }
 
-        } else if (fora === nome) {
-
-            golsMarcados += gf;
-
-            golsSofridos += gc;
-
-
-            if (gf > gc) {
-
-                vitorias++;
-
-            } else if (gf === gc) {
-
-                empates++;
-
-            } else {
-
-                derrotas++;
-            }
         }
-    }
+        else {
+
+            if (
+                gf > gc
+            ) {
+
+                pontos = 1;
+
+            }
+            else if (
+                gf === gc
+            ) {
+
+                pontos = 0.5;
+
+            }
+
+        }
 
 
-    const jogos =
-        historico.length;
-
-
-    const mediaMarcados =
-        golsMarcados /
-        jogos;
-
-
-    const mediaSofridos =
-        golsSofridos /
-        jogos;
-
-
-    const aproveitamento =
-        (
-            vitorias * 3 +
-            empates
-        ) /
-        (
-            jogos * 3
+        pontosForma.push(
+            pontos
         );
+
+    }
 
 
     return {
 
-        jogos,
+        jogos:
+            totalJogos,
 
         golsMarcados:
             arredondar(
-                mediaMarcados,
+                calcularMedia(
+                    golsMarcados
+                ),
                 3
             ),
 
         golsSofridos:
             arredondar(
-                mediaSofridos,
+                calcularMedia(
+                    golsSofridos
+                ),
                 3
             ),
 
@@ -928,59 +1074,300 @@ function calcularEstatisticasEquipe(
 
         forma:
             arredondar(
-                aproveitamento * 100,
-                1
+                calcularMedia(
+                    pontosForma
+                ),
+                4
             )
+
     };
+
 }
 
 
 // ==========================================================
-// ESTATÍSTICA H2H
+// H2H
+// ==========================================================
+
+async function buscarH2H(
+    casa,
+    fora,
+    dataJogo = null
+) {
+
+    if (
+        !casa ||
+        !fora
+    ) {
+
+        return [];
+
+    }
+
+
+    try {
+
+        let resultado;
+
+
+        if (
+            dataJogo
+        ) {
+
+            resultado =
+                await query(
+
+                    `
+                    SELECT
+
+                        id,
+
+                        api_id,
+
+                        time_casa,
+                        time_fora,
+
+                        gols_casa,
+                        gols_fora,
+
+                        data_jogo,
+                        status
+
+                    FROM jogos
+
+                    WHERE
+
+                        (
+
+                            (
+
+                                LOWER(
+                                    TRIM(time_casa)
+                                )
+                                =
+                                LOWER(
+                                    TRIM($1)
+                                )
+
+                                AND
+
+                                LOWER(
+                                    TRIM(time_fora)
+                                )
+                                =
+                                LOWER(
+                                    TRIM($2)
+                                )
+
+                            )
+
+                            OR
+
+                            (
+
+                                LOWER(
+                                    TRIM(time_casa)
+                                )
+                                =
+                                LOWER(
+                                    TRIM($2)
+                                )
+
+                                AND
+
+                                LOWER(
+                                    TRIM(time_fora)
+                                )
+                                =
+                                LOWER(
+                                    TRIM($1)
+                                )
+
+                            )
+
+                        )
+
+                        AND data_jogo IS NOT NULL
+
+                        AND data_jogo < $3
+
+                    ORDER BY
+                        data_jogo DESC
+
+                    LIMIT $4
+                    `,
+
+                    [
+                        casa,
+                        fora,
+                        dataJogo,
+                        LIMITE_H2H
+                    ]
+
+                );
+
+        }
+
+        else {
+
+            resultado =
+                await query(
+
+                    `
+                    SELECT
+
+                        id,
+
+                        api_id,
+
+                        time_casa,
+                        time_fora,
+
+                        gols_casa,
+                        gols_fora,
+
+                        data_jogo,
+                        status
+
+                    FROM jogos
+
+                    WHERE
+
+                        (
+
+                            (
+
+                                LOWER(
+                                    TRIM(time_casa)
+                                )
+                                =
+                                LOWER(
+                                    TRIM($1)
+                                )
+
+                                AND
+
+                                LOWER(
+                                    TRIM(time_fora)
+                                )
+                                =
+                                LOWER(
+                                    TRIM($2)
+                                )
+
+                            )
+
+                            OR
+
+                            (
+
+                                LOWER(
+                                    TRIM(time_casa)
+                                )
+                                =
+                                LOWER(
+                                    TRIM($2)
+                                )
+
+                                AND
+
+                                LOWER(
+                                    TRIM(time_fora)
+                                )
+                                =
+                                LOWER(
+                                    TRIM($1)
+                                )
+
+                            )
+
+                        )
+
+                        AND data_jogo IS NOT NULL
+
+                        AND data_jogo <
+                        CURRENT_TIMESTAMP
+
+                    ORDER BY
+                        data_jogo DESC
+
+                    LIMIT $3
+                    `,
+
+                    [
+                        casa,
+                        fora,
+                        LIMITE_H2H
+                    ]
+
+                );
+
+        }
+
+
+        const linhas =
+            resultado?.rows || [];
+
+
+        console.log(
+            `⚔️ H2H banco: ${linhas.length} ` +
+            `registros encontrados`
+        );
+
+
+        return filtrarHistoricoValido(
+            linhas
+        );
+
+    }
+
+    catch (erro) {
+
+        console.error(
+            "❌ Erro H2H:",
+            erro.message
+        );
+
+        return [];
+
+    }
+
+}
+
+
+// ==========================================================
+// ESTATÍSTICAS H2H
 // ==========================================================
 
 function calcularEstatisticasH2H(
-    h2h,
+    historico,
     casa,
     fora
 ) {
+
+    const jogos =
+        filtrarHistoricoValido(
+            historico
+        );
+
 
     let vitoriasCasa = 0;
     let empates = 0;
     let vitoriasFora = 0;
 
-    let golsCasa = 0;
-    let golsFora = 0;
 
-
-    const nomeCasa =
-        String(casa)
-            .trim()
-            .toLowerCase();
-
-    const nomeFora =
-        String(fora)
-            .trim()
-            .toLowerCase();
+    const golsCasa = [];
+    const golsFora = [];
 
 
     for (
-        const jogo of h2h
+        const jogo of jogos
     ) {
 
-        const tc =
-            String(
-                jogo.time_casa || ""
-            )
-            .trim()
-            .toLowerCase();
-
-        const tf =
-            String(
-                jogo.time_fora || ""
-            )
-            .trim()
-            .toLowerCase();
+        const nomeCasa =
+            texto(
+                jogo.time_casa
+            );
 
 
         const gc =
@@ -994,79 +1381,140 @@ function calcularEstatisticasH2H(
             );
 
 
-        if (
-            tc === nomeCasa &&
-            tf === nomeFora
-        ) {
+        const casaFoiMandante =
+            nomeCasa
+                .toLowerCase()
+                ===
+                texto(casa)
+                    .toLowerCase();
 
-            golsCasa += gc;
-            golsFora += gf;
 
+        if (casaFoiMandante) {
+
+            golsCasa.push(gc);
+            golsFora.push(gf);
 
             if (gc > gf) {
-
                 vitoriasCasa++;
-
-            } else if (gc === gf) {
-
+            }
+            else if (gc === gf) {
                 empates++;
-
-            } else {
-
+            }
+            else {
                 vitoriasFora++;
             }
 
-        } else {
+        }
+        else {
 
-            golsCasa += gf;
-            golsFora += gc;
-
+            golsCasa.push(gf);
+            golsFora.push(gc);
 
             if (gf > gc) {
-
                 vitoriasCasa++;
-
-            } else if (gf === gc) {
-
+            }
+            else if (gf === gc) {
                 empates++;
-
-            } else {
-
+            }
+            else {
                 vitoriasFora++;
             }
+
         }
+
     }
 
 
     return {
 
         jogos:
-            h2h.length,
+            jogos.length,
 
-        vitoriasCasa,
+        casaVitorias:
+            vitoriasCasa,
 
         empates,
 
-        vitoriasFora,
+        foraVitorias:
+            vitoriasFora,
 
         golsCasa:
-            h2h.length
-                ? arredondar(
-                    golsCasa /
-                    h2h.length,
-                    2
-                )
-                : 0,
+            arredondar(
+                calcularMedia(
+                    golsCasa
+                ),
+                3
+            ),
 
         golsFora:
-            h2h.length
-                ? arredondar(
-                    golsFora /
-                    h2h.length,
-                    2
-                )
-                : 0
+            arredondar(
+                calcularMedia(
+                    golsFora
+                ),
+                3
+            )
+
     };
+
+}
+
+
+// ==========================================================
+// FORÇA OFENSIVA
+// ==========================================================
+
+function calcularForcaOfensiva(
+    estatisticas
+) {
+
+    if (
+        !estatisticas ||
+        estatisticas.jogos === 0
+    ) {
+
+        return 1;
+
+    }
+
+
+    return limitar(
+        estatisticas.golsMarcados,
+        0.25,
+        4
+    );
+
+}
+
+
+// ==========================================================
+// FORÇA DEFENSIVA
+//
+// Aqui usamos gols sofridos como referência.
+//
+// Quanto maior o número de gols sofridos,
+// maior a vulnerabilidade defensiva.
+// ==========================================================
+
+function calcularForcaDefensiva(
+    estatisticas
+) {
+
+    if (
+        !estatisticas ||
+        estatisticas.jogos === 0
+    ) {
+
+        return 1;
+
+    }
+
+
+    return limitar(
+        estatisticas.golsSofridos,
+        0.25,
+        4
+    );
+
 }
 
 
@@ -1075,33 +1523,29 @@ function calcularEstatisticasH2H(
 // ==========================================================
 
 function calcularGolsEsperados(
-    estatCasa,
-    estatFora,
-    h2h
+    casa,
+    fora,
+    h2h = null
 ) {
 
     const ataqueCasa =
-        numero(
-            estatCasa.golsMarcados,
-            1
+        calcularForcaOfensiva(
+            casa
         );
 
     const defesaCasa =
-        numero(
-            estatCasa.golsSofridos,
-            1
+        calcularForcaDefensiva(
+            casa
         );
 
     const ataqueFora =
-        numero(
-            estatFora.golsMarcados,
-            1
+        calcularForcaOfensiva(
+            fora
         );
 
     const defesaFora =
-        numero(
-            estatFora.golsSofridos,
-            1
+        calcularForcaDefensiva(
+            fora
         );
 
 
@@ -1109,40 +1553,79 @@ function calcularGolsEsperados(
         (
             ataqueCasa +
             defesaFora
-        ) / 2;
+        )
+        /
+        2;
 
 
     let lambdaFora =
         (
             ataqueFora +
             defesaCasa
-        ) / 2;
+        )
+        /
+        2;
 
 
-    // H2H entra somente quando há amostra.
+    // ======================================================
+    // PEQUENO AJUSTE H2H
+    //
+    // Somente quando existem confrontos válidos.
+    // Peso baixo para não dominar o modelo.
+    // ======================================================
+
     if (
         h2h &&
-        h2h.jogos >= 2
+        h2h.jogos >= 3
     ) {
+
+        const mediaH2HCasa =
+            numero(
+                h2h.golsCasa
+            );
+
+        const mediaH2HFora =
+            numero(
+                h2h.golsFora
+            );
+
 
         lambdaCasa =
             (
-                lambdaCasa * 0.85 +
-                h2h.golsCasa * 0.15
+                lambdaCasa * 0.80
+            )
+            +
+            (
+                mediaH2HCasa * 0.20
             );
+
 
         lambdaFora =
             (
-                lambdaFora * 0.85 +
-                h2h.golsFora * 0.15
+                lambdaFora * 0.80
+            )
+            +
+            (
+                mediaH2HFora * 0.20
             );
+
     }
 
 
-    // Mando
-    lambdaCasa *= 1.10;
-    lambdaFora *= 0.95;
+    // ======================================================
+    // MANDO DE CAMPO
+    // ======================================================
 
+    lambdaCasa *=
+        1.10;
+
+    lambdaFora *=
+        0.95;
+
+
+    // ======================================================
+    // LIMITES
+    // ======================================================
 
     lambdaCasa =
         limitar(
@@ -1150,7 +1633,6 @@ function calcularGolsEsperados(
             0.20,
             4.50
         );
-
 
     lambdaFora =
         limitar(
@@ -1180,17 +1662,106 @@ function calcularGolsEsperados(
                 lambdaFora,
                 2
             )
+
     };
+
 }
 
 
 // ==========================================================
-// PROBABILIDADE 1X2
+// PROBABILIDADE DE GOLS ATÉ
+// ==========================================================
+
+function probabilidadeGolsAte(
+    limite,
+    lambda
+) {
+
+    let probabilidade =
+        0;
+
+
+    for (
+        let gols = 0;
+        gols <= limite;
+        gols++
+    ) {
+
+        probabilidade +=
+            poisson(
+                gols,
+                lambda
+            );
+
+    }
+
+
+    return limitar(
+        probabilidade,
+        0,
+        1
+    );
+
+}
+
+
+// ==========================================================
+// OVER
+// ==========================================================
+
+function probabilidadeOver(
+    linha,
+    lambda
+) {
+
+    const limite =
+        Math.floor(
+            linha
+        );
+
+
+    return limitar(
+        1 -
+        probabilidadeGolsAte(
+            limite,
+            lambda
+        ),
+        0,
+        1
+    );
+
+}
+
+
+// ==========================================================
+// UNDER
+// ==========================================================
+
+function probabilidadeUnder(
+    linha,
+    lambda
+) {
+
+    return limitar(
+        1 -
+        probabilidadeOver(
+            linha,
+            lambda
+        ),
+        0,
+        1
+    );
+
+}
+
+
+// ==========================================================
+// 1X2
 // ==========================================================
 
 function calcularProbabilidadesResultado(
-    lambdaCasa,
-    lambdaFora
+    golsCasa,
+    golsFora
 ) {
 
     let casa = 0;
@@ -1198,45 +1769,58 @@ function calcularProbabilidadesResultado(
     let fora = 0;
 
 
-    const MAX_GOLS = 8;
-
-
     for (
         let gc = 0;
-        gc <= MAX_GOLS;
+        gc <= MAX_GOLS_POISSON;
         gc++
     ) {
 
         for (
             let gf = 0;
-            gf <= MAX_GOLS;
+            gf <= MAX_GOLS_POISSON;
             gf++
         ) {
 
-            const prob =
+            const probCasa =
                 poisson(
                     gc,
-                    lambdaCasa
-                ) *
+                    golsCasa
+                );
+
+            const probFora =
                 poisson(
                     gf,
-                    lambdaFora
+                    golsFora
                 );
 
 
-            if (gc > gf) {
+            const prob =
+                probCasa *
+                probFora;
+
+
+            if (
+                gc > gf
+            ) {
 
                 casa += prob;
 
-            } else if (gc === gf) {
+            }
+            else if (
+                gc === gf
+            ) {
 
                 empate += prob;
 
-            } else {
+            }
+            else {
 
                 fora += prob;
+
             }
+
         }
+
     }
 
 
@@ -1260,7 +1844,9 @@ function calcularProbabilidadesResultado(
 
             fora:
                 0.3334
+
         };
+
     }
 
 
@@ -1274,140 +1860,84 @@ function calcularProbabilidadesResultado(
 
         fora:
             fora / total
+
     };
+
 }
 
 
 // ==========================================================
-// PLACAR
+// PLACAR PROVÁVEL
 // ==========================================================
 
 function preverPlacar(
-    lambdaCasa,
-    lambdaFora
+    golsCasa,
+    golsFora
 ) {
 
-    let maior = 0;
-
-    let placar =
+    let melhorPlacar =
         "0x0";
+
+    let maiorProbabilidade =
+        0;
 
 
     for (
         let gc = 0;
-        gc <= 7;
+        gc <= 6;
         gc++
     ) {
 
         for (
             let gf = 0;
-            gf <= 7;
+            gf <= 6;
             gf++
         ) {
 
             const prob =
                 poisson(
                     gc,
-                    lambdaCasa
-                ) *
+                    golsCasa
+                )
+                *
                 poisson(
                     gf,
-                    lambdaFora
+                    golsFora
                 );
 
 
             if (
-                prob > maior
+                prob >
+                maiorProbabilidade
             ) {
 
-                maior =
+                maiorProbabilidade =
                     prob;
 
-                placar =
+                melhorPlacar =
                     `${gc}x${gf}`;
+
             }
+
         }
+
     }
 
 
     return {
 
-        placar,
+        placar:
+            melhorPlacar,
 
         probabilidade:
             arredondar(
-                maior * 100,
+                maiorProbabilidade *
+                100,
                 2
             )
+
     };
-}
 
-
-// ==========================================================
-// PROBABILIDADE TOTAL DE GOLS
-// ==========================================================
-
-function probabilidadeGolsAte(
-    limite,
-    lambda
-) {
-
-    let total = 0;
-
-
-    for (
-        let gols = 0;
-        gols <= limite;
-        gols++
-    ) {
-
-        total +=
-            poisson(
-                gols,
-                lambda
-            );
-    }
-
-
-    return total;
-}
-
-
-function probabilidadeOver(
-    linha,
-    lambda
-) {
-
-    const limite =
-        Math.floor(linha);
-
-
-    return limitar(
-        1 -
-        probabilidadeGolsAte(
-            limite,
-            lambda
-        ),
-        0,
-        1
-    );
-}
-
-
-function probabilidadeUnder(
-    linha,
-    lambda
-) {
-
-    return limitar(
-        1 -
-        probabilidadeOver(
-            linha,
-            lambda
-        ),
-        0,
-        1
-    );
 }
 
 
@@ -1416,34 +1946,39 @@ function probabilidadeUnder(
 // ==========================================================
 
 function calcularAmbasMarcam(
-    lambdaCasa,
-    lambdaFora
+    golsCasa,
+    golsFora
 ) {
 
-    const p0Casa =
+    const casaNaoMarca =
         poisson(
             0,
-            lambdaCasa
+            golsCasa
         );
 
-    const p0Fora =
+    const foraNaoMarca =
         poisson(
             0,
-            lambdaFora
+            golsFora
+        );
+
+
+    const probabilidade =
+        1 -
+        casaNaoMarca -
+        foraNaoMarca +
+        (
+            casaNaoMarca *
+            foraNaoMarca
         );
 
 
     return limitar(
-        1 -
-        p0Casa -
-        p0Fora +
-        (
-            p0Casa *
-            p0Fora
-        ),
+        probabilidade,
         0,
         1
     );
+
 }
 
 
@@ -1460,26 +1995,33 @@ function calcularConfianca(
 
     const valores = [
 
-        probabilidades.casa,
-        probabilidades.empate,
-        probabilidades.fora
+        numero(
+            probabilidades.casa
+        ),
 
-    ];
+        numero(
+            probabilidades.empate
+        ),
 
+        numero(
+            probabilidades.fora
+        )
 
-    const ordenados =
-        [...valores]
-            .sort(
-                (a, b) =>
-                    b - a
-            );
+    ]
+    .sort(
+        (
+            a,
+            b
+        ) =>
+            b - a
+    );
 
 
     const maior =
-        ordenados[0];
+        valores[0] || 0;
 
     const segundo =
-        ordenados[1];
+        valores[1] || 0;
 
 
     const margem =
@@ -1489,13 +2031,20 @@ function calcularConfianca(
 
     const amostra =
         Math.min(
-            amostraCasa,
-            amostraFora
+            numero(
+                amostraCasa
+            ),
+            numero(
+                amostraFora
+            )
         );
 
 
     let confianca =
-        35 +
+        35;
+
+
+    confianca +=
         margem * 100;
 
 
@@ -1505,25 +2054,36 @@ function calcularConfianca(
 
         confianca += 12;
 
-    } else if (
-        amostra >= 7
+    }
+    else if (
+        amostra >= 8
     ) {
 
-        confianca += 8;
+        confianca += 10;
 
-    } else if (
+    }
+    else if (
         amostra >= 5
     ) {
 
-        confianca += 5;
+        confianca += 6;
+
+    }
+    else if (
+        amostra >= 3
+    ) {
+
+        confianca += 3;
+
     }
 
 
     if (
-        h2hJogos >= 3
+        h2hJogos >= 5
     ) {
 
         confianca += 3;
+
     }
 
 
@@ -1546,12 +2106,14 @@ function calcularConfianca(
         nivel =
             "Alta";
 
-    } else if (
+    }
+    else if (
         confianca >= 50
     ) {
 
         nivel =
             "Média";
+
     }
 
 
@@ -1564,7 +2126,37 @@ function calcularConfianca(
             ),
 
         nivel
+
     };
+
+}
+
+
+// ==========================================================
+// PROBABILIDADE IMPLÍCITA
+// ==========================================================
+
+function probabilidadeImplicita(
+    odd
+) {
+
+    const valor =
+        numero(
+            odd
+        );
+
+
+    if (
+        valor <= 1
+    ) {
+
+        return 0;
+
+    }
+
+
+    return 1 / valor;
+
 }
 
 
@@ -1578,7 +2170,9 @@ function calcularValueBet(
 ) {
 
     const oddNumerica =
-        numero(odd);
+        numero(
+            odd
+        );
 
 
     if (
@@ -1599,25 +2193,29 @@ function calcularValueBet(
 
             oddJusta:
                 0
+
         };
+
     }
 
 
-    const probMercado =
-        1 /
-        oddNumerica;
+    const probabilidadeMercado =
+        probabilidadeImplicita(
+            oddNumerica
+        );
 
 
     const edge =
         probabilidade -
-        probMercado;
+        probabilidadeMercado;
 
 
-    const valor =
+    const valorEstimado =
         (
             probabilidade *
             oddNumerica
-        ) - 1;
+        ) -
+        1;
 
 
     const oddJusta =
@@ -1632,13 +2230,15 @@ function calcularValueBet(
 
         valor:
             arredondar(
-                valor * 100,
+                valorEstimado *
+                100,
                 2
             ),
 
         edge:
             arredondar(
-                edge * 100,
+                edge *
+                100,
                 2
             ),
 
@@ -1647,12 +2247,58 @@ function calcularValueBet(
                 oddJusta,
                 2
             )
+
     };
+
 }
 
 
 // ==========================================================
-// ANALISAR MERCADO
+// NORMALIZAR ODDS
+// ==========================================================
+
+function extrairOdds(
+    dados
+) {
+
+    const odds =
+        dados?.odds ||
+        dados?.odd ||
+        {};
+
+
+    return {
+
+        casa:
+            numero(
+                odds.casa ??
+                odds.home ??
+                odds.home_win ??
+                dados?.odd_casa
+            ),
+
+        empate:
+            numero(
+                odds.empate ??
+                odds.draw ??
+                dados?.odd_empate
+            ),
+
+        fora:
+            numero(
+                odds.fora ??
+                odds.away ??
+                odds.away_win ??
+                dados?.odd_fora
+            )
+
+    };
+
+}
+
+
+// ==========================================================
+// ANÁLISE PRINCIPAL
 // ==========================================================
 
 export async function analisarMercado(
@@ -1660,8 +2306,37 @@ export async function analisarMercado(
     dados = {}
 ) {
 
-    const info =
-        normalizarJogo(
+    // ======================================================
+    // ACEITAR OBJETO OU STRING
+    // ======================================================
+
+    const equipes =
+        extrairEquipes(
+            jogo
+        );
+
+
+    if (
+        !equipes.casa ||
+        !equipes.fora
+    ) {
+
+        throw new Error(
+            "Jogo não informado"
+        );
+
+    }
+
+
+    const nomeJogo =
+        montarNomeJogo(
+            equipes.casa,
+            equipes.fora
+        );
+
+
+    const dataJogo =
+        normalizarDataJogo(
             jogo
         );
 
@@ -1671,7 +2346,7 @@ export async function analisarMercado(
     );
 
     console.log(
-        `📊 BUSCANDO HISTÓRICO REAL: ${info.nome}`
+        `📊 BUSCANDO HISTÓRICO REAL: ${nomeJogo}`
     );
 
     console.log(
@@ -1687,73 +2362,146 @@ export async function analisarMercado(
     );
 
 
-    const [
-        historicoCasa,
-        historicoFora,
-        h2h
-    ] =
-        await Promise.all([
+    // ======================================================
+    // HISTÓRICO
+    // ======================================================
 
-            buscarHistoricoEquipe(
-                info.casa
-            ),
+    console.log(
+        `📚 Consultando histórico do time: ${equipes.casa}`
+    );
 
-            buscarHistoricoEquipe(
-                info.fora
-            ),
+    const historicoCasa =
+        await buscarHistoricoEquipe(
+            equipes.casa,
+            dataJogo
+        );
 
-            buscarH2H(
-                info.casa,
-                info.fora
-            )
 
-        ]);
+    console.log(
+        `📚 Consultando histórico do time: ${equipes.fora}`
+    );
 
+    const historicoFora =
+        await buscarHistoricoEquipe(
+            equipes.fora,
+            dataJogo
+        );
+
+
+    const historicoCasaValido =
+        filtrarHistoricoValido(
+            historicoCasa
+        );
+
+    const historicoForaValido =
+        filtrarHistoricoValido(
+            historicoFora
+        );
+
+
+    console.log(
+        `📊 ${equipes.casa}: ` +
+        `${historicoCasaValido.length} jogos históricos válidos`
+    );
+
+    console.log(
+        `📊 ${equipes.fora}: ` +
+        `${historicoForaValido.length} jogos históricos válidos`
+    );
+
+
+    // ======================================================
+    // H2H
+    // ======================================================
+
+    console.log(
+        `⚔️ Consultando H2H: ${nomeJogo}`
+    );
+
+
+    const h2hHistorico =
+        await buscarH2H(
+            equipes.casa,
+            equipes.fora,
+            dataJogo
+        );
+
+
+    const h2h =
+        calcularEstatisticasH2H(
+            h2hHistorico,
+            equipes.casa,
+            equipes.fora
+        );
+
+
+    console.log(
+        `⚔️ H2H válido: ${h2h.jogos} confrontos`
+    );
+
+    console.log(
+        `⚔️ H2H: ${h2h.jogos} confrontos | ` +
+        `Casa ${h2h.casaVitorias} vitórias | ` +
+        `Empates ${h2h.empates} | ` +
+        `Fora ${h2h.foraVitorias}`
+    );
+
+
+    // ======================================================
+    // ESTATÍSTICAS
+    // ======================================================
 
     const estatisticasCasa =
         calcularEstatisticasEquipe(
-            historicoCasa,
-            info.casa
+            historicoCasaValido,
+            equipes.casa
         );
 
 
     const estatisticasFora =
         calcularEstatisticasEquipe(
-            historicoFora,
-            info.fora
-        );
-
-
-    const estatisticasH2H =
-        calcularEstatisticasH2H(
-            h2h,
-            info.casa,
-            info.fora
+            historicoForaValido,
+            equipes.fora
         );
 
 
     console.log(
-        `📊 ${info.casa}: ` +
-        `${estatisticasCasa.jogos} jogos históricos válidos`
+        `📊 ${equipes.casa}: ` +
+        `${estatisticasCasa.jogos} jogos | ` +
+        `forma ${arredondar(
+            estatisticasCasa.forma * 100,
+            1
+        )}% | ` +
+        `gols ${estatisticasCasa.golsMarcados}`
     );
+
 
     console.log(
-        `📊 ${info.fora}: ` +
-        `${estatisticasFora.jogos} jogos históricos válidos`
+        `📊 ${equipes.fora}: ` +
+        `${estatisticasFora.jogos} jogos | ` +
+        `forma ${arredondar(
+            estatisticasFora.forma * 100,
+            1
+        )}% | ` +
+        `gols ${estatisticasFora.golsMarcados}`
     );
 
-    console.log(
-        `⚔️ H2H: ${estatisticasH2H.jogos} confrontos`
-    );
 
+    // ======================================================
+    // GOLS ESPERADOS
+    // ======================================================
 
     const gols =
         calcularGolsEsperados(
             estatisticasCasa,
             estatisticasFora,
-            estatisticasH2H
+            h2h
         );
 
+
+    // ======================================================
+    // 1X2
+    // ======================================================
 
     const probabilidades =
         calcularProbabilidadesResultado(
@@ -1762,12 +2510,20 @@ export async function analisarMercado(
         );
 
 
+    // ======================================================
+    // PLACAR
+    // ======================================================
+
     const placar =
         preverPlacar(
             gols.casa,
             gols.fora
         );
 
+
+    // ======================================================
+    // AMBAS MARCAM
+    // ======================================================
 
     const ambasMarcam =
         calcularAmbasMarcam(
@@ -1776,12 +2532,15 @@ export async function analisarMercado(
         );
 
 
+    // ======================================================
+    // MERCADOS
+    // ======================================================
+
     const over15 =
         probabilidadeOver(
             1.5,
             gols.total
         );
-
 
     const over25 =
         probabilidadeOver(
@@ -1789,13 +2548,17 @@ export async function analisarMercado(
             gols.total
         );
 
-
     const over35 =
         probabilidadeOver(
             3.5,
             gols.total
         );
 
+    const under15 =
+        probabilidadeUnder(
+            1.5,
+            gols.total
+        );
 
     const under25 =
         probabilidadeUnder(
@@ -1803,43 +2566,65 @@ export async function analisarMercado(
             gols.total
         );
 
+    const under35 =
+        probabilidadeUnder(
+            3.5,
+            gols.total
+        );
+
+
+    // ======================================================
+    // AMOSTRA
+    // ======================================================
+
+    const amostra =
+        Math.min(
+            estatisticasCasa.jogos,
+            estatisticasFora.jogos
+        );
+
+
+    // ======================================================
+    // CONFIANÇA
+    // ======================================================
 
     const confianca =
         calcularConfianca(
             probabilidades,
             estatisticasCasa.jogos,
             estatisticasFora.jogos,
-            estatisticasH2H.jogos
+            h2h.jogos
         );
 
 
+    // ======================================================
+    // ODDS
+    // ======================================================
+
     const odds =
-        dados?.odds ??
-        info.odds ??
-        {};
+        extrairOdds(
+            dados
+        );
 
 
     const valueCasa =
         calcularValueBet(
             probabilidades.casa,
-            odds.casa ??
-            odds.home
+            odds.casa
         );
 
 
     const valueEmpate =
         calcularValueBet(
             probabilidades.empate,
-            odds.empate ??
-            odds.draw
+            odds.empate
         );
 
 
     const valueFora =
         calcularValueBet(
             probabilidades.fora,
-            odds.fora ??
-            odds.away
+            odds.fora
         );
 
 
@@ -1859,10 +2644,7 @@ export async function analisarMercado(
                 "Casa",
 
             odd:
-                numero(
-                    odds.casa ??
-                    odds.home
-                ),
+                odds.casa,
 
             probabilidade:
                 arredondar(
@@ -1879,7 +2661,9 @@ export async function analisarMercado(
 
             oddJusta:
                 valueCasa.oddJusta
+
         });
+
     }
 
 
@@ -1896,10 +2680,7 @@ export async function analisarMercado(
                 "Empate",
 
             odd:
-                numero(
-                    odds.empate ??
-                    odds.draw
-                ),
+                odds.empate,
 
             probabilidade:
                 arredondar(
@@ -1916,7 +2697,9 @@ export async function analisarMercado(
 
             oddJusta:
                 valueEmpate.oddJusta
+
         });
+
     }
 
 
@@ -1933,10 +2716,7 @@ export async function analisarMercado(
                 "Fora",
 
             odd:
-                numero(
-                    odds.fora ??
-                    odds.away
-                ),
+                odds.fora,
 
             probabilidade:
                 arredondar(
@@ -1953,34 +2733,45 @@ export async function analisarMercado(
 
             oddJusta:
                 valueFora.oddJusta
+
         });
+
     }
 
 
-    const resultado = {
+    // ======================================================
+    // RESULTADO
+    // ======================================================
+
+    return {
 
         sucesso:
             true,
 
         algoritmo:
-            "BetVision AI Motor Estatístico v8",
-
-        api_id:
-            info.api_id,
-
-        data_jogo:
-            info.data_jogo,
+            "BetVision AI Motor Estatístico v8.0",
 
         jogo: {
 
             nome:
-                info.nome,
+                nomeJogo,
 
             casa:
-                info.casa,
+                equipes.casa,
 
             fora:
-                info.fora
+                equipes.fora,
+
+            api_id:
+                jogo?.api_id ??
+                jogo?.apiId ??
+                null,
+
+            data_jogo:
+                jogo?.data_jogo ??
+                jogo?.dataJogo ??
+                null
+
         },
 
         dataAnalise:
@@ -2008,6 +2799,7 @@ export async function analisarMercado(
                     100,
                     2
                 )
+
         },
 
         golsEsperados: {
@@ -2020,6 +2812,7 @@ export async function analisarMercado(
 
             total:
                 gols.total
+
         },
 
         placarPrevisto:
@@ -2032,33 +2825,53 @@ export async function analisarMercado(
 
             over15:
                 arredondar(
-                    over15 * 100,
+                    over15 *
+                    100,
                     2
                 ),
 
             over25:
                 arredondar(
-                    over25 * 100,
+                    over25 *
+                    100,
                     2
                 ),
 
             over35:
                 arredondar(
-                    over35 * 100,
+                    over35 *
+                    100,
+                    2
+                ),
+
+            under15:
+                arredondar(
+                    under15 *
+                    100,
                     2
                 ),
 
             under25:
                 arredondar(
-                    under25 * 100,
+                    under25 *
+                    100,
+                    2
+                ),
+
+            under35:
+                arredondar(
+                    under35 *
+                    100,
                     2
                 ),
 
             ambasMarcam:
                 arredondar(
-                    ambasMarcam * 100,
+                    ambasMarcam *
+                    100,
                     2
                 )
+
         },
 
         estatisticas: {
@@ -2069,66 +2882,34 @@ export async function analisarMercado(
             fora:
                 estatisticasFora,
 
-            h2h:
-                estatisticasH2H,
+            h2h,
 
-            amostra:
-                Math.min(
-                    estatisticasCasa.jogos,
-                    estatisticasFora.jogos
-                )
+            amostra
+
         },
 
-        h2h:
-            estatisticasH2H,
+        odds,
 
         valueBets,
 
         confianca,
 
         qualidadeDados:
-
-            Math.min(
-                estatisticasCasa.jogos,
-                estatisticasFora.jogos
-            ) >= MINIMO_HISTORICO
-
+            amostra >=
+            MINIMO_JOGOS_HISTORICO
                 ? "Boa"
-
                 : "Limitada"
+
     };
 
-
-    console.log(
-        `📊 ${info.casa}: ` +
-        `${estatisticasCasa.jogos} jogos | ` +
-        `forma ${estatisticasCasa.forma}% | ` +
-        `gols ${estatisticasCasa.golsMarcados}`
-    );
-
-
-    console.log(
-        `📊 ${info.fora}: ` +
-        `${estatisticasFora.jogos} jogos | ` +
-        `forma ${estatisticasFora.forma}% | ` +
-        `gols ${estatisticasFora.golsMarcados}`
-    );
-
-
-    console.log(
-        `⚔️ H2H: ${estatisticasH2H.jogos} confrontos | ` +
-        `Casa ${estatisticasH2H.vitoriasCasa} vitórias | ` +
-        `Empates ${estatisticasH2H.empates} | ` +
-        `Fora ${estatisticasH2H.vitoriasFora}`
-    );
-
-
-    return resultado;
 }
 
 
 // ==========================================================
 // GERAR ANÁLISE IA
+//
+// Compatibilidade antiga.
+//
 // ==========================================================
 
 export async function gerarAnaliseIA(
@@ -2140,21 +2921,15 @@ export async function gerarAnaliseIA(
         jogo,
         dados
     );
+
 }
 
 
 // ==========================================================
-// COMPATIBILIDADE COM O SINCRONIZADOR
+// GERAR ANÁLISE INTELIGENTE
 //
-// MUITO IMPORTANTE:
+// ESTA É A FUNÇÃO QUE routes/analises.js IMPORTA.
 //
-// O sincronizador pode chamar:
-//
-// gerarAnaliseInteligente(jogo)
-//
-// onde "jogo" é um OBJETO.
-//
-// Esta função agora aceita o objeto.
 // ==========================================================
 
 export async function gerarAnaliseInteligente(
@@ -2162,57 +2937,32 @@ export async function gerarAnaliseInteligente(
     dados = {}
 ) {
 
-    try {
+    if (
+        !jogo
+    ) {
 
-        const info =
-            normalizarJogo(
-                jogo
-            );
-
-
-        console.log(
-            `📊 Buscando histórico: ${info.nome}`
+        throw new Error(
+            "Jogo não informado"
         );
 
-
-        const resultado =
-            await analisarMercado(
-                info,
-                dados
-            );
-
-
-        return resultado;
-
-    } catch (erro) {
-
-        console.error(
-            `❌ Erro análise ${
-
-                typeof jogo === "string"
-
-                    ? jogo
-
-                    : jogo?.nome ??
-                      jogo?.jogo ??
-                      `${jogo?.time_casa ?? ""} x ` +
-                      `${jogo?.time_fora ?? ""}`
-
-            }: ${erro.message}`
-        );
-
-
-        throw erro;
     }
+
+
+    return await analisarMercado(
+        jogo,
+        dados
+    );
+
 }
 
 
 // ==========================================================
 // LISTAR ANÁLISES
 //
-// Mantém compatibilidade.
+// Compatibilidade de serviço.
 //
 // SOMENTE HOJE + AMANHÃ.
+//
 // ==========================================================
 
 export async function listarAnalises() {
@@ -2221,89 +2971,61 @@ export async function listarAnalises() {
 
         const resultado =
             await query(
+
                 `
-                SELECT
+                SELECT *
 
-                    a.*,
-
-                    j.id AS jogo_id,
-
-                    j.api_id AS jogo_api_id,
-
-                    j.data_jogo,
-
-                    j.campeonato,
-
-                    j.time_casa,
-
-                    j.time_fora,
-
-                    j.estadio,
-
-                    j.status
-
-                FROM analises a
-
-                INNER JOIN jogos j
-
-                    ON j.api_id = a.api_id
+                FROM analises
 
                 WHERE
 
-                    j.data_jogo IS NOT NULL
+                    data_jogo IS NOT NULL
 
                     AND
 
                     (
-                        j.data_jogo
+                        data_jogo
                         AT TIME ZONE
                         $1
                     )::date
 
                     BETWEEN
 
-                    $2::date
+                    (
+                        CURRENT_TIMESTAMP
+                        AT TIME ZONE
+                        $1
+                    )::date
 
                     AND
 
-                    $3::date
+                    (
+                        CURRENT_TIMESTAMP
+                        AT TIME ZONE
+                        $1
+                    )::date + 1
 
                 ORDER BY
-
-                    j.data_jogo ASC,
-
-                    a.criado_em DESC,
-
-                    a.id DESC
+                    data_jogo ASC
 
                 LIMIT 100
                 `,
+
                 [
-                    TIMEZONE,
-                    obterDataHojeBrasil(),
-                    (() => {
-
-                        const hoje =
-                            new Date(
-                                `${obterDataHojeBrasil()}T00:00:00`
-                            );
-
-                        hoje.setDate(
-                            hoje.getDate() + 1
-                        );
-
-                        return hoje
-                            .toISOString()
-                            .slice(0, 10);
-
-                    })()
+                    TIMEZONE
                 ]
+
             );
 
 
-        return resultado.rows || [];
+        return (
+            resultado.rows ||
+            []
+        );
 
-    } catch (erro) {
+    }
+
+    catch (erro) {
 
         console.error(
             "❌ Erro listar análises:",
@@ -2311,7 +3033,9 @@ export async function listarAnalises() {
         );
 
         return [];
+
     }
+
 }
 
 
