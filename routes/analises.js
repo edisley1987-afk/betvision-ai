@@ -4,9 +4,9 @@
 //
 // ROTAS DE ANÁLISES IA
 //
-// VERSÃO V8 - CORREÇÃO COMPLETA
+// VERSÃO 8.0 - CORREÇÃO DEFINITIVA
 //
-// PRINCIPAIS CORREÇÕES:
+// REGRAS:
 //
 // - GET /api/analises
 //      SOMENTE JOGOS DE HOJE
@@ -14,28 +14,31 @@
 // - GET /api/analises/hoje
 //      SOMENTE JOGOS DE HOJE
 //
-// - NÃO exibe jogos de ontem
-// - NÃO exibe jogos de amanhã
-// - Mantém histórico no PostgreSQL
-// - Vincula análise ao jogo por api_id
-// - Compatível com America/Sao_Paulo
-// - Evita conflito entre /hoje e /:id
-// - Validação de parâmetros
-// - Respostas JSON padronizadas
-// - Remove duplicidades
-// - Ordena por horário do jogo
-// - Reconhece vários formatos de data
-// - Reconhece data dentro do objeto jogo
-// - Reconhece estruturas aninhadas
-// - POST /api/analises mantido
-// - POST /api/analises/prever mantido
+// - GET /api/analises/:id
+//      CONSULTA INDIVIDUAL
+//      PODE CONSULTAR HISTÓRICO
+//
+// - POST /api/analises
+//      ANÁLISE DE MERCADO
+//
+// - POST /api/analises/prever
+//      PREVISÃO IA
 //
 // IMPORTANTE:
 //
-// O FILTRO DE HOJE É FEITO NOVAMENTE NESTA ROTA,
-// MESMO QUE O bancoService JÁ FAÇA O FILTRO.
+// A DATA DA ANÁLISE NÃO É USADA PARA DEFINIR
+// SE O JOGO É DE HOJE.
 //
-// Isso cria uma segunda camada de proteção.
+// A DATA OFICIAL VEM DA TABELA:
+//
+//      jogos.data_jogo
+//
+// através do:
+//
+//      api_id
+//
+// TIMEZONE:
+//      America/Sao_Paulo
 //
 // ==================================================
 
@@ -47,7 +50,8 @@ import {
 } from "../services/inteligenciaService.js";
 
 import {
-    listarAnalisesHoje
+    listarAnalisesHoje,
+    buscarAnalisePorId
 } from "../services/bancoService.js";
 
 const router = express.Router();
@@ -61,10 +65,7 @@ const TIMEZONE = "America/Sao_Paulo";
 
 
 // ==================================================
-// FUNÇÃO: OBTER DATA DE HOJE NO BRASIL
-//
-// Retorna:
-// YYYY-MM-DD
+// DATA DE HOJE NO BRASIL
 // ==================================================
 
 function obterDataHojeBrasil() {
@@ -81,24 +82,17 @@ function obterDataHojeBrasil() {
             }
         ).format(new Date());
 
-    } catch (erro) {
+    }
+    catch (erro) {
 
         console.error(
             "❌ Erro obtendo data Brasil:",
             erro.message
         );
 
-        // ------------------------------------------
-        // Fallback
-        // ------------------------------------------
-
         return new Date()
-            .toLocaleDateString(
-                "sv-SE",
-                {
-                    timeZone: TIMEZONE
-                }
-            );
+            .toISOString()
+            .slice(0, 10);
 
     }
 
@@ -106,20 +100,16 @@ function obterDataHojeBrasil() {
 
 
 // ==================================================
-// FUNÇÃO: NORMALIZAR DATA
-//
-// Aceita:
-//
-// YYYY-MM-DD
-// YYYY-MM-DD HH:mm:ss
-// YYYY-MM-DDTHH:mm:ss
-// ISO completo
-// Date
-// timestamp
+// NORMALIZAR DATA PARA BRASIL
 //
 // Retorna:
-//
 // YYYY-MM-DD
+//
+// IMPORTANTE:
+//
+// Se receber YYYY-MM-DD diretamente,
+// não passa pelo new Date(),
+// evitando deslocamento de dia.
 // ==================================================
 
 function normalizarDataBrasil(valor) {
@@ -134,26 +124,16 @@ function normalizarDataBrasil(valor) {
 
     }
 
-
     try {
 
         // ------------------------------------------
-        // DATE
+        // Date
         // ------------------------------------------
 
         if (
-            valor instanceof Date
+            valor instanceof Date &&
+            !Number.isNaN(valor.getTime())
         ) {
-
-            if (
-                Number.isNaN(
-                    valor.getTime()
-                )
-            ) {
-
-                return null;
-
-            }
 
             return new Intl.DateTimeFormat(
                 "en-CA",
@@ -168,49 +148,8 @@ function normalizarDataBrasil(valor) {
         }
 
 
-        // ------------------------------------------
-        // NÚMERO
-        //
-        // Pode ser timestamp.
-        // ------------------------------------------
-
-        if (
-            typeof valor === "number"
-        ) {
-
-            const data =
-                new Date(valor);
-
-            if (
-                Number.isNaN(
-                    data.getTime()
-                )
-            ) {
-
-                return null;
-
-            }
-
-            return new Intl.DateTimeFormat(
-                "en-CA",
-                {
-                    timeZone: TIMEZONE,
-                    year: "numeric",
-                    month: "2-digit",
-                    day: "2-digit"
-                }
-            ).format(data);
-
-        }
-
-
-        // ------------------------------------------
-        // STRING
-        // ------------------------------------------
-
         const texto =
-            String(valor)
-                .trim();
+            String(valor).trim();
 
 
         if (!texto) {
@@ -221,78 +160,29 @@ function normalizarDataBrasil(valor) {
 
 
         // ------------------------------------------
-        // FORMATO YYYY-MM-DD
-        //
-        // IMPORTANTE:
-        //
-        // Não passar diretamente pelo new Date()
-        // para evitar deslocamento de dia.
+        // YYYY-MM-DD
+        // YYYY-MM-DDTHH:mm...
         // ------------------------------------------
 
-        const matchISO =
+        const match =
             texto.match(
                 /^(\d{4})-(\d{2})-(\d{2})/
             );
 
 
-        if (matchISO) {
-
-            const ano =
-                Number(matchISO[1]);
-
-            const mes =
-                Number(matchISO[2]);
-
-            const dia =
-                Number(matchISO[3]);
-
-
-            // --------------------------------------
-            // Validação básica
-            // --------------------------------------
-
-            if (
-                ano >= 2000 &&
-                mes >= 1 &&
-                mes <= 12 &&
-                dia >= 1 &&
-                dia <= 31
-            ) {
-
-                return (
-                    `${String(ano).padStart(4, "0")}-` +
-                    `${String(mes).padStart(2, "0")}-` +
-                    `${String(dia).padStart(2, "0")}`
-                );
-
-            }
-
-        }
-
-
-        // ------------------------------------------
-        // FORMATO DD/MM/YYYY
-        // ------------------------------------------
-
-        const matchBR =
-            texto.match(
-                /^(\d{2})\/(\d{2})\/(\d{4})/
-            );
-
-
-        if (matchBR) {
+        if (match) {
 
             return (
-                `${matchBR[3]}-` +
-                `${matchBR[2]}-` +
-                `${matchBR[1]}`
+                `${match[1]}-` +
+                `${match[2]}-` +
+                `${match[3]}`
             );
 
         }
 
 
         // ------------------------------------------
-        // TENTAR COMO DATA NORMAL
+        // Outros formatos
         // ------------------------------------------
 
         const data =
@@ -321,7 +211,6 @@ function normalizarDataBrasil(valor) {
         ).format(data);
 
     }
-
     catch (erro) {
 
         console.error(
@@ -337,261 +226,67 @@ function normalizarDataBrasil(valor) {
 
 
 // ==================================================
-// FUNÇÃO: OBTER TODOS OS POSSÍVEIS CAMPOS DE DATA
+// OBTER DATA OFICIAL DA ANÁLISE
 //
-// Aqui está uma das principais correções.
+// PRIORIDADE:
 //
-// O jogo pode vir como:
+// 1. data_jogo
+// 2. jogo.data_jogo
+// 3. demais campos
 //
-// analise.data_jogo
-// analise.dataJogo
-// analise.jogo_data
-// analise.data
-// analise.inicio
-// analise.kickoff
-// analise.date
-// analise.datetime
-// analise.data_hora
-// analise.dataHora
+// IMPORTANTE:
 //
-// ou:
+// O bancoService já retorna:
 //
-// analise.jogo.data_jogo
-// analise.jogo.data
-// analise.jogo.fixture.date
-// analise.jogo.fixture.data
+//      j.data_jogo
 //
-// etc.
+// portanto esse campo será o principal.
 // ==================================================
 
-function obterValoresDeData(analise) {
+function obterDataAnalise(analise) {
 
     if (!analise) {
 
-        return [];
+        return null;
 
     }
 
 
-    const valores = [];
+    const campos = [
+
+        analise.data_jogo,
+
+        analise.jogo_data,
+
+        analise.dataJogo,
+
+        analise.jogo?.data_jogo,
+
+        analise.jogo?.jogo_data,
+
+        analise.jogo?.dataJogo,
+
+        analise.data,
+
+        analise.inicio,
+
+        analise.kickoff,
+
+        analise.date,
+
+        analise.datetime,
+
+        analise.data_hora,
+
+        analise.dataHora
+
+    ];
 
 
-    // ==================================================
-    // FUNÇÃO INTERNA
-    // ==================================================
-
-    function adicionar(valor) {
-
-        if (
-            valor !== null &&
-            valor !== undefined &&
-            valor !== ""
-        ) {
-
-            valores.push(valor);
-
-        }
-
-    }
-
-
-    // ==================================================
-    // NÍVEL PRINCIPAL
-    // ==================================================
-
-    adicionar(analise.data_jogo);
-    adicionar(analise.dataJogo);
-    adicionar(analise.jogo_data);
-    adicionar(analise.data);
-    adicionar(analise.inicio);
-    adicionar(analise.kickoff);
-    adicionar(analise.date);
-    adicionar(analise.datetime);
-    adicionar(analise.data_hora);
-    adicionar(analise.dataHora);
-    adicionar(analise.horario);
-    adicionar(analise.fixture_date);
-    adicionar(analise.fixtureDate);
-    adicionar(analise.match_date);
-    adicionar(analise.matchDate);
-
-
-    // ==================================================
-    // OBJETO JOGO
-    // ==================================================
-
-    if (
-        analise.jogo &&
-        typeof analise.jogo === "object"
-    ) {
-
-        const jogo =
-            analise.jogo;
-
-
-        adicionar(jogo.data_jogo);
-        adicionar(jogo.dataJogo);
-        adicionar(jogo.jogo_data);
-        adicionar(jogo.data);
-        adicionar(jogo.inicio);
-        adicionar(jogo.kickoff);
-        adicionar(jogo.date);
-        adicionar(jogo.datetime);
-        adicionar(jogo.data_hora);
-        adicionar(jogo.dataHora);
-        adicionar(jogo.horario);
-        adicionar(jogo.fixture_date);
-        adicionar(jogo.fixtureDate);
-        adicionar(jogo.match_date);
-        adicionar(jogo.matchDate);
-
-
-        // ------------------------------------------
-        // fixture
-        // ------------------------------------------
-
-        if (
-            jogo.fixture &&
-            typeof jogo.fixture === "object"
-        ) {
-
-            adicionar(
-                jogo.fixture.date
-            );
-
-            adicionar(
-                jogo.fixture.data
-            );
-
-            adicionar(
-                jogo.fixture.datetime
-            );
-
-            adicionar(
-                jogo.fixture.kickoff
-            );
-
-        }
-
-
-        // ------------------------------------------
-        // partida
-        // ------------------------------------------
-
-        if (
-            jogo.partida &&
-            typeof jogo.partida === "object"
-        ) {
-
-            adicionar(
-                jogo.partida.data
-            );
-
-            adicionar(
-                jogo.partida.data_jogo
-            );
-
-            adicionar(
-                jogo.partida.date
-            );
-
-            adicionar(
-                jogo.partida.kickoff
-            );
-
-        }
-
-    }
-
-
-    // ==================================================
-    // OBJETO PARTIDA
-    // ==================================================
-
-    if (
-        analise.partida &&
-        typeof analise.partida === "object"
-    ) {
-
-        adicionar(
-            analise.partida.data
-        );
-
-        adicionar(
-            analise.partida.data_jogo
-        );
-
-        adicionar(
-            analise.partida.dataJogo
-        );
-
-        adicionar(
-            analise.partida.date
-        );
-
-        adicionar(
-            analise.partida.kickoff
-        );
-
-    }
-
-
-    // ==================================================
-    // OBJETO MATCH
-    // ==================================================
-
-    if (
-        analise.match &&
-        typeof analise.match === "object"
-    ) {
-
-        adicionar(
-            analise.match.date
-        );
-
-        adicionar(
-            analise.match.data
-        );
-
-        adicionar(
-            analise.match.data_jogo
-        );
-
-        adicionar(
-            analise.match.kickoff
-        );
-
-    }
-
-
-    return valores;
-
-}
-
-
-// ==================================================
-// FUNÇÃO: OBTER DATA DO JOGO
-//
-// Retorna a primeira data válida encontrada.
-// ==================================================
-
-function obterDataDoJogo(analise) {
-
-    const valores =
-        obterValoresDeData(
-            analise
-        );
-
-
-    for (
-        const valor
-        of valores
-    ) {
+    for (const campo of campos) {
 
         const data =
-            normalizarDataBrasil(
-                valor
-            );
+            normalizarDataBrasil(campo);
 
 
         if (data) {
@@ -609,30 +304,24 @@ function obterDataDoJogo(analise) {
 
 
 // ==================================================
-// VERIFICAR SE ANÁLISE É DE HOJE
+// VERIFICAR SE É DE HOJE
 // ==================================================
 
 function analiseEhDeHoje(analise) {
-
-    if (!analise) {
-
-        return false;
-
-    }
-
 
     const hoje =
         obterDataHojeBrasil();
 
 
-    const dataJogo =
-        obterDataDoJogo(
+    const data =
+        obterDataAnalise(
             analise
         );
 
 
     return (
-        dataJogo === hoje
+        data !== null &&
+        data === hoje
     );
 
 }
@@ -641,264 +330,75 @@ function analiseEhDeHoje(analise) {
 // ==================================================
 // FILTRAR SOMENTE HOJE
 //
-// REGRA ABSOLUTA:
+// SEGURANÇA FINAL DO BACKEND.
 //
-// data do jogo === data do Brasil
-//
-// Não usa created_at.
-// Não usa updated_at.
-// Não usa data da análise.
-//
-// O QUE IMPORTA É A DATA DA PARTIDA.
+// Mesmo que alguma consulta futura retorne
+// registros errados, eles são bloqueados aqui.
 // ==================================================
 
 function filtrarSomenteHoje(lista) {
 
-    if (
-        !Array.isArray(lista)
-    ) {
+    if (!Array.isArray(lista)) {
 
         return [];
 
     }
 
 
-    const hoje =
-        obterDataHojeBrasil();
-
-
-    const resultado = [];
-
-
-    for (
-        const analise
-        of lista
-    ) {
-
-        if (!analise) {
-
-            continue;
-
-        }
-
-
-        const dataJogo =
-            obterDataDoJogo(
+    return lista.filter(
+        analise =>
+            analiseEhDeHoje(
                 analise
-            );
-
-
-        // ------------------------------------------
-        // SEM DATA = NÃO EXIBIR
-        // ------------------------------------------
-
-        if (!dataJogo) {
-
-            console.warn(
-                "⚠️ Análise ignorada: jogo sem data identificável",
-                {
-                    id:
-                        analise.id ??
-                        analise.analise_id ??
-                        null,
-
-                    api_id:
-                        analise.api_id ??
-                        analise.apiId ??
-                        analise.jogo_api_id ??
-                        null
-                }
-            );
-
-            continue;
-
-        }
-
-
-        // ------------------------------------------
-        // SOMENTE HOJE
-        // ------------------------------------------
-
-        if (
-            dataJogo !== hoje
-        ) {
-
-            continue;
-
-        }
-
-
-        resultado.push(
-            analise
-        );
-
-    }
-
-
-    return resultado;
-
-}
-
-
-// ==================================================
-// ORDENAR ANÁLISES
-//
-// Ordena pelo horário/data da partida.
-// ==================================================
-
-function ordenarAnalises(lista) {
-
-    if (
-        !Array.isArray(lista)
-    ) {
-
-        return [];
-
-    }
-
-
-    return [
-        ...lista
-    ].sort(
-        (
-            a,
-            b
-        ) => {
-
-            const dataA =
-                obterDataOrdenacao(
-                    a
-                );
-
-
-            const dataB =
-                obterDataOrdenacao(
-                    b
-                );
-
-
-            return (
-                dataA - dataB
-            );
-
-        }
+            )
     );
 
 }
 
 
 // ==================================================
-// OBTER DATA PARA ORDENAÇÃO
+// OBTER DATA DE ORDENAÇÃO
 // ==================================================
 
 function obterDataOrdenacao(analise) {
 
-    if (!analise) {
+    const campos = [
 
-        return Number.MAX_SAFE_INTEGER;
+        analise?.data_jogo,
 
-    }
+        analise?.jogo_data,
 
+        analise?.dataJogo,
 
-    const valores =
-        obterValoresDeData(
-            analise
-        );
+        analise?.jogo?.data_jogo,
 
+        analise?.data,
 
-    for (
-        const valor
-        of valores
-    ) {
+        analise?.inicio,
 
-        if (
-            valor instanceof Date
-        ) {
+        analise?.kickoff,
 
-            const timestamp =
-                valor.getTime();
+        analise?.date,
+
+        analise?.datetime
+
+    ];
 
 
-            if (
-                !Number.isNaN(
-                    timestamp
-                )
-            ) {
+    for (const campo of campos) {
 
-                return timestamp;
-
-            }
+        if (!campo) {
 
             continue;
-
-        }
-
-
-        const texto =
-            String(valor)
-                .trim();
-
-
-        if (!texto) {
-
-            continue;
-
-        }
-
-
-        // ------------------------------------------
-        // Se for apenas YYYY-MM-DD,
-        // não existe horário.
-        // ------------------------------------------
-
-        if (
-            /^\d{4}-\d{2}-\d{2}$/.test(
-                texto
-            )
-        ) {
-
-            const partes =
-                texto.split("-");
-
-
-            const data =
-                new Date(
-                    Number(partes[0]),
-                    Number(partes[1]) - 1,
-                    Number(partes[2]),
-                    0,
-                    0,
-                    0
-                );
-
-
-            const timestamp =
-                data.getTime();
-
-
-            if (
-                !Number.isNaN(
-                    timestamp
-                )
-            ) {
-
-                return timestamp;
-
-            }
 
         }
 
 
         const timestamp =
-            new Date(
-                texto
-            ).getTime();
+            new Date(campo).getTime();
 
 
         if (
-            !Number.isNaN(
-                timestamp
-            )
+            !Number.isNaN(timestamp)
         ) {
 
             return timestamp;
@@ -914,20 +414,58 @@ function obterDataOrdenacao(analise) {
 
 
 // ==================================================
+// ORDENAR
+// ==================================================
+
+function ordenarAnalises(lista) {
+
+    if (!Array.isArray(lista)) {
+
+        return [];
+
+    }
+
+
+    return [...lista].sort(
+        (a, b) =>
+            obterDataOrdenacao(a) -
+            obterDataOrdenacao(b)
+    );
+
+}
+
+
+// ==================================================
+// OBTER API ID
+// ==================================================
+
+function obterApiId(analise) {
+
+    return (
+        analise?.api_id ??
+        analise?.apiId ??
+        analise?.jogo_api_id ??
+        analise?.jogo?.api_id ??
+        analise?.jogo?.apiId ??
+        null
+    );
+
+}
+
+
+// ==================================================
 // REMOVER DUPLICADAS
 //
 // Prioridade:
 //
-// 1. api_id
-// 2. id
-// 3. nome + data
+// api_id
+// depois id
+// depois combinação de times + data
 // ==================================================
 
 function removerDuplicadas(lista) {
 
-    if (
-        !Array.isArray(lista)
-    ) {
+    if (!Array.isArray(lista)) {
 
         return [];
 
@@ -938,10 +476,7 @@ function removerDuplicadas(lista) {
         new Map();
 
 
-    for (
-        const analise
-        of lista
-    ) {
+    for (const analise of lista) {
 
         if (!analise) {
 
@@ -951,48 +486,35 @@ function removerDuplicadas(lista) {
 
 
         const apiId =
-            analise.api_id ??
-            analise.apiId ??
-            analise.jogo_api_id ??
-            analise.jogo?.api_id ??
-            analise.jogo?.apiId ??
-            analise.partida?.api_id ??
-            analise.partida?.apiId;
+            obterApiId(
+                analise
+            );
 
 
         const id =
             analise.id ??
-            analise.analise_id;
+            analise.analise_id ??
+            null;
+
+
+        const data =
+            obterDataAnalise(
+                analise
+            ) || "";
 
 
         const casa =
-            analise.casa ??
             analise.time_casa ??
+            analise.casa ??
             analise.home_team ??
-            analise.homeTeam ??
-            analise.jogo?.casa ??
-            analise.jogo?.home_team ??
-            analise.jogo?.homeTeam ??
-            analise.partida?.casa ??
             "";
 
 
         const fora =
-            analise.fora ??
             analise.time_fora ??
+            analise.fora ??
             analise.away_team ??
-            analise.awayTeam ??
-            analise.jogo?.fora ??
-            analise.jogo?.away_team ??
-            analise.jogo?.awayTeam ??
-            analise.partida?.fora ??
             "";
-
-
-        const data =
-            obterDataDoJogo(
-                analise
-            ) || "";
 
 
         let chave;
@@ -1001,38 +523,29 @@ function removerDuplicadas(lista) {
         if (
             apiId !== null &&
             apiId !== undefined &&
-            String(apiId).trim() !== ""
+            apiId !== ""
         ) {
 
             chave =
-                `api:${String(apiId).trim()}`;
+                `api:${apiId}`;
 
         }
-
         else if (
             id !== null &&
-            id !== undefined
+            id !== undefined &&
+            id !== ""
         ) {
 
             chave =
-                `id:${String(id)}`;
+                `id:${id}`;
 
         }
-
         else {
 
             chave =
-                [
-                    String(casa)
-                        .trim()
-                        .toLowerCase(),
-
-                    String(fora)
-                        .trim()
-                        .toLowerCase(),
-
-                    data
-                ].join("|");
+                `${String(casa).trim().toLowerCase()}|` +
+                `${String(fora).trim().toLowerCase()}|` +
+                `${data}`;
 
         }
 
@@ -1059,17 +572,15 @@ function removerDuplicadas(lista) {
 
 
 // ==================================================
-// PREPARAR LISTA FINAL
+// PREPARAR LISTA
 //
-// banco
+// BANCO
 // ↓
-// array
+// SOMENTE HOJE
 // ↓
-// somente hoje
+// DUPLICADAS
 // ↓
-// remover duplicadas
-// ↓
-// ordenar
+// ORDENAÇÃO
 // ==================================================
 
 function prepararListaAnalises(dados) {
@@ -1080,24 +591,10 @@ function prepararListaAnalises(dados) {
             : [];
 
 
-    const hoje =
-        obterDataHojeBrasil();
-
-
-    console.log(
-        `📦 Registros recebidos do banco: ${lista.length}`
-    );
-
-
     const somenteHoje =
         filtrarSomenteHoje(
             lista
         );
-
-
-    console.log(
-        `📅 Registros de hoje após filtro: ${somenteHoje.length}`
-    );
 
 
     const semDuplicadas =
@@ -1106,89 +603,50 @@ function prepararListaAnalises(dados) {
         );
 
 
-    console.log(
-        `♻️ Após remover duplicadas: ${semDuplicadas.length}`
+    return ordenarAnalises(
+        semDuplicadas
     );
-
-
-    const ordenada =
-        ordenarAnalises(
-            semDuplicadas
-        );
-
-
-    console.log(
-        `✅ Lista final de análises: ${ordenada.length}`
-    );
-
-
-    return ordenada;
 
 }
 
 
 // ==================================================
-// FUNÇÃO AUXILIAR:
-// LOGAR ANÁLISES
+// LOG RESUMIDO
 // ==================================================
 
-function logarAnalises(lista) {
+function registrarLogAnalises(lista) {
 
-    if (
-        !Array.isArray(lista) ||
-        lista.length === 0
-    ) {
-
-        return;
-
-    }
-
-
-    for (
-        const analise
-        of lista
-    ) {
+    for (const analise of lista) {
 
         const apiId =
-            analise.api_id ??
-            analise.apiId ??
-            analise.jogo_api_id ??
-            analise.jogo?.api_id ??
-            analise.jogo?.apiId ??
-            "N/A";
+            obterApiId(
+                analise
+            ) ?? "N/A";
 
 
         const casa =
-            analise.casa ??
             analise.time_casa ??
+            analise.casa ??
             analise.home_team ??
-            analise.homeTeam ??
-            analise.jogo?.casa ??
-            analise.jogo?.home_team ??
-            analise.jogo?.homeTeam ??
             "Casa";
 
 
         const fora =
-            analise.fora ??
             analise.time_fora ??
+            analise.fora ??
             analise.away_team ??
-            analise.awayTeam ??
-            analise.jogo?.fora ??
-            analise.jogo?.away_team ??
-            analise.jogo?.awayTeam ??
             "Fora";
 
 
         const data =
-            obterDataDoJogo(
+            obterDataAnalise(
                 analise
-            ) || "SEM DATA";
+            ) ?? "SEM DATA";
 
 
         console.log(
             `⚽ ${casa} x ${fora} | ` +
-            `📅 ${data} | ` +
+            `Data: ${data} | ` +
             `API: ${apiId}`
         );
 
@@ -1200,17 +658,12 @@ function logarAnalises(lista) {
 // ==================================================
 // GET /api/analises
 //
-// SOMENTE JOGOS DE HOJE
-//
-// Este é o endpoint principal do dashboard.
+// SOMENTE HOJE
 // ==================================================
 
 router.get(
     "/",
-    async (
-        req,
-        res
-    ) => {
+    async (req, res) => {
 
         try {
 
@@ -1227,7 +680,7 @@ router.get(
             );
 
             console.log(
-                `📅 Data Brasil: ${hoje}`
+                `📅 Hoje Brasil: ${hoje}`
             );
 
             console.log(
@@ -1235,21 +688,13 @@ router.get(
             );
 
             console.log(
-                "🎯 Filtro: SOMENTE JOGOS DE HOJE"
+                "🎯 Filtro: SOMENTE HOJE"
             );
 
-
-            // --------------------------------------
-            // BUSCAR DO BANCO
-            // --------------------------------------
 
             const dados =
                 await listarAnalisesHoje();
 
-
-            // --------------------------------------
-            // FILTRO FINAL
-            // --------------------------------------
 
             const lista =
                 prepararListaAnalises(
@@ -1258,11 +703,11 @@ router.get(
 
 
             console.log(
-                `🤖 Análises exibidas hoje: ${lista.length}`
+                `🤖 Análises válidas: ${lista.length}`
             );
 
 
-            logarAnalises(
+            registrarLogAnalises(
                 lista
             );
 
@@ -1294,7 +739,6 @@ router.get(
             });
 
         }
-
         catch (erro) {
 
             console.error(
@@ -1338,15 +782,12 @@ router.get(
 // ==================================================
 // GET /api/analises/hoje
 //
-// SOMENTE JOGOS DE HOJE
+// SOMENTE HOJE
 // ==================================================
 
 router.get(
     "/hoje",
-    async (
-        req,
-        res
-    ) => {
+    async (req, res) => {
 
         try {
 
@@ -1355,15 +796,7 @@ router.get(
 
 
             console.log(
-                "=========================================="
-            );
-
-            console.log(
-                "📅 BUSCANDO ANÁLISES DE HOJE"
-            );
-
-            console.log(
-                `📅 Hoje Brasil: ${hoje}`
+                `📅 Buscando análises de hoje: ${hoje}`
             );
 
 
@@ -1375,21 +808,6 @@ router.get(
                 prepararListaAnalises(
                     dados
                 );
-
-
-            console.log(
-                `📅 Análises válidas de hoje: ${lista.length}`
-            );
-
-
-            logarAnalises(
-                lista
-            );
-
-
-            console.log(
-                "=========================================="
-            );
 
 
             return res.json({
@@ -1414,7 +832,6 @@ router.get(
             });
 
         }
-
         catch (erro) {
 
             console.error(
@@ -1463,10 +880,7 @@ router.get(
 
 router.post(
     "/",
-    async (
-        req,
-        res
-    ) => {
+    async (req, res) => {
 
         try {
 
@@ -1481,10 +895,6 @@ router.post(
             const dados =
                 body.dados || {};
 
-
-            // --------------------------------------
-            // VALIDAÇÃO
-            // --------------------------------------
 
             if (
                 typeof jogo !== "string" ||
@@ -1525,7 +935,6 @@ router.post(
             );
 
         }
-
         catch (erro) {
 
             console.error(
@@ -1554,15 +963,12 @@ router.post(
 // ==================================================
 // POST /api/analises/prever
 //
-// ANÁLISE DIRETA
+// PREVISÃO DIRETA
 // ==================================================
 
 router.post(
     "/prever",
-    async (
-        req,
-        res
-    ) => {
+    async (req, res) => {
 
         try {
 
@@ -1577,10 +983,6 @@ router.post(
             const dados =
                 body.dados || {};
 
-
-            // --------------------------------------
-            // VALIDAÇÃO
-            // --------------------------------------
 
             if (
                 typeof jogo !== "string" ||
@@ -1626,7 +1028,6 @@ router.post(
             });
 
         }
-
         catch (erro) {
 
             console.error(
@@ -1655,41 +1056,30 @@ router.post(
 // ==================================================
 // GET /api/analises/:id
 //
-// BUSCAR UMA ANÁLISE ESPECÍFICA
+// CONSULTA INDIVIDUAL
+//
+// Diferente da listagem:
+// pode consultar análise histórica.
 //
 // IMPORTANTE:
 //
-// Esta consulta é INDIVIDUAL.
-//
-// Portanto, não aplica o filtro "somente hoje"
-// da listagem principal.
-//
-// A listagem do dashboard continua somente hoje.
+// Esta rota está depois de /hoje e /prever.
 // ==================================================
 
 router.get(
     "/:id",
-    async (
-        req,
-        res
-    ) => {
+    async (req, res) => {
 
         try {
 
             const idTexto =
                 String(
-                    req.params.id ?? ""
+                    req.params.id || ""
                 ).trim();
 
 
-            // --------------------------------------
-            // SOMENTE ID NUMÉRICO
-            // --------------------------------------
-
             if (
-                !/^\d+$/.test(
-                    idTexto
-                )
+                !/^\d+$/.test(idTexto)
             ) {
 
                 return res.status(400)
@@ -1706,9 +1096,7 @@ router.get(
 
 
             const id =
-                Number(
-                    idTexto
-                );
+                Number(idTexto);
 
 
             if (
@@ -1729,51 +1117,9 @@ router.get(
             }
 
 
-            // --------------------------------------
-            // IMPORTANTE
-            //
-            // Como o bancoService atual disponibiliza
-            // listarAnalisesHoje(), usamos essa fonte
-            // para localizar o registro.
-            //
-            // Se futuramente existir buscarAnalisePorId()
-            // no bancoService, ela poderá substituir
-            // esta consulta sem alterar o restante
-            // da rota.
-            // --------------------------------------
-
-            const dados =
-                await listarAnalisesHoje();
-
-
-            const lista =
-                Array.isArray(dados)
-                    ? dados
-                    : [];
-
-
             const analise =
-                lista.find(
-                    item => {
-
-                        if (!item) {
-
-                            return false;
-
-                        }
-
-
-                        return (
-                            Number(
-                                item.id
-                            ) === id
-                            ||
-                            Number(
-                                item.analise_id
-                            ) === id
-                        );
-
-                    }
+                await buscarAnalisePorId(
+                    id
                 );
 
 
@@ -1802,7 +1148,6 @@ router.get(
             });
 
         }
-
         catch (erro) {
 
             console.error(
