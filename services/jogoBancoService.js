@@ -2,7 +2,7 @@
 // BETVISION AI
 // services/jogoBancoService.js
 //
-// VERSÃO 10.0
+// VERSÃO 11.0
 // MOTOR DE BANCO DE JOGOS
 // PostgreSQL / NeonDB
 //
@@ -37,6 +37,21 @@
 //
 // A consulta é convertida para UTC antes
 // de consultar o PostgreSQL.
+//
+// ==================================================
+//
+// CORREÇÕES V11:
+//
+// - ADICIONADA extração de gols (gols_casa / gols_fora)
+// - normalizarJogo() agora captura placar recebido da API
+// - INSERT agora grava gols_casa / gols_fora
+// - UPDATE agora grava gols_casa / gols_fora
+//   (usando COALESCE para nunca apagar um placar já salvo
+//   quando a atualização vier sem gols, por exemplo um
+//   fixture futuro sendo re-sincronizado)
+// - Isso corrige o bug em que jogos finalizados nunca
+//   ganhavam placar no banco, impedindo o histórico real
+//   de ser usado pelo motor de IA.
 //
 // ==================================================
 
@@ -614,6 +629,455 @@ function obterStatus(
 
 
 // ==================================================
+// OBTER GOLS
+//
+// IMPORTANTE:
+//
+// Retorna null quando o placar NÃO existe.
+//
+// Nunca converte ausência de placar para 0 x 0,
+// pois isso destruiria a integridade do histórico
+// (um jogo "0 x 0 fictício" contaminaria as
+// estatísticas do motor de IA).
+//
+// Aceita os principais formatos usados pelas
+// APIs de futebol (API-Football, Football-Data,
+// formato interno do banco).
+// ==================================================
+
+function obterGols(
+    jogo
+) {
+
+    if (!jogo) {
+
+        return {
+
+            possui:
+                false,
+
+            casa:
+                null,
+
+            fora:
+                null
+
+        };
+
+    }
+
+
+    // ==============================================
+    // FORMATO DIRETO
+    // ==============================================
+
+    const camposDiretos = [
+
+        [
+            jogo.gols_casa,
+            jogo.gols_fora
+        ],
+
+        [
+            jogo.golsCasa,
+            jogo.golsFora
+        ],
+
+        [
+            jogo.home_goals,
+            jogo.away_goals
+        ],
+
+        [
+            jogo.homeGoals,
+            jogo.awayGoals
+        ]
+
+    ];
+
+
+    for (
+        const [
+            casa,
+            fora
+        ]
+        of camposDiretos
+    ) {
+
+        if (
+
+            casa !== undefined &&
+            casa !== null &&
+            casa !== "" &&
+
+            fora !== undefined &&
+            fora !== null &&
+            fora !== ""
+
+        ) {
+
+            const golsCasa =
+                Number(
+                    casa
+                );
+
+            const golsFora =
+                Number(
+                    fora
+                );
+
+            if (
+
+                Number.isFinite(
+                    golsCasa
+                )
+                &&
+                Number.isFinite(
+                    golsFora
+                )
+                &&
+                golsCasa >= 0
+                &&
+                golsFora >= 0
+
+            ) {
+
+                return {
+
+                    possui:
+                        true,
+
+                    casa:
+                        golsCasa,
+
+                    fora:
+                        golsFora
+
+                };
+
+            }
+
+        }
+
+    }
+
+
+    // ==============================================
+    // PLACAR
+    // ==============================================
+
+    const placar =
+        jogo.placar;
+
+    if (
+        placar
+    ) {
+
+        const casa =
+            placar.casa ??
+            placar.home;
+
+        const fora =
+            placar.fora ??
+            placar.away;
+
+        if (
+
+            casa !== undefined &&
+            casa !== null &&
+
+            fora !== undefined &&
+            fora !== null
+
+        ) {
+
+            const golsCasa =
+                Number(
+                    casa
+                );
+
+            const golsFora =
+                Number(
+                    fora
+                );
+
+            if (
+
+                Number.isFinite(
+                    golsCasa
+                )
+                &&
+                Number.isFinite(
+                    golsFora
+                )
+                &&
+                golsCasa >= 0
+                &&
+                golsFora >= 0
+
+            ) {
+
+                return {
+
+                    possui:
+                        true,
+
+                    casa:
+                        golsCasa,
+
+                    fora:
+                        golsFora
+
+                };
+
+            }
+
+        }
+
+    }
+
+
+    // ==============================================
+    // SCORE (API-Football / Football-Data)
+    // ==============================================
+
+    const score =
+        jogo.score;
+
+    if (
+        score
+    ) {
+
+        const fullTime =
+            score.fullTime ??
+            score.fulltime ??
+            null;
+
+        if (
+            fullTime
+        ) {
+
+            const casa =
+                fullTime.home;
+
+            const fora =
+                fullTime.away;
+
+            if (
+
+                casa !== undefined &&
+                casa !== null &&
+
+                fora !== undefined &&
+                fora !== null
+
+            ) {
+
+                const golsCasa =
+                    Number(
+                        casa
+                    );
+
+                const golsFora =
+                    Number(
+                        fora
+                    );
+
+                if (
+
+                    Number.isFinite(
+                        golsCasa
+                    )
+                    &&
+                    Number.isFinite(
+                        golsFora
+                    )
+                    &&
+                    golsCasa >= 0
+                    &&
+                    golsFora >= 0
+
+                ) {
+
+                    return {
+
+                        possui:
+                            true,
+
+                        casa:
+                            golsCasa,
+
+                        fora:
+                            golsFora
+
+                    };
+
+                }
+
+            }
+
+        }
+
+
+        // Formato alternativo
+
+        const casa =
+            score.home;
+
+        const fora =
+            score.away;
+
+        if (
+
+            casa !== undefined &&
+            casa !== null &&
+
+            fora !== undefined &&
+            fora !== null
+
+        ) {
+
+            const golsCasa =
+                Number(
+                    casa
+                );
+
+            const golsFora =
+                Number(
+                    fora
+                );
+
+            if (
+
+                Number.isFinite(
+                    golsCasa
+                )
+                &&
+                Number.isFinite(
+                    golsFora
+                )
+                &&
+                golsCasa >= 0
+                &&
+                golsFora >= 0
+
+            ) {
+
+                return {
+
+                    possui:
+                        true,
+
+                    casa:
+                        golsCasa,
+
+                    fora:
+                        golsFora
+
+                };
+
+            }
+
+        }
+
+    }
+
+
+    // ==============================================
+    // FIXTURE.GOALS (API-Football)
+    // ==============================================
+
+    const goals =
+        jogo.goals ??
+        jogo.fixture?.goals;
+
+    if (
+        goals
+    ) {
+
+        const casa =
+            goals.home;
+
+        const fora =
+            goals.away;
+
+        if (
+
+            casa !== undefined &&
+            casa !== null &&
+
+            fora !== undefined &&
+            fora !== null
+
+        ) {
+
+            const golsCasa =
+                Number(
+                    casa
+                );
+
+            const golsFora =
+                Number(
+                    fora
+                );
+
+            if (
+
+                Number.isFinite(
+                    golsCasa
+                )
+                &&
+                Number.isFinite(
+                    golsFora
+                )
+                &&
+                golsCasa >= 0
+                &&
+                golsFora >= 0
+
+            ) {
+
+                return {
+
+                    possui:
+                        true,
+
+                    casa:
+                        golsCasa,
+
+                    fora:
+                        golsFora
+
+                };
+
+            }
+
+        }
+
+    }
+
+
+    // ==============================================
+    // NÃO EXISTE RESULTADO
+    // ==============================================
+
+    return {
+
+        possui:
+            false,
+
+        casa:
+            null,
+
+        fora:
+            null
+
+    };
+
+}
+
+
+// ==================================================
 // NORMALIZAR JOGO
 // ==================================================
 
@@ -681,6 +1145,12 @@ function normalizarJogo(
         );
 
 
+    const gols =
+        obterGols(
+            jogo
+        );
+
+
     return {
 
         id,
@@ -714,7 +1184,29 @@ function normalizarJogo(
         status:
             status
                 ? String(status).trim()
-                : "SCHEDULED"
+                : "SCHEDULED",
+
+        // ==============================================
+        // GOLS
+        //
+        // gols_casa / gols_fora só existem quando o
+        // jogo já possui resultado real. Caso contrário
+        // permanecem null e NÃO sobrescrevem um placar
+        // já salvo (ver COALESCE no UPDATE).
+        // ==============================================
+
+        possui_resultado:
+            gols.possui,
+
+        gols_casa:
+            gols.possui
+                ? gols.casa
+                : null,
+
+        gols_fora:
+            gols.possui
+                ? gols.fora
+                : null
 
     };
 
@@ -922,6 +1414,15 @@ export async function buscarJogoPorApiId(
 // UPDATE se já existir.
 // INSERT se não existir.
 //
+// IMPORTANTE (V11):
+//
+// gols_casa / gols_fora agora são persistidos.
+//
+// No UPDATE, usa-se COALESCE para nunca apagar um
+// placar já existente quando a atualização recebida
+// não contém gols (ex.: fixture futuro sendo
+// re-sincronizado antes de começar).
+//
 // ==================================================
 
 export async function salvarJogo(
@@ -983,7 +1484,17 @@ export async function salvarJogo(
 
                         estadio = $5::text,
 
-                        status = $6::text
+                        status = $6::text,
+
+                        gols_casa = COALESCE(
+                            $8::integer,
+                            gols_casa
+                        ),
+
+                        gols_fora = COALESCE(
+                            $9::integer,
+                            gols_fora
+                        )
 
                     WHERE
                         api_id = $7::integer
@@ -1005,21 +1516,44 @@ export async function salvarJogo(
 
                         normalizado.status,
 
-                        normalizado.api_id
+                        normalizado.api_id,
+
+                        normalizado.gols_casa,
+
+                        normalizado.gols_fora
 
                     ]
 
                 );
 
 
-            console.log(
+            if (
+                normalizado.possui_resultado
+            ) {
 
-                `🔄 Jogo atualizado: ` +
-                `${normalizado.time_casa} x ` +
-                `${normalizado.time_fora} ` +
-                `(API ${normalizado.api_id})`
+                console.log(
 
-            );
+                    `🔄 Jogo atualizado COM RESULTADO: ` +
+                    `${normalizado.time_casa} ${normalizado.gols_casa} x ` +
+                    `${normalizado.gols_fora} ${normalizado.time_fora} ` +
+                    `(API ${normalizado.api_id})`
+
+                );
+
+            }
+
+            else {
+
+                console.log(
+
+                    `🔄 Jogo atualizado: ` +
+                    `${normalizado.time_casa} x ` +
+                    `${normalizado.time_fora} ` +
+                    `(API ${normalizado.api_id})`
+
+                );
+
+            }
 
 
             return (
@@ -1063,7 +1597,9 @@ export async function salvarJogo(
                     time_fora,
                     data_jogo,
                     estadio,
-                    status
+                    status,
+                    gols_casa,
+                    gols_fora
                 )
 
                 VALUES
@@ -1074,7 +1610,9 @@ export async function salvarJogo(
                     $4::text,
                     $5,
                     $6::text,
-                    $7::text
+                    $7::text,
+                    $8::integer,
+                    $9::integer
                 )
 
                 RETURNING *
@@ -1094,7 +1632,11 @@ export async function salvarJogo(
 
                     normalizado.estadio,
 
-                    normalizado.status
+                    normalizado.status,
+
+                    normalizado.gols_casa,
+
+                    normalizado.gols_fora
 
                 ]
 
@@ -1857,7 +2399,18 @@ export async function estatisticasJogos() {
                             AND data_jogo >= $1
                             AND data_jogo < $4
 
-                    ) AS disponiveis
+                    ) AS disponiveis,
+
+
+                    (
+                        SELECT COUNT(*)
+                        FROM jogos
+
+                        WHERE
+                            gols_casa IS NOT NULL
+                            AND gols_fora IS NOT NULL
+
+                    ) AS com_resultado
 
                 `,
 
@@ -1971,6 +2524,111 @@ export async function encontrarJogosInvalidos() {
 
 
 // ==================================================
+// BUSCAR JOGOS SEM RESULTADO E JÁ REALIZADOS
+//
+// NOVO (V11):
+//
+// Lista jogos cuja data já passou mas que ainda
+// não possuem gols_casa / gols_fora preenchidos.
+//
+// Útil para o processo de sincronização de
+// resultados (buscar na API externa somente os
+// jogos que realmente precisam de atualização,
+// em vez de reconsultar tudo).
+// ==================================================
+
+export async function buscarJogosPendentesDeResultado(
+    limite = 100
+) {
+
+    let quantidade =
+        Number(
+            limite
+        );
+
+
+    if (
+        !Number.isInteger(
+            quantidade
+        )
+        ||
+        quantidade < 1
+    ) {
+
+        quantidade = 100;
+
+    }
+
+
+    if (
+        quantidade > 500
+    ) {
+
+        quantidade = 500;
+
+    }
+
+
+    try {
+
+        const resultado =
+            await query(
+
+                `
+                SELECT *
+
+                FROM jogos
+
+                WHERE
+
+                    data_jogo IS NOT NULL
+
+                    AND
+
+                    data_jogo < CURRENT_TIMESTAMP
+
+                    AND
+
+                    (
+                        gols_casa IS NULL
+                        OR
+                        gols_fora IS NULL
+                    )
+
+                ORDER BY
+                    data_jogo DESC
+
+                LIMIT $1::integer
+                `,
+
+                [
+                    quantidade
+                ]
+
+            );
+
+
+        return resultado.rows;
+
+    }
+
+    catch (erro) {
+
+        console.error(
+
+            "❌ Erro buscar jogos pendentes de resultado:",
+            erro.message
+
+        );
+
+        return [];
+
+    }
+
+}
+
+
+// ==================================================
 // EXPORT DEFAULT
 // ==================================================
 
@@ -1996,6 +2654,8 @@ export default {
 
     estatisticasJogos,
 
-    encontrarJogosInvalidos
+    encontrarJogosInvalidos,
+
+    buscarJogosPendentesDeResultado
 
 };
