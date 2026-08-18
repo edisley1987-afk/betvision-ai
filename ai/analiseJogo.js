@@ -2,7 +2,7 @@
 // BETVISION AI
 // ai/analiseJogo.js
 //
-// MOTOR ESTATÍSTICO v6.0
+// MOTOR ESTATÍSTICO v6.1
 //
 // Objetivos:
 //
@@ -20,6 +20,36 @@
 // Este arquivo NÃO inventa dados.
 // Quando estatísticas não forem fornecidas,
 // utiliza apenas parâmetros neutros.
+//
+// ==================================================
+//
+// CORREÇÕES V6.1:
+//
+// - CORRIGIDO bug em obterResultado():
+//   o código "D" estava presente TANTO na lista de
+//   Empate ("D" de "Draw", em inglês) QUANTO na lista
+//   de Derrota ("D" de "Derrota", em português).
+//   Como o if de Empate era avaliado primeiro, todo
+//   resultado "D" era classificado como Empate, e a
+//   checagem de Derrota com "D" nunca era alcançada
+//   (código morto).
+//   Isso fazia calcularForma() tratar derrotas como
+//   empates sempre que o dado de entrada usasse "D"
+//   para derrota, distorcendo silenciosamente os
+//   gols esperados e a confiança do modelo.
+//
+// - Resolvido separando claramente os códigos:
+//   Empate agora usa apenas "E", "EMPATE", "DRAW".
+//   Derrota agora usa "D", "L", "LOSS", "DERROTA".
+//   "D" isolado (sem contexto) é tratado como Derrota,
+//   por ser a leitura mais natural em português —
+//   que é o idioma usado no restante do sistema.
+//   Isso vale tanto para o formato string quanto para
+//   o formato objeto (jogo.resultado / jogo.result),
+//   mantendo os dois branches consistentes entre si
+//   (no objeto, "D" antes não aparecia em nenhuma
+//   lista e o jogo era descartado silenciosamente).
+//
 // ==================================================
 
 
@@ -220,7 +250,7 @@ export function analisarJogo(jogo = {}) {
         sucesso: true,
 
         versao:
-            "BetVision Statistical AI v6.0",
+            "BetVision Statistical AI v6.1",
 
 
         jogo: {
@@ -870,6 +900,21 @@ function calcularForma(
 
 // ==================================================
 // IDENTIFICAR RESULTADO
+//
+// CORRIGIDO (V6.1):
+//
+// "D" agora pertence SOMENTE à lista de Derrota.
+// Antes estava duplicado em Empate e Derrota, e como
+// o if de Empate era avaliado primeiro, "D" nunca
+// chegava a ser tratado como Derrota (código morto).
+//
+// Empate:  "E", "EMPATE", "DRAW"
+// Derrota: "D", "L", "LOSS", "DERROTA"
+//
+// O mesmo critério é aplicado nos dois formatos
+// aceitos (string solta e objeto com campo
+// resultado/result), para que ambos os branches
+// sempre concordem entre si.
 // ==================================================
 
 function obterResultado(
@@ -895,7 +940,7 @@ function obterResultado(
         }
 
         if (
-            ["E", "D", "DRAW", "EMPATE"]
+            ["E", "DRAW", "EMPATE"]
                 .includes(valor)
         ) {
 
@@ -904,7 +949,7 @@ function obterResultado(
         }
 
         if (
-            ["L", "LOSS", "DERROTA", "D"]
+            ["D", "L", "LOSS", "DERROTA"]
                 .includes(valor)
         ) {
 
@@ -957,7 +1002,7 @@ function obterResultado(
 
 
     if (
-        ["L", "LOSS", "DERROTA"]
+        ["D", "L", "LOSS", "DERROTA"]
             .includes(resultado)
     ) {
 
