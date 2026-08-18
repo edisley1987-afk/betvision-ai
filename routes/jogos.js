@@ -2,7 +2,7 @@
 // BETVISION AI
 // routes/jogos.js
 //
-// VERSÃO 17.0
+// VERSÃO 18.0
 // API DE JOGOS
 // PostgreSQL / NeonDB
 //
@@ -40,6 +40,37 @@
 // - Dashboard principal não mostra jogos antigos
 //
 // ==========================================
+//
+// CORREÇÕES V18:
+//
+// - CORRIGIDO bug crítico: analisarJogo() calculava a
+//   análise (Poisson, 1X2, value bet, confiança) e
+//   simplesmente RETORNAVA o resultado sem nunca
+//   gravá-lo na tabela `analises`. Por isso o dashboard
+//   sempre mostrava "0 análises", mesmo com o log
+//   confirmando "🤖 Análises: 4/4" a cada acesso.
+//
+// - ADICIONADA persistência: após gerarAnaliseIA()
+//   retornar com sucesso, o resultado agora é formatado
+//   com prepararAnaliseParaBanco() e gravado através de
+//   salvarAnalise() (services/bancoService.js) — a MESMA
+//   função já usada por routes/analises.js, garantindo
+//   que os dois fluxos gravem exatamente na mesma tabela
+//   e no mesmo formato.
+//
+// - A extração de campos (prepararAnaliseParaBanco e
+//   funções auxiliares) foi replicada aqui a partir de
+//   routes/analises.js. Idealmente deveria ser movida
+//   para um módulo compartilhado (ex.:
+//   services/analiseFormatador.js) para eliminar a
+//   duplicação — sinalizado como próximo passo.
+//
+// - Erros ao salvar são logados mas NUNCA interrompem a
+//   resposta ao usuário: a rota continua respondendo
+//   normalmente mesmo se o salvamento falhar, para não
+//   piorar a disponibilidade do endpoint.
+//
+// ==========================================
 
 import express from "express";
 
@@ -57,6 +88,10 @@ import {
 import {
     buscarHistoricoJogo
 } from "../services/historicoService.js";
+
+import {
+    salvarAnalise
+} from "../services/bancoService.js";
 
 
 const router =
@@ -1481,6 +1516,592 @@ async function gerarDadosEstatisticos(
 
 
 // ==========================================
+// PREPARAR ANÁLISE PARA BANCO
+//
+// NOVO (V18):
+//
+// Replicado de routes/analises.js para que a análise
+// gerada aqui (dentro de /api/jogos) possa ser salva
+// na tabela `analises` usando exatamente o mesmo
+// formato usado pela rota POST /api/analises.
+//
+// TODO: mover para um módulo compartilhado
+// (ex.: services/analiseFormatador.js) e importar
+// dos dois lugares, eliminando esta duplicação.
+// ==========================================
+
+function normalizarDataBrasilAnalise(
+    valor
+) {
+
+    if (!valor) {
+
+        return null;
+
+    }
+
+
+    try {
+
+        if (
+            valor instanceof Date &&
+            !Number.isNaN(
+                valor.getTime()
+            )
+        ) {
+
+            return new Intl.DateTimeFormat(
+                "en-CA",
+                {
+                    timeZone:
+                        TIMEZONE,
+
+                    year:
+                        "numeric",
+
+                    month:
+                        "2-digit",
+
+                    day:
+                        "2-digit"
+                }
+            ).format(
+                valor
+            );
+
+        }
+
+
+        const texto =
+            String(
+                valor
+            ).trim();
+
+
+        if (!texto) {
+
+            return null;
+
+        }
+
+
+        const match =
+            texto.match(
+                /^(\d{4})-(\d{2})-(\d{2})/
+            );
+
+        if (match) {
+
+            return (
+                `${match[1]}-${match[2]}-${match[3]}`
+            );
+
+        }
+
+
+        const matchBR =
+            texto.match(
+                /^(\d{2})\/(\d{2})\/(\d{4})/
+            );
+
+        if (matchBR) {
+
+            return (
+                `${matchBR[3]}-` +
+                `${matchBR[2]}-` +
+                `${matchBR[1]}`
+            );
+
+        }
+
+
+        const data =
+            new Date(
+                texto
+            );
+
+        if (
+            Number.isNaN(
+                data.getTime()
+            )
+        ) {
+
+            return null;
+
+        }
+
+
+        return new Intl.DateTimeFormat(
+            "en-CA",
+            {
+                timeZone:
+                    TIMEZONE,
+
+                year:
+                    "numeric",
+
+                month:
+                    "2-digit",
+
+                day:
+                    "2-digit"
+            }
+        ).format(
+            data
+        );
+
+    }
+
+    catch (erro) {
+
+        console.error(
+
+            "⚠️ Erro normalizando data (análise):",
+            erro.message
+
+        );
+
+        return null;
+
+    }
+
+}
+
+
+function extrairApiIdAnalise(
+    resultado,
+    jogo
+) {
+
+    return (
+
+        resultado?.jogo?.api_id ??
+        resultado?.jogo?.apiId ??
+        resultado?.api_id ??
+        resultado?.apiId ??
+        jogo?.api_id ??
+        jogo?.apiId ??
+        jogo?.fixture?.id ??
+        jogo?.id ??
+        null
+
+    );
+
+}
+
+
+function extrairJogoIdAnalise(
+    resultado,
+    jogo
+) {
+
+    return (
+
+        resultado?.jogo?.jogo_id ??
+        resultado?.jogo?.jogoId ??
+        resultado?.jogo_id ??
+        resultado?.jogoId ??
+        jogo?.jogo_id ??
+        jogo?.jogoId ??
+        null
+
+    );
+
+}
+
+
+function extrairNomeJogoAnalise(
+    resultado,
+    jogo
+) {
+
+    if (
+        resultado?.jogo?.nome
+    ) {
+
+        return String(
+            resultado.jogo.nome
+        ).trim();
+
+    }
+
+
+    if (
+        resultado?.jogo?.jogo
+    ) {
+
+        return String(
+            resultado.jogo.jogo
+        ).trim();
+
+    }
+
+
+    const casa =
+        jogo?.time_casa ??
+        jogo?.casa ??
+        "";
+
+
+    const fora =
+        jogo?.time_fora ??
+        jogo?.fora ??
+        "";
+
+
+    return (
+        `${casa} x ${fora}`
+    ).trim();
+
+}
+
+
+function extrairDataJogoParaBancoAnalise(
+    resultado,
+    jogo
+) {
+
+    const camposResultado = [
+
+        resultado?.jogo?.data_jogo,
+        resultado?.jogo?.dataJogo,
+        resultado?.jogo?.date
+
+    ];
+
+
+    for (
+        const campo of camposResultado
+    ) {
+
+        const data =
+            normalizarDataBrasilAnalise(
+                campo
+            );
+
+        if (data) {
+
+            return data;
+
+        }
+
+    }
+
+
+    const camposJogo = [
+
+        jogo?.data_jogo,
+        jogo?.dataJogo,
+        jogo?.jogo_data,
+
+        jogo?.data,
+        jogo?.inicio,
+        jogo?.kickoff,
+
+        jogo?.date,
+        jogo?.datetime,
+
+        jogo?.fixture?.date
+
+    ];
+
+
+    for (
+        const campo of camposJogo
+    ) {
+
+        const data =
+            normalizarDataBrasilAnalise(
+                campo
+            );
+
+        if (data) {
+
+            return data;
+
+        }
+
+    }
+
+
+    return null;
+
+}
+
+
+function extrairConfiancaAnalise(
+    resultado
+) {
+
+    const valor =
+        resultado?.confianca?.percentual ??
+        resultado?.confianca?.valor ??
+        resultado?.confianca?.nivel ??
+        resultado?.confianca ??
+        null;
+
+
+    if (
+        typeof valor === "number"
+    ) {
+
+        return valor;
+
+    }
+
+
+    if (
+        typeof valor === "string"
+    ) {
+
+        const numero =
+            Number(
+
+                valor
+                    .replace(
+                        "%",
+                        ""
+                    )
+                    .replace(
+                        ",",
+                        "."
+                    )
+
+            );
+
+
+        if (
+            Number.isFinite(
+                numero
+            )
+        ) {
+
+            return numero;
+
+        }
+
+    }
+
+
+    return null;
+
+}
+
+
+function prepararAnaliseParaBanco(
+    resultado,
+    jogo
+) {
+
+    if (
+        !resultado ||
+        !resultado.sucesso
+    ) {
+
+        console.log(
+
+            "⚠️ Resultado da análise não possui sucesso. " +
+            "Não será salvo."
+
+        );
+
+        return null;
+
+    }
+
+
+    const probabilidades =
+        resultado.probabilidades ||
+        {};
+
+
+    const gols =
+        resultado.golsEsperados ||
+        {};
+
+
+    const valueBets =
+        Array.isArray(
+            resultado.valueBets
+        )
+            ? resultado.valueBets
+            : [];
+
+
+    const apiId =
+        extrairApiIdAnalise(
+            resultado,
+            jogo
+        );
+
+
+    const jogoId =
+        extrairJogoIdAnalise(
+            resultado,
+            jogo
+        );
+
+
+    const dataJogo =
+        extrairDataJogoParaBancoAnalise(
+            resultado,
+            jogo
+        );
+
+
+    const nomeJogo =
+        extrairNomeJogoAnalise(
+            resultado,
+            jogo
+        );
+
+
+    if (!dataJogo) {
+
+        console.warn(
+
+            "⚠️ ATENÇÃO: análise sem data_jogo " +
+            `(${nomeJogo}).`
+
+        );
+
+    }
+
+
+    return {
+
+        api_id:
+            apiId,
+
+        jogo_id:
+            jogoId,
+
+        jogo:
+            nomeJogo,
+
+        data_jogo:
+            dataJogo,
+
+        probabilidades: {
+
+            casa:
+                probabilidades.casa ??
+                null,
+
+            empate:
+                probabilidades.empate ??
+                null,
+
+            fora:
+                probabilidades.fora ??
+                null
+
+        },
+
+        gols_esperados: {
+
+            casa:
+                gols.casa ??
+                null,
+
+            fora:
+                gols.fora ??
+                null,
+
+            total:
+                gols.total ??
+                null
+
+        },
+
+        placar_previsto:
+            resultado.placarPrevisto ??
+            null,
+
+        value_bet:
+            valueBets,
+
+        confianca:
+            extrairConfiancaAnalise(
+                resultado
+            ),
+
+        algoritmo:
+            resultado.algoritmo ??
+            "BetVision AI Motor Estatístico"
+
+    };
+
+}
+
+
+// ==========================================
+// SALVAR ANÁLISE (COM PROTEÇÃO)
+//
+// Nunca lança erro para cima — falha ao salvar
+// não deve derrubar a geração/resposta da análise.
+// ==========================================
+
+async function salvarAnaliseComProtecao(
+    resultado,
+    jogo,
+    nomeJogo
+) {
+
+    try {
+
+        const paraSalvar =
+            prepararAnaliseParaBanco(
+                resultado,
+                jogo
+            );
+
+
+        if (
+            !paraSalvar
+        ) {
+
+            return;
+
+        }
+
+
+        const salva =
+            await salvarAnalise(
+                paraSalvar
+            );
+
+
+        if (
+            salva
+        ) {
+
+            console.log(
+
+                `💾 Análise salva: ` +
+                `${nomeJogo} (ID ${salva.id})`
+
+            );
+
+        }
+
+    }
+
+    catch (erro) {
+
+        console.error(
+
+            `⚠️ Erro salvando análise ${nomeJogo}:`,
+            erro.message
+
+        );
+
+    }
+
+}
+
+
+// ==========================================
 // ANALISAR JOGO
 // ==========================================
 
@@ -1542,6 +2163,26 @@ async function analisarJogo(
                 jogoNormalizado,
                 dados
             );
+
+
+        // ==================================================
+        // SALVAR NO BANCO
+        //
+        // Só tenta salvar se a análise foi gerada com
+        // sucesso. Falha ao salvar não afeta o retorno.
+        // ==================================================
+
+        if (
+            resultado?.sucesso
+        ) {
+
+            await salvarAnaliseComProtecao(
+                resultado,
+                jogoNormalizado,
+                nomeJogo
+            );
+
+        }
 
 
         return resultado;
@@ -1799,6 +2440,10 @@ router.get(
             //
             // Histórico usado somente como
             // fonte estatística.
+            //
+            // A partir da V18, cada análise gerada
+            // com sucesso é também PERSISTIDA na
+            // tabela `analises` (ver analisarJogo()).
             // ======================================
 
             let analisesProcessadas = 0;
