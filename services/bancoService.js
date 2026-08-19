@@ -2,22 +2,28 @@
 // BETVISION AI
 // services/bancoService.js
 //
-// VERSÃO 10.0
+// VERSÃO 11.0
 //
 // PostgreSQL / NeonDB
 //
-// CORREÇÃO PRINCIPAL:
-// - Compatível com a tabela ANALISES atual
-// - NÃO usa colunas inexistentes em analises
-// - Data do jogo vem da tabela JOGOS
-// - Análises de hoje são relacionadas pelo nome do jogo
-// - Histórico continua funcionando
-// - H2H continua funcionando
-// - Jogos = HOJE + AMANHÃ
-// - Análises = SOMENTE HOJE
-// - Timezone = America/Sao_Paulo
+// CORREÇÕES:
+//
+// - PostgreSQL compatível
+// - NeonDB
+// - TIMEZONE America/Sao_Paulo
+// - Jogos HOJE + AMANHÃ
+// - Análises SOMENTE HOJE
+// - H2H REAL
+// - Histórico REAL
 // - Não cria jogos fictícios
 // - Não cria resultados fictícios
+// - Tabela analises atual preservada
+// - api_id vem de jogos
+// - jogo_id vem de jogos
+// - Dashboard não depende de dashboard_status
+// - Probabilidades compatíveis com objeto
+// - Value Bets protegidas contra erro
+// - Consultas protegidas
 // ==================================================
 
 import {
@@ -29,7 +35,8 @@ import {
 // CONFIGURAÇÃO
 // ==================================================
 
-const TIMEZONE = "America/Sao_Paulo";
+const TIMEZONE =
+    "America/Sao_Paulo";
 
 
 // ==================================================
@@ -48,7 +55,9 @@ export function obterDataHojeBrasil() {
                 month: "2-digit",
                 day: "2-digit"
             }
-        ).format(new Date());
+        ).format(
+            new Date()
+        );
 
     } catch (erro) {
 
@@ -73,8 +82,10 @@ export function obterDataAmanhaBrasil() {
     const hoje =
         obterDataHojeBrasil();
 
+
     const partes =
         hoje.split("-");
+
 
     const data =
         new Date(
@@ -85,9 +96,11 @@ export function obterDataAmanhaBrasil() {
             )
         );
 
+
     data.setUTCDate(
         data.getUTCDate() + 1
     );
+
 
     return data
         .toISOString()
@@ -96,7 +109,7 @@ export function obterDataAmanhaBrasil() {
 
 
 // ==================================================
-// NORMALIZAR INTEGER
+// NORMALIZAR ID
 // ==================================================
 
 export function normalizarId(valor) {
@@ -110,8 +123,10 @@ export function normalizarId(valor) {
         return null;
     }
 
+
     const numero =
         Number(valor);
+
 
     if (
         !Number.isInteger(numero) ||
@@ -120,6 +135,7 @@ export function normalizarId(valor) {
 
         return null;
     }
+
 
     return numero;
 }
@@ -131,36 +147,34 @@ export function normalizarId(valor) {
 
 export function normalizarApiId(valor) {
 
-    return normalizarId(valor);
+    return normalizarId(
+        valor
+    );
 }
 
 
 // ==================================================
 // CAMPEONATOS
-// ==================================================
+// ==========================================================
 
 export async function listarCampeonatos() {
 
-    try {
-
-        const resultado =
-            await query(`
-                SELECT *
-                FROM campeonatos
-                ORDER BY nome ASC
-            `);
-
-        return resultado.rows;
-
-    } catch (erro) {
-
-        console.error(
-            "❌ Erro listar campeonatos:",
-            erro.message
+    const resultado =
+        await query(
+            `
+            SELECT *
+            FROM campeonatos
+            ORDER BY nome ASC
+            `
         );
 
-        return [];
-    }
+
+    console.log(
+        `🏆 Campeonatos encontrados: ${resultado.rows.length}`
+    );
+
+
+    return resultado.rows;
 }
 
 
@@ -179,7 +193,9 @@ export async function inserirCampeonato(
         );
     }
 
+
     const {
+
         id,
         nome,
         pais,
@@ -188,10 +204,13 @@ export async function inserirCampeonato(
         api_id,
         logo,
         ativo
+
     } = campeonato;
+
 
     const campeonatoId =
         normalizarId(id);
+
 
     if (!campeonatoId) {
 
@@ -200,8 +219,12 @@ export async function inserirCampeonato(
         );
     }
 
+
     const apiId =
-        normalizarApiId(api_id);
+        normalizarApiId(
+            api_id
+        );
+
 
     const resultado =
         await query(
@@ -217,6 +240,7 @@ export async function inserirCampeonato(
                 logo,
                 ativo
             )
+
             VALUES
             (
                 $1::integer,
@@ -233,29 +257,61 @@ export async function inserirCampeonato(
 
             DO UPDATE SET
 
-                nome = EXCLUDED.nome,
-                pais = EXCLUDED.pais,
-                continente = EXCLUDED.continente,
-                temporada = EXCLUDED.temporada,
-                api_id = EXCLUDED.api_id,
-                logo = EXCLUDED.logo,
-                ativo = EXCLUDED.ativo
+                nome =
+                    EXCLUDED.nome,
+
+                pais =
+                    EXCLUDED.pais,
+
+                continente =
+                    EXCLUDED.continente,
+
+                temporada =
+                    EXCLUDED.temporada,
+
+                api_id =
+                    EXCLUDED.api_id,
+
+                logo =
+                    EXCLUDED.logo,
+
+                ativo =
+                    EXCLUDED.ativo
 
             RETURNING *
             `,
             [
+
                 campeonatoId,
-                nome ?? null,
-                pais ?? null,
-                continente ?? null,
-                temporada ?? null,
+
+                nome ??
+                    null,
+
+                pais ??
+                    null,
+
+                continente ??
+                    null,
+
+                temporada ??
+                    null,
+
                 apiId,
-                logo ?? null,
-                ativo ?? true
+
+                logo ??
+                    null,
+
+                ativo ??
+                    true
+
             ]
         );
 
-    return resultado.rows[0] || null;
+
+    return (
+        resultado.rows[0] ||
+        null
+    );
 }
 
 
@@ -265,26 +321,17 @@ export async function inserirCampeonato(
 
 export async function listarTimes() {
 
-    try {
-
-        const resultado =
-            await query(`
-                SELECT *
-                FROM times
-                ORDER BY nome ASC
-            `);
-
-        return resultado.rows;
-
-    } catch (erro) {
-
-        console.error(
-            "❌ Erro listar times:",
-            erro.message
+    const resultado =
+        await query(
+            `
+            SELECT *
+            FROM times
+            ORDER BY nome ASC
+            `
         );
 
-        return [];
-    }
+
+    return resultado.rows;
 }
 
 
@@ -303,15 +350,20 @@ export async function inserirTime(
         );
     }
 
+
     const {
+
         id,
         campeonato_id,
         nome,
         pais
+
     } = time;
+
 
     const timeId =
         normalizarId(id);
+
 
     if (!timeId) {
 
@@ -320,12 +372,18 @@ export async function inserirTime(
         );
     }
 
+
     const campeonatoId =
-        campeonato_id === null ||
-        campeonato_id === undefined ||
-        campeonato_id === ""
+        (
+            campeonato_id === null ||
+            campeonato_id === undefined ||
+            campeonato_id === ""
+        )
             ? null
-            : normalizarId(campeonato_id);
+            : normalizarId(
+                campeonato_id
+            );
+
 
     const resultado =
         await query(
@@ -337,6 +395,7 @@ export async function inserirTime(
                 nome,
                 pais
             )
+
             VALUES
             (
                 $1::integer,
@@ -361,15 +420,41 @@ export async function inserirTime(
             RETURNING *
             `,
             [
+
                 timeId,
+
                 campeonatoId,
-                nome ?? null,
-                pais ?? null
+
+                nome ??
+                    null,
+
+                pais ??
+                    null
+
             ]
         );
 
-    return resultado.rows[0] || null;
+
+    return (
+        resultado.rows[0] ||
+        null
+    );
 }
+
+
+// ==================================================
+// CONDIÇÃO DE DATA
+//
+// Funciona para timestamp/timestamptz
+// mantendo America/Sao_Paulo.
+//
+// ==================================================
+
+const EXPRESSAO_DATA_BRASIL = `
+    (
+        data_jogo AT TIME ZONE $1
+    )::date
+`;
 
 
 // ==================================================
@@ -383,6 +468,7 @@ export async function listarJogosHoje() {
         const hoje =
             obterDataHojeBrasil();
 
+
         const resultado =
             await query(
                 `
@@ -391,7 +477,8 @@ export async function listarJogosHoje() {
 
                 WHERE data_jogo IS NOT NULL
 
-                AND (
+                AND
+                (
                     data_jogo AT TIME ZONE $1
                 )::date = $2::date
 
@@ -403,9 +490,11 @@ export async function listarJogosHoje() {
                 ]
             );
 
+
         console.log(
             `⚽ ${resultado.rows.length} jogos encontrados para hoje`
         );
+
 
         return resultado.rows;
 
@@ -413,10 +502,10 @@ export async function listarJogosHoje() {
 
         console.error(
             "❌ Erro jogos hoje:",
-            erro.message
+            erro
         );
 
-        return [];
+        throw erro;
     }
 }
 
@@ -432,6 +521,7 @@ export async function listarJogosAmanha() {
         const amanha =
             obterDataAmanhaBrasil();
 
+
         const resultado =
             await query(
                 `
@@ -440,7 +530,8 @@ export async function listarJogosAmanha() {
 
                 WHERE data_jogo IS NOT NULL
 
-                AND (
+                AND
+                (
                     data_jogo AT TIME ZONE $1
                 )::date = $2::date
 
@@ -452,9 +543,11 @@ export async function listarJogosAmanha() {
                 ]
             );
 
+
         console.log(
             `⚽ ${resultado.rows.length} jogos encontrados para amanhã`
         );
+
 
         return resultado.rows;
 
@@ -462,10 +555,10 @@ export async function listarJogosAmanha() {
 
         console.error(
             "❌ Erro jogos amanhã:",
-            erro.message
+            erro
         );
 
-        return [];
+        throw erro;
     }
 }
 
@@ -481,8 +574,10 @@ export async function listarJogosDisponiveis() {
         const hoje =
             obterDataHojeBrasil();
 
+
         const amanha =
             obterDataAmanhaBrasil();
+
 
         const resultado =
             await query(
@@ -492,9 +587,12 @@ export async function listarJogosDisponiveis() {
 
                 WHERE data_jogo IS NOT NULL
 
-                AND (
+                AND
+                (
                     data_jogo AT TIME ZONE $1
-                )::date BETWEEN $2::date AND $3::date
+                )::date
+                BETWEEN $2::date
+                AND $3::date
 
                 ORDER BY data_jogo ASC
                 `,
@@ -505,9 +603,11 @@ export async function listarJogosDisponiveis() {
                 ]
             );
 
+
         console.log(
-            `⚽ ${resultado.rows.length} jogos encontrados para hoje + amanhã`
+            `⚽ ${resultado.rows.length} jogos encontrados hoje + amanhã`
         );
+
 
         return resultado.rows;
 
@@ -515,13 +615,17 @@ export async function listarJogosDisponiveis() {
 
         console.error(
             "❌ Erro jogos disponíveis:",
-            erro.message
+            erro
         );
 
-        return [];
+        throw erro;
     }
 }
 
+
+// ==================================================
+// ALIAS
+// ==================================================
 
 export async function listarJogosHojeEAmanha() {
 
@@ -540,39 +644,35 @@ export async function buscarJogoPorId(
     const jogoId =
         normalizarId(id);
 
+
     if (!jogoId) {
         return null;
     }
 
-    try {
 
-        const resultado =
-            await query(
-                `
-                SELECT *
-                FROM jogos
-                WHERE id = $1::integer
-                LIMIT 1
-                `,
-                [jogoId]
-            );
-
-        return resultado.rows[0] || null;
-
-    } catch (erro) {
-
-        console.error(
-            "❌ Erro buscar jogo:",
-            erro.message
+    const resultado =
+        await query(
+            `
+            SELECT *
+            FROM jogos
+            WHERE id = $1::integer
+            LIMIT 1
+            `,
+            [
+                jogoId
+            ]
         );
 
-        return null;
-    }
+
+    return (
+        resultado.rows[0] ||
+        null
+    );
 }
 
 
 // ==================================================
-// BUSCAR JOGO API ID
+// BUSCAR JOGO POR API ID
 // ==================================================
 
 export async function buscarJogoPorApiId(
@@ -580,41 +680,39 @@ export async function buscarJogoPorApiId(
 ) {
 
     const apiId =
-        normalizarApiId(api_id);
+        normalizarApiId(
+            api_id
+        );
+
 
     if (!apiId) {
         return null;
     }
 
-    try {
 
-        const resultado =
-            await query(
-                `
-                SELECT *
-                FROM jogos
-                WHERE api_id = $1::integer
-                LIMIT 1
-                `,
-                [apiId]
-            );
-
-        return resultado.rows[0] || null;
-
-    } catch (erro) {
-
-        console.error(
-            "❌ Erro buscar jogo API:",
-            erro.message
+    const resultado =
+        await query(
+            `
+            SELECT *
+            FROM jogos
+            WHERE api_id = $1::integer
+            LIMIT 1
+            `,
+            [
+                apiId
+            ]
         );
 
-        return null;
-    }
+
+    return (
+        resultado.rows[0] ||
+        null
+    );
 }
 
 
 // ==================================================
-// HISTÓRICO REAL DE UM TIME
+// HISTÓRICO REAL
 // ==================================================
 
 export async function buscarHistoricoTime(
@@ -626,6 +724,7 @@ export async function buscarHistoricoTime(
     if (!nomeTime) {
         return [];
     }
+
 
     try {
 
@@ -649,40 +748,47 @@ export async function buscarHistoricoTime(
 
                 WHERE
 
-                    (
-                        LOWER(TRIM(time_casa))
-                        =
-                        LOWER(TRIM($1::text))
+                (
+                    LOWER(TRIM(time_casa))
+                    =
+                    LOWER(TRIM($1::text))
 
-                        OR
+                    OR
 
-                        LOWER(TRIM(time_fora))
-                        =
-                        LOWER(TRIM($1::text))
-                    )
+                    LOWER(TRIM(time_fora))
+                    =
+                    LOWER(TRIM($1::text))
+                )
 
-                    AND gols_casa IS NOT NULL
-                    AND gols_fora IS NOT NULL
+                AND gols_casa IS NOT NULL
+                AND gols_fora IS NOT NULL
 
-                    AND (
-                        $2::timestamp IS NULL
-                        OR data_jogo < $2::timestamp
-                    )
+                AND
+                (
+                    $2::timestamp IS NULL
+                    OR data_jogo < $2::timestamp
+                )
 
                 ORDER BY data_jogo DESC
 
                 LIMIT $3::integer
                 `,
                 [
+
                     nomeTime,
+
                     dataLimite,
+
                     Number(limite) || 10
+
                 ]
             );
 
+
         console.log(
-            `📚 Banco retornou ${resultado.rows.length} registros para ${nomeTime}`
+            `📚 Histórico ${nomeTime}: ${resultado.rows.length}`
         );
+
 
         return resultado.rows;
 
@@ -690,10 +796,10 @@ export async function buscarHistoricoTime(
 
         console.error(
             `❌ Erro histórico ${nomeTime}:`,
-            erro.message
+            erro
         );
 
-        return [];
+        throw erro;
     }
 }
 
@@ -709,9 +815,14 @@ export async function buscarH2H(
     dataLimite = null
 ) {
 
-    if (!timeCasa || !timeFora) {
+    if (
+        !timeCasa ||
+        !timeFora
+    ) {
+
         return [];
     }
+
 
     try {
 
@@ -735,59 +846,67 @@ export async function buscarH2H(
 
                 WHERE
 
+                (
+
                     (
+                        LOWER(TRIM(time_casa))
+                        =
+                        LOWER(TRIM($1::text))
 
-                        (
-                            LOWER(TRIM(time_casa))
-                            =
-                            LOWER(TRIM($1::text))
+                        AND
 
-                            AND
-
-                            LOWER(TRIM(time_fora))
-                            =
-                            LOWER(TRIM($2::text))
-                        )
-
-                        OR
-
-                        (
-                            LOWER(TRIM(time_casa))
-                            =
-                            LOWER(TRIM($2::text))
-
-                            AND
-
-                            LOWER(TRIM(time_fora))
-                            =
-                            LOWER(TRIM($1::text))
-                        )
-
+                        LOWER(TRIM(time_fora))
+                        =
+                        LOWER(TRIM($2::text))
                     )
 
-                    AND gols_casa IS NOT NULL
-                    AND gols_fora IS NOT NULL
+                    OR
 
-                    AND (
-                        $3::timestamp IS NULL
-                        OR data_jogo < $3::timestamp
+                    (
+                        LOWER(TRIM(time_casa))
+                        =
+                        LOWER(TRIM($2::text))
+
+                        AND
+
+                        LOWER(TRIM(time_fora))
+                        =
+                        LOWER(TRIM($1::text))
                     )
+
+                )
+
+                AND gols_casa IS NOT NULL
+                AND gols_fora IS NOT NULL
+
+                AND
+                (
+                    $3::timestamp IS NULL
+                    OR data_jogo < $3::timestamp
+                )
 
                 ORDER BY data_jogo DESC
 
                 LIMIT $4::integer
                 `,
                 [
+
                     timeCasa,
+
                     timeFora,
+
                     dataLimite,
+
                     Number(limite) || 10
+
                 ]
             );
 
+
         console.log(
-            `⚔️ H2H banco: ${resultado.rows.length} registros encontrados`
+            `⚔️ H2H ${timeCasa} x ${timeFora}: ${resultado.rows.length}`
         );
+
 
         return resultado.rows;
 
@@ -795,20 +914,16 @@ export async function buscarH2H(
 
         console.error(
             "❌ Erro H2H:",
-            erro.message
+            erro
         );
 
-        return [];
+        throw erro;
     }
 }
 
 
 // ==================================================
 // BUSCAR ANÁLISE POR NOME
-//
-// IMPORTANTE:
-// A tabela analises atual NÃO possui api_id.
-// Portanto a identificação é feita pelo nome do jogo.
 // ==================================================
 
 export async function buscarAnalisePorNome(
@@ -819,6 +934,7 @@ export async function buscarAnalisePorNome(
         return null;
     }
 
+
     try {
 
         const resultado =
@@ -827,7 +943,8 @@ export async function buscarAnalisePorNome(
                 SELECT *
                 FROM analises
 
-                WHERE LOWER(TRIM(jogo))
+                WHERE
+                    LOWER(TRIM(jogo))
                     =
                     LOWER(TRIM($1::text))
 
@@ -835,19 +952,25 @@ export async function buscarAnalisePorNome(
 
                 LIMIT 1
                 `,
-                [jogo]
+                [
+                    jogo
+                ]
             );
 
-        return resultado.rows[0] || null;
+
+        return (
+            resultado.rows[0] ||
+            null
+        );
 
     } catch (erro) {
 
         console.error(
             "❌ Erro análise por nome:",
-            erro.message
+            erro
         );
 
-        return null;
+        throw erro;
     }
 }
 
@@ -863,9 +986,11 @@ export async function buscarAnalisePorId(
     const analiseId =
         normalizarId(id);
 
+
     if (!analiseId) {
         return null;
     }
+
 
     try {
 
@@ -873,19 +998,27 @@ export async function buscarAnalisePorId(
             await query(
                 `
                 SELECT
+
                     a.*,
 
                     j.id AS jogo_id,
+
                     j.api_id AS jogo_api_id,
 
                     j.data_jogo,
+
                     j.campeonato,
+
                     j.time_casa,
+
                     j.time_fora,
+
                     j.estadio,
+
                     j.status,
 
                     j.gols_casa,
+
                     j.gols_fora
 
                 FROM analises a
@@ -897,7 +1030,9 @@ export async function buscarAnalisePorId(
                     LOWER(
                         TRIM(
                             COALESCE(j.time_casa, '')
-                            || ' x ' ||
+                            ||
+                            ' x '
+                            ||
                             COALESCE(j.time_fora, '')
                         )
                     )
@@ -906,40 +1041,31 @@ export async function buscarAnalisePorId(
 
                 LIMIT 1
                 `,
-                [analiseId]
+                [
+                    analiseId
+                ]
             );
 
-        return resultado.rows[0] || null;
+
+        return (
+            resultado.rows[0] ||
+            null
+        );
 
     } catch (erro) {
 
         console.error(
-            "❌ Erro buscar análise por ID:",
-            erro.message
+            "❌ Erro buscar análise ID:",
+            erro
         );
 
-        return null;
+        throw erro;
     }
 }
 
 
 // ==================================================
-// BUSCAR ANÁLISES DE HOJE
-//
-// CORREÇÃO CRÍTICA:
-//
-// NÃO usa:
-//     a.api_id
-//
-// porque essa coluna NÃO existe na tabela analises.
-//
-// A relação é feita por:
-//
-//     analises.jogo
-//
-// com:
-//
-//     jogos.time_casa + " x " + jogos.time_fora
+// LISTAR ANÁLISES DE HOJE
 // ==================================================
 
 export async function listarAnalisesHoje() {
@@ -949,21 +1075,23 @@ export async function listarAnalisesHoje() {
         const hoje =
             obterDataHojeBrasil();
 
+
         console.log(
             "=========================================="
         );
 
         console.log(
-            "🤖 BUSCANDO ANÁLISES NO BANCO"
+            "🤖 BUSCANDO ANÁLISES DE HOJE"
         );
 
         console.log(
-            `📅 Data Brasil: ${hoje}`
+            `📅 ${hoje}`
         );
 
         console.log(
-            `🌎 Fuso: ${TIMEZONE}`
+            `🌎 ${TIMEZONE}`
         );
+
 
         const resultado =
             await query(
@@ -975,15 +1103,19 @@ export async function listarAnalisesHoje() {
                     a.jogo,
 
                     a.probabilidade_casa,
+
                     a.probabilidade_empate,
+
                     a.probabilidade_fora,
 
                     a.gols_esperados,
+
                     a.placar_previsto,
 
                     a.value_bet,
 
                     j.id AS jogo_id,
+
                     j.api_id AS jogo_api_id,
 
                     j.data_jogo,
@@ -991,24 +1123,31 @@ export async function listarAnalisesHoje() {
                     j.campeonato,
 
                     j.time_casa,
+
                     j.time_fora,
 
                     j.estadio,
+
                     j.status,
 
                     j.gols_casa,
+
                     j.gols_fora
 
                 FROM analises a
 
                 INNER JOIN jogos j
 
-                    ON LOWER(TRIM(a.jogo))
+                    ON
+
+                    LOWER(TRIM(a.jogo))
                     =
                     LOWER(
                         TRIM(
                             COALESCE(j.time_casa, '')
-                            || ' x ' ||
+                            ||
+                            ' x '
+                            ||
                             COALESCE(j.time_fora, '')
                         )
                     )
@@ -1017,13 +1156,16 @@ export async function listarAnalisesHoje() {
 
                     j.data_jogo IS NOT NULL
 
-                    AND (
+                    AND
+
+                    (
                         j.data_jogo AT TIME ZONE $1
                     )::date = $2::date
 
                 ORDER BY
 
                     j.data_jogo ASC,
+
                     a.id DESC
                 `,
                 [
@@ -1032,36 +1174,25 @@ export async function listarAnalisesHoje() {
                 ]
             );
 
-        console.log(
-            `🤖 ${resultado.rows.length} análises encontradas para hoje`
-        );
-
-        for (
-            const linha of resultado.rows
-        ) {
-
-            console.log(
-                `⚽ ${linha.time_casa} x ${linha.time_fora} | ` +
-                `API ${linha.jogo_api_id} | ` +
-                `Data ${linha.data_jogo}`
-            );
-
-        }
 
         console.log(
-            "=========================================="
+            `🤖 ${resultado.rows.length} análises encontradas`
         );
+
 
         return resultado.rows;
 
     } catch (erro) {
 
         console.error(
-            "❌ Erro análises hoje:",
-            erro.message
+            "❌ ERRO SQL listarAnalisesHoje:"
         );
 
-        return [];
+        console.error(
+            erro
+        );
+
+        throw erro;
     }
 }
 
@@ -1075,11 +1206,14 @@ export async function listarAnalises() {
     try {
 
         const resultado =
-            await query(`
+            await query(
+                `
                 SELECT *
                 FROM analises
                 ORDER BY id DESC
-            `);
+                `
+            );
+
 
         return resultado.rows;
 
@@ -1087,10 +1221,10 @@ export async function listarAnalises() {
 
         console.error(
             "❌ Erro listar análises:",
-            erro.message
+            erro
         );
 
-        return [];
+        throw erro;
     }
 }
 
@@ -1098,7 +1232,7 @@ export async function listarAnalises() {
 // ==================================================
 // SALVAR ANÁLISE
 //
-// COMPATÍVEL COM A TABELA ANALISES ATUAL:
+// TABELA ATUAL:
 //
 // id
 // jogo
@@ -1109,12 +1243,6 @@ export async function listarAnalises() {
 // placar_previsto
 // value_bet
 //
-// NÃO usa:
-// api_id
-// jogo_id
-// data_jogo
-// confianca
-// algoritmo
 // ==================================================
 
 export async function salvarAnalise(
@@ -1131,30 +1259,15 @@ export async function salvarAnalise(
         );
     }
 
-    const {
 
-        jogo,
-
-        probabilidade_casa,
-        probabilidade_empate,
-        probabilidade_fora,
-
-        gols_esperados,
-        placar_previsto,
-
-        value_bet
-
-    } = analise;
+    const nomeJogo =
+        String(
+            analise.jogo ??
+            ""
+        ).trim();
 
 
-    // ==================================================
-    // VALIDAR JOGO
-    // ==================================================
-
-    if (
-        !jogo ||
-        !String(jogo).trim()
-    ) {
+    if (!nomeJogo) {
 
         throw new Error(
             "Nome do jogo obrigatório"
@@ -1162,12 +1275,173 @@ export async function salvarAnalise(
     }
 
 
-    const nomeJogo =
-        String(jogo).trim();
+    // ==================================================
+    // PROBABILIDADES
+    // ==================================================
+
+    const probabilidadeCasa =
+        analise.probabilidade_casa ??
+        analise.probabilidades?.casa ??
+        null;
+
+
+    const probabilidadeEmpate =
+        analise.probabilidade_empate ??
+        analise.probabilidades?.empate ??
+        null;
+
+
+    const probabilidadeFora =
+        analise.probabilidade_fora ??
+        analise.probabilidades?.fora ??
+        null;
 
 
     // ==================================================
-    // VERIFICAR ANÁLISE EXISTENTE
+    // GOLS ESPERADOS
+    // ==================================================
+
+    let golsEsperados =
+        analise.gols_esperados ??
+        analise.golsEsperados ??
+        null;
+
+
+    if (
+        golsEsperados &&
+        typeof golsEsperados === "object"
+    ) {
+
+        if (
+            golsEsperados.total !== undefined &&
+            golsEsperados.total !== null
+        ) {
+
+            golsEsperados =
+                Number(
+                    golsEsperados.total
+                );
+
+        } else {
+
+            const casa =
+                Number(
+                    golsEsperados.casa ??
+                    0
+                );
+
+
+            const fora =
+                Number(
+                    golsEsperados.fora ??
+                    0
+                );
+
+
+            golsEsperados =
+                casa + fora;
+        }
+    }
+
+
+    if (
+        !Number.isFinite(
+            Number(golsEsperados)
+        )
+    ) {
+
+        golsEsperados =
+            null;
+
+    } else {
+
+        golsEsperados =
+            Number(
+                golsEsperados
+            );
+    }
+
+
+    // ==================================================
+    // VALUE BET
+    // ==================================================
+
+    const valorValueBet =
+        analise.value_bet ??
+        analise.valueBet ??
+        false;
+
+
+    let valueBet =
+        false;
+
+
+    if (
+        typeof valorValueBet === "boolean"
+    ) {
+
+        valueBet =
+            valorValueBet;
+
+    } else if (
+        Array.isArray(
+            valorValueBet
+        )
+    ) {
+
+        valueBet =
+            valorValueBet.length > 0;
+
+    } else if (
+        valorValueBet &&
+        typeof valorValueBet === "object"
+    ) {
+
+        valueBet =
+            true;
+
+    } else if (
+        typeof valorValueBet === "string"
+    ) {
+
+        valueBet =
+            [
+                "true",
+                "1",
+                "sim",
+                "yes"
+            ].includes(
+                valorValueBet
+                    .toLowerCase()
+                    .trim()
+            );
+    }
+
+
+    // ==================================================
+    // PLACAR
+    // ==================================================
+
+    let placar =
+        analise.placar_previsto ??
+        analise.placarPrevisto ??
+        null;
+
+
+    if (
+        placar &&
+        typeof placar === "object"
+    ) {
+
+        placar =
+            JSON.stringify(
+                placar
+            );
+    }
+
+
+    // ==================================================
+    // VERIFICAR EXISTENTE
     // ==================================================
 
     const existente =
@@ -1179,115 +1453,10 @@ export async function salvarAnalise(
     if (existente) {
 
         console.log(
-            `♻️ Análise já existe: ${nomeJogo} - ID ${existente.id}`
+            `♻️ Análise já existe: ${nomeJogo}`
         );
 
         return existente;
-    }
-
-
-    // ==================================================
-    // NORMALIZAR GOLS
-    // ==================================================
-
-    let golsEsperadosBanco =
-        gols_esperados;
-
-
-    // --------------------------------------------------
-    // Se vier objeto:
-    //
-    // {
-    //   casa: 1.5,
-    //   fora: 1.1,
-    //   total: 2.6
-    // }
-    //
-    // a tabela aceita apenas NUMERIC.
-    // --------------------------------------------------
-
-    if (
-        gols_esperados &&
-        typeof gols_esperados === "object"
-    ) {
-
-        if (
-            gols_esperados.total !== undefined &&
-            gols_esperados.total !== null
-        ) {
-
-            golsEsperadosBanco =
-                Number(
-                    gols_esperados.total
-                );
-
-        }
-
-        else {
-
-            const casa =
-                Number(
-                    gols_esperados.casa
-                ) || 0;
-
-            const fora =
-                Number(
-                    gols_esperados.fora
-                ) || 0;
-
-            golsEsperadosBanco =
-                casa + fora;
-        }
-
-    }
-
-
-    // ==================================================
-    // NORMALIZAR VALUE BET
-    // ==================================================
-
-    let valueBetBanco =
-        false;
-
-
-    if (
-        typeof value_bet === "boolean"
-    ) {
-
-        valueBetBanco =
-            value_bet;
-
-    }
-
-    else if (
-        Array.isArray(value_bet)
-    ) {
-
-        valueBetBanco =
-            value_bet.length > 0;
-
-    }
-
-    else if (
-        value_bet &&
-        typeof value_bet === "object"
-    ) {
-
-        valueBetBanco =
-            true;
-
-    }
-
-    else if (
-        typeof value_bet === "string"
-    ) {
-
-        valueBetBanco =
-            (
-                value_bet.toLowerCase()
-                === "true"
-            );
-
     }
 
 
@@ -1325,64 +1494,76 @@ export async function salvarAnalise(
                 RETURNING *
                 `,
                 [
+
                     nomeJogo,
 
-                    probabilidade_casa ??
-                        null,
+                    probabilidadeCasa,
 
-                    probabilidade_empate ??
-                        null,
+                    probabilidadeEmpate,
 
-                    probabilidade_fora ??
-                        null,
+                    probabilidadeFora,
 
-                    Number.isFinite(
-                        Number(
-                            golsEsperadosBanco
-                        )
-                    )
-                        ? Number(
-                            golsEsperadosBanco
-                        )
-                        : null,
+                    golsEsperados,
 
-                    typeof placar_previsto === "object"
-                        ? JSON.stringify(
-                            placar_previsto
-                        )
-                        : (
-                            placar_previsto ??
-                            null
-                        ),
+                    placar,
 
-                    valueBetBanco
+                    valueBet
+
                 ]
             );
 
 
-        if (
-            resultado.rows[0]
-        ) {
+        const salva =
+            resultado.rows[0] ||
+            null;
+
+
+        if (salva) {
 
             console.log(
-                `💾 Análise salva: ID ${resultado.rows[0].id}`
+                "=========================================="
             );
 
             console.log(
-                `⚽ ${resultado.rows[0].jogo}`
+                `💾 ANÁLISE SALVA`
             );
 
-            return resultado.rows[0];
+            console.log(
+                `🆔 ID: ${salva.id}`
+            );
+
+            console.log(
+                `⚽ ${salva.jogo}`
+            );
+
+            console.log(
+                `🏠 ${salva.probabilidade_casa}`
+            );
+
+            console.log(
+                `🤝 ${salva.probabilidade_empate}`
+            );
+
+            console.log(
+                `✈️ ${salva.probabilidade_fora}`
+            );
+
+            console.log(
+                "=========================================="
+            );
         }
 
 
-        return null;
+        return salva;
 
     } catch (erro) {
 
         console.error(
-            "❌ Erro salvando análise:",
-            erro.message
+            "❌ ERRO SQL SALVAR ANÁLISE:"
+        );
+
+        console.error(
+            erro
         );
 
         throw erro;
@@ -1391,7 +1572,7 @@ export async function salvarAnalise(
 
 
 // ==================================================
-// LISTAR ANÁLISES HOJE + AMANHÃ
+// ANÁLISES HOJE + AMANHÃ
 // ==================================================
 
 export async function listarAnalisesDisponiveis() {
@@ -1408,39 +1589,51 @@ export async function listarAnalisesDisponiveis() {
                     a.jogo,
 
                     a.probabilidade_casa,
+
                     a.probabilidade_empate,
+
                     a.probabilidade_fora,
 
                     a.gols_esperados,
+
                     a.placar_previsto,
 
                     a.value_bet,
 
                     j.id AS jogo_id,
+
                     j.api_id AS jogo_api_id,
 
                     j.data_jogo,
+
                     j.campeonato,
 
                     j.time_casa,
+
                     j.time_fora,
 
                     j.estadio,
+
                     j.status,
 
                     j.gols_casa,
+
                     j.gols_fora
 
                 FROM analises a
 
                 INNER JOIN jogos j
 
-                    ON LOWER(TRIM(a.jogo))
+                    ON
+
+                    LOWER(TRIM(a.jogo))
                     =
                     LOWER(
                         TRIM(
                             COALESCE(j.time_casa, '')
-                            || ' x ' ||
+                            ||
+                            ' x '
+                            ||
                             COALESCE(j.time_fora, '')
                         )
                     )
@@ -1449,21 +1642,32 @@ export async function listarAnalisesDisponiveis() {
 
                     j.data_jogo IS NOT NULL
 
-                    AND (
+                    AND
+
+                    (
                         j.data_jogo AT TIME ZONE $1
-                    )::date BETWEEN $2::date AND $3::date
+                    )::date
+
+                    BETWEEN $2::date
+                    AND $3::date
 
                 ORDER BY
 
                     j.data_jogo ASC,
+
                     a.id DESC
                 `,
                 [
+
                     TIMEZONE,
+
                     obterDataHojeBrasil(),
+
                     obterDataAmanhaBrasil()
+
                 ]
             );
+
 
         return resultado.rows;
 
@@ -1471,20 +1675,16 @@ export async function listarAnalisesDisponiveis() {
 
         console.error(
             "❌ Erro análises disponíveis:",
-            erro.message
+            erro
         );
 
-        return [];
+        throw erro;
     }
 }
 
 
 // ==================================================
 // BUSCAR ANÁLISE POR API ID
-//
-// A tabela analises NÃO possui api_id.
-//
-// A busca é feita através da tabela jogos.
 // ==================================================
 
 export async function buscarAnalisePorApiId(
@@ -1492,11 +1692,15 @@ export async function buscarAnalisePorApiId(
 ) {
 
     const apiId =
-        normalizarApiId(api_id);
+        normalizarApiId(
+            api_id
+        );
+
 
     if (!apiId) {
         return null;
     }
+
 
     try {
 
@@ -1508,25 +1712,35 @@ export async function buscarAnalisePorApiId(
                     a.*,
 
                     j.id AS jogo_id,
+
                     j.api_id AS jogo_api_id,
 
                     j.data_jogo,
+
                     j.time_casa,
+
                     j.time_fora,
+
                     j.campeonato,
+
                     j.estadio,
+
                     j.status
 
                 FROM analises a
 
                 INNER JOIN jogos j
 
-                    ON LOWER(TRIM(a.jogo))
+                    ON
+
+                    LOWER(TRIM(a.jogo))
                     =
                     LOWER(
                         TRIM(
                             COALESCE(j.time_casa, '')
-                            || ' x ' ||
+                            ||
+                            ' x '
+                            ||
                             COALESCE(j.time_fora, '')
                         )
                     )
@@ -1537,19 +1751,25 @@ export async function buscarAnalisePorApiId(
 
                 LIMIT 1
                 `,
-                [apiId]
+                [
+                    apiId
+                ]
             );
 
-        return resultado.rows[0] || null;
+
+        return (
+            resultado.rows[0] ||
+            null
+        );
 
     } catch (erro) {
 
         console.error(
-            "❌ Erro buscar análise API:",
-            erro.message
+            "❌ Erro análise API:",
+            erro
         );
 
-        return null;
+        throw erro;
     }
 }
 
@@ -1566,6 +1786,7 @@ export async function salvarValueBet(
         return null;
     }
 
+
     const {
 
         jogo_id,
@@ -1578,8 +1799,12 @@ export async function salvarValueBet(
 
     } = valueBet;
 
+
     const jogoId =
-        normalizarId(jogo_id);
+        normalizarId(
+            jogo_id
+        );
+
 
     if (!jogoId) {
 
@@ -1588,45 +1813,76 @@ export async function salvarValueBet(
         );
     }
 
-    const resultado =
-        await query(
-            `
-            INSERT INTO value_bets
-            (
-                jogo_id,
-                mercado,
-                selecao,
-                odd_mercado,
-                probabilidade,
-                valor_estimado,
-                ativo
-            )
 
-            VALUES
-            (
-                $1::integer,
-                $2::text,
-                $3::text,
-                $4::numeric,
-                $5::numeric,
-                $6::numeric,
-                COALESCE($7::boolean, true)
-            )
+    try {
 
-            RETURNING *
-            `,
-            [
-                jogoId,
-                mercado ?? "N/A",
-                selecao ?? null,
-                odd_mercado ?? null,
-                probabilidade ?? null,
-                valor_estimado ?? null,
-                ativo ?? true
-            ]
+        const resultado =
+            await query(
+                `
+                INSERT INTO value_bets
+                (
+                    jogo_id,
+                    mercado,
+                    selecao,
+                    odd_mercado,
+                    probabilidade,
+                    valor_estimado,
+                    ativo
+                )
+
+                VALUES
+                (
+                    $1::integer,
+                    $2::text,
+                    $3::text,
+                    $4::numeric,
+                    $5::numeric,
+                    $6::numeric,
+                    COALESCE($7::boolean, true)
+                )
+
+                RETURNING *
+                `,
+                [
+
+                    jogoId,
+
+                    mercado ??
+                        "N/A",
+
+                    selecao ??
+                        null,
+
+                    odd_mercado ??
+                        null,
+
+                    probabilidade ??
+                        null,
+
+                    valor_estimado ??
+                        null,
+
+                    ativo ??
+                        true
+
+                ]
+            );
+
+
+        return (
+            resultado.rows[0] ||
+            null
         );
 
-    return resultado.rows[0] || null;
+    } catch (erro) {
+
+        console.error(
+            "❌ Erro salvar Value Bet:",
+            erro
+        );
+
+        throw erro;
+    }
 }
 
 
@@ -1638,6 +1894,14 @@ export async function listarValueBetsDisponiveis() {
 
     try {
 
+        const hoje =
+            obterDataHojeBrasil();
+
+
+        const amanha =
+            obterDataAmanhaBrasil();
+
+
         const resultado =
             await query(
                 `
@@ -1646,86 +1910,250 @@ export async function listarValueBetsDisponiveis() {
                     vb.*,
 
                     j.api_id,
+
                     j.time_casa,
+
                     j.time_fora,
+
                     j.data_jogo,
+
                     j.campeonato,
+
                     j.estadio,
+
                     j.status
 
                 FROM value_bets vb
 
                 INNER JOIN jogos j
+
                     ON j.id = vb.jogo_id
 
                 WHERE
 
-                    vb.ativo = true
+                    COALESCE(vb.ativo, true)
+                    = true
 
                     AND j.data_jogo IS NOT NULL
 
-                    AND (
+                    AND
+
+                    (
                         j.data_jogo AT TIME ZONE $1
-                    )::date BETWEEN $2::date AND $3::date
+                    )::date
+
+                    BETWEEN $2::date
+                    AND $3::date
 
                 ORDER BY
 
                     vb.valor_estimado DESC NULLS LAST,
+
                     j.data_jogo ASC
 
                 LIMIT 100
                 `,
                 [
+
                     TIMEZONE,
-                    obterDataHojeBrasil(),
-                    obterDataAmanhaBrasil()
+
+                    hoje,
+
+                    amanha
+
                 ]
             );
+
+
+        console.log(
+            `💰 Value Bets encontradas: ${resultado.rows.length}`
+        );
+
 
         return resultado.rows;
 
     } catch (erro) {
 
         console.error(
-            "❌ Erro Value Bets:",
-            erro.message
+            "❌ ERRO SQL VALUE BETS:"
         );
 
-        return [];
+        console.error(
+            erro
+        );
+
+        throw erro;
     }
 }
 
 
 // ==================================================
 // DASHBOARD
+//
+// Não depende mais obrigatoriamente de
+// dashboard_status.
+//
 // ==================================================
 
 export async function buscarDashboard() {
 
     try {
 
-        const resultado =
-            await query(`
-                SELECT *
-                FROM dashboard_status
-            `);
+        const hoje =
+            obterDataHojeBrasil();
 
-        return resultado.rows[0] || null;
+
+        const amanha =
+            obterDataAmanhaBrasil();
+
+
+        const resultado =
+            await query(
+                `
+                SELECT
+
+                    (
+                        SELECT COUNT(*)
+                        FROM campeonatos
+                    )::integer
+                    AS campeonatos,
+
+                    (
+                        SELECT COUNT(*)
+                        FROM times
+                    )::integer
+                    AS times,
+
+                    (
+                        SELECT COUNT(*)
+                        FROM jogos
+                    )::integer
+                    AS jogos_historico,
+
+                    (
+                        SELECT COUNT(*)
+                        FROM jogos
+
+                        WHERE data_jogo IS NOT NULL
+
+                        AND
+                        (
+                            data_jogo AT TIME ZONE $1
+                        )::date = $2::date
+
+                    )::integer
+                    AS jogos_hoje,
+
+                    (
+                        SELECT COUNT(*)
+                        FROM jogos
+
+                        WHERE data_jogo IS NOT NULL
+
+                        AND
+                        (
+                            data_jogo AT TIME ZONE $1
+                        )::date = $3::date
+
+                    )::integer
+                    AS jogos_amanha,
+
+                    (
+                        SELECT COUNT(*)
+                        FROM analises
+                    )::integer
+                    AS analises,
+
+                    (
+                        SELECT COUNT(*)
+                        FROM value_bets
+                        WHERE COALESCE(ativo, true) = true
+                    )::integer
+                    AS valuebets,
+
+                    (
+                        SELECT COUNT(*)
+                        FROM analises a
+
+                        INNER JOIN jogos j
+
+                            ON LOWER(TRIM(a.jogo))
+                            =
+                            LOWER(
+                                TRIM(
+                                    COALESCE(j.time_casa, '')
+                                    ||
+                                    ' x '
+                                    ||
+                                    COALESCE(j.time_fora, '')
+                                )
+                            )
+
+                        WHERE
+
+                            j.data_jogo IS NOT NULL
+
+                            AND
+                            (
+                                j.data_jogo AT TIME ZONE $1
+                            )::date = $2::date
+
+                    )::integer
+                    AS analises_hoje
+
+                `,
+                [
+
+                    TIMEZONE,
+
+                    hoje,
+
+                    amanha
+
+                ]
+            );
+
+
+        const dados =
+            resultado.rows[0] ||
+            {};
+
+
+        return {
+
+            ...dados,
+
+            status:
+                "operacional",
+
+            sistema:
+                "BetVision AI",
+
+            timezone:
+                TIMEZONE,
+
+            data:
+                hoje
+
+        };
 
     } catch (erro) {
 
         console.error(
-            "❌ Erro dashboard:",
-            erro.message
+            "❌ ERRO SQL DASHBOARD:"
         );
 
-        return null;
+        console.error(
+            erro
+        );
+
+        throw erro;
     }
 }
 
 
 // ==================================================
-// ESTATÍSTICAS
+// ESTATÍSTICAS BANCO
 // ==================================================
 
 export async function estatisticasBanco() {
@@ -1758,9 +2186,11 @@ export async function estatisticasBanco() {
 
                         WHERE data_jogo IS NOT NULL
 
-                        AND (
+                        AND
+                        (
                             data_jogo AT TIME ZONE $1
                         )::date = $2::date
+
                     ) AS jogos_hoje,
 
                     (
@@ -1769,9 +2199,11 @@ export async function estatisticasBanco() {
 
                         WHERE data_jogo IS NOT NULL
 
-                        AND (
+                        AND
+                        (
                             data_jogo AT TIME ZONE $1
                         )::date = $3::date
+
                     ) AS jogos_amanha,
 
                     (
@@ -1782,26 +2214,39 @@ export async function estatisticasBanco() {
                     (
                         SELECT COUNT(*)
                         FROM value_bets
-                        WHERE ativo = true
+
+                        WHERE
+                            COALESCE(ativo, true)
+                            = true
+
                     ) AS valuebets_ativas
+
                 `,
                 [
+
                     TIMEZONE,
+
                     obterDataHojeBrasil(),
+
                     obterDataAmanhaBrasil()
+
                 ]
             );
 
-        return resultado.rows[0] || null;
+
+        return (
+            resultado.rows[0] ||
+            null
+        );
 
     } catch (erro) {
 
         console.error(
             "❌ Erro estatísticas:",
-            erro.message
+            erro
         );
 
-        return null;
+        throw erro;
     }
 }
 
@@ -1847,4 +2292,5 @@ export default {
 
     obterDataHojeBrasil,
     obterDataAmanhaBrasil
+
 };
