@@ -2,7 +2,7 @@
 // BETVISION AI
 // services/sincronizacaoService.js
 //
-// MOTOR ESTATÍSTICO v6
+// MOTOR ESTATÍSTICO v7
 //
 // Neon PostgreSQL + Football-Data.org v4
 //
@@ -11,12 +11,53 @@
 // - Sincronizar campeonatos
 // - Sincronizar jogos
 // - Buscar somente jogos de HOJE + AMANHÃ
+// - Buscar RESULTADOS PENDENTES (jogos já
+//   realizados que ainda não têm placar salvo)
 // - America/Sao_Paulo
-// - Evitar jogos antigos
+// - Evitar jogos antigos sem necessidade
 // - Evitar duplicação
 // - Atualizar jogos existentes
-// - Preparar dados para o Motor Estatístico v6
+// - Preparar dados para o Motor Estatístico
 // - Agendamento automático
+//
+// ==================================================
+//
+// CORREÇÕES V7:
+//
+// - CORRIGIDO bug crítico: buscarJogosAPI() só
+//   consultava a janela HOJE + AMANHÃ. O agendamento
+//   roda às 03:00 / 09:00 / 15:00 / 21:00. Qualquer
+//   jogo que termina DEPOIS da sincronização das 21:00
+//   e ANTES da meia-noite (ou seja, a maioria dos jogos
+//   noturnos) nunca tinha seu placar capturado: na
+//   sincronização seguinte (03:00 do dia seguinte) o
+//   jogo já não era mais "hoje" nem "amanhã", e saía
+//   da janela de busca PARA SEMPRE. Isso fazia
+//   gols_casa/gols_fora permanecerem NULL
+//   indefinidamente para esses jogos, impedindo que o
+//   histórico real fosse usado pelo motor de IA
+//   (historicoService.js sempre retornava 0 jogos
+//   válidos, mesmo dias ou semanas depois).
+//
+// - ADICIONADA nova etapa: sincronizarResultadosPendentes().
+//   Busca no próprio banco os jogos cuja data_jogo já
+//   passou mas que ainda estão com gols_casa/gols_fora
+//   NULL, e consulta o placar de cada um diretamente
+//   pelo endpoint /v4/matches/{id} da Football-Data.org
+//   (busca por api_id, não depende de janela de data).
+//   Essa etapa roda dentro de sincronizarTudo(), logo
+//   após sincronizarJogos().
+//
+// - Respeita rate limit da API (plano gratuito
+//   Football-Data.org: 10 requisições/minuto): processa
+//   em lotes pequenos e aguarda um intervalo entre
+//   chamadas individuais.
+//
+// - Apenas jogos com até N dias de atraso são
+//   considerados a cada ciclo (padrão: 5 dias), para
+//   não gastar chamadas de API com jogos muito antigos
+//   que provavelmente já foram cancelados/adiados sem
+//   nunca terem sido disputados.
 //
 // ==================================================
 
@@ -55,6 +96,53 @@ const LIMITE_CAMPEONATOS =
 
 const LIMITE_JOGOS =
     500;
+
+
+// --------------------------------------------------
+// RESULTADOS PENDENTES (NOVO V7)
+// --------------------------------------------------
+
+// Quantos dias no passado ainda vale a pena tentar
+// buscar resultado. Além disso, considera-se que o
+// jogo provavelmente não vai ganhar placar (adiado,
+// cancelado, erro de cadastro etc.) e para de tentar.
+const DIAS_MAXIMOS_BUSCA_RESULTADO =
+    5;
+
+
+// Quantos jogos pendentes processar por ciclo de
+// sincronização. Mantém o tempo de execução previsível
+// e protege o rate limit da API gratuita.
+const LOTE_RESULTADOS_PENDENTES =
+    15;
+
+
+// Intervalo entre chamadas individuais à API para
+// buscar resultado de um jogo específico.
+// Plano gratuito Football-Data.org: 10 req/min,
+// ou seja, 1 a cada 6s é o limite seguro. Usamos 6.5s
+// de folga.
+const INTERVALO_ENTRE_CHAMADAS_MS =
+    6500;
+
+
+// ==================================================
+// AGUARDAR (helper para respeitar rate limit)
+// ==================================================
+
+function aguardar(
+    ms
+) {
+
+    return new Promise(
+        resolve =>
+            setTimeout(
+                resolve,
+                ms
+            )
+    );
+
+}
 
 
 // ==================================================
@@ -1033,6 +1121,15 @@ function jogoDentroDaJanela(
 //
 // Caso a tabela jogos não tenha api_id,
 // tenta localizar pelo confronto + data.
+//
+// NOTA (V7): mantém o comportamento original de
+// sobrescrever gols_casa/gols_fora diretamente, pois
+// aqui os valores vêm sempre de uma consulta real à
+// API dentro da janela hoje/amanhã (nunca fabricados).
+// A proteção contra sobrescrita com NULL fica a cargo
+// de salvarResultadoJogo(), usada pelo backfill de
+// resultados pendentes (ver mais abaixo), que SEMPRE
+// usa COALESCE por lidar com jogos fora dessa janela.
 // ==================================================
 
 async function salvarJogo(
@@ -1461,6 +1558,564 @@ export async function sincronizarJogos() {
 
 
 // ==================================================
+// BUSCAR JOGOS PENDENTES DE RESULTADO NO BANCO
+//
+// NOVO (V7).
+//
+// Jogos cuja data_jogo já passou, mas que ainda estão
+// sem gols_casa/gols_fora. Limitado a um intervalo de
+// dias razoável (DIAS_MAXIMOS_BUSCA_RESULTADO), para
+// não desperdiçar chamadas de API com jogos muito
+// antigos que provavelmente foram adiados/cancelados
+// sem nunca terem sido disputados.
+// ==================================================
+
+async function buscarJogosPendentesDeResultadoBanco(
+    limite = LOTE_RESULTADOS_PENDENTES
+) {
+
+    try {
+
+        const resultado =
+            await query(
+                `
+                SELECT
+
+                    id,
+                    api_id,
+                    time_casa,
+                    time_fora,
+                    data_jogo
+
+                FROM jogos
+
+                WHERE
+
+                    api_id IS NOT NULL
+
+                    AND
+
+                    data_jogo IS NOT NULL
+
+                    AND
+
+                    data_jogo < CURRENT_TIMESTAMP
+
+                    AND
+
+                    data_jogo >=
+                    (
+                        CURRENT_TIMESTAMP
+                        -
+                        ($1 || ' days')::interval
+                    )
+
+                    AND
+
+                    (
+                        gols_casa IS NULL
+                        OR
+                        gols_fora IS NULL
+                    )
+
+                ORDER BY
+                    data_jogo DESC
+
+                LIMIT $2
+                `,
+                [
+
+                    DIAS_MAXIMOS_BUSCA_RESULTADO,
+
+                    limite
+
+                ]
+            );
+
+
+        return resultado.rows || [];
+
+    }
+
+    catch (error) {
+
+        console.error(
+
+            "❌ Erro buscar jogos pendentes de resultado:",
+            error.message
+
+        );
+
+        return [];
+
+    }
+
+}
+
+
+// ==================================================
+// BUSCAR RESULTADO DE UM JOGO PELO API ID
+//
+// NOVO (V7).
+//
+// Não depende de janela de data — consulta o jogo
+// diretamente pelo identificador externo, usando o
+// endpoint /v4/matches/{id} da Football-Data.org.
+// ==================================================
+
+async function buscarResultadoPorApiId(
+    apiId
+) {
+
+    try {
+
+        if (
+            !apiDisponivel()
+        ) {
+
+            return null;
+
+        }
+
+
+        const resposta =
+            await axios.get(
+
+                `${API_URL}/matches/${apiId}`,
+
+                {
+
+                    headers:
+                        headersAPI(),
+
+                    timeout:
+                        15000
+
+                }
+
+            );
+
+
+        const jogo =
+            resposta?.data;
+
+
+        if (
+            !jogo
+        ) {
+
+            return null;
+
+        }
+
+
+        const golsCasa =
+            Number.isFinite(
+                Number(
+                    jogo.score
+                        ?.fullTime
+                        ?.home
+                )
+            )
+                ? Number(
+                    jogo.score
+                        .fullTime
+                        .home
+                )
+                : null;
+
+
+        const golsFora =
+            Number.isFinite(
+                Number(
+                    jogo.score
+                        ?.fullTime
+                        ?.away
+                )
+            )
+                ? Number(
+                    jogo.score
+                        .fullTime
+                        .away
+                )
+                : null;
+
+
+        return {
+
+            api_id:
+                apiId,
+
+            status:
+                jogo.status ||
+                null,
+
+            gols_casa:
+                golsCasa,
+
+            gols_fora:
+                golsFora,
+
+            possui_resultado:
+                (
+                    golsCasa !== null
+                    &&
+                    golsFora !== null
+                )
+
+        };
+
+    }
+
+    catch (error) {
+
+        console.error(
+
+            `❌ Erro buscar resultado API ${apiId}:`,
+            error.response?.data ||
+            error.message
+
+        );
+
+        return null;
+
+    }
+
+}
+
+
+// ==================================================
+// SALVAR RESULTADO DE UM JOGO
+//
+// NOVO (V7).
+//
+// Diferente de salvarJogo() (usada na sincronização
+// principal), esta função SEMPRE usa COALESCE, porque
+// lida com jogos fora da janela hoje/amanhã e a API
+// pode eventualmente retornar um jogo ainda sem placar
+// (por exemplo, status POSTPONED). Nesse caso o placar
+// já salvo (se existir) nunca é apagado.
+// ==================================================
+
+async function salvarResultadoJogo(
+    idInterno,
+    resultado
+) {
+
+    try {
+
+        if (
+            !resultado
+            ||
+            !resultado.possui_resultado
+        ) {
+
+            return null;
+
+        }
+
+
+        const salvo =
+            await query(
+                `
+                UPDATE jogos
+
+                SET
+
+                    gols_casa = COALESCE(
+                        $1::integer,
+                        gols_casa
+                    ),
+
+                    gols_fora = COALESCE(
+                        $2::integer,
+                        gols_fora
+                    ),
+
+                    status = COALESCE(
+                        $3::text,
+                        status
+                    )
+
+                WHERE id = $4
+
+                RETURNING *
+                `,
+                [
+
+                    resultado.gols_casa,
+
+                    resultado.gols_fora,
+
+                    resultado.status,
+
+                    idInterno
+
+                ]
+            );
+
+
+        return (
+            salvo.rows[0] ||
+            null
+        );
+
+    }
+
+    catch (error) {
+
+        console.error(
+
+            `❌ Erro salvar resultado jogo ${idInterno}:`,
+            error.message
+
+        );
+
+        return null;
+
+    }
+
+}
+
+
+// ==================================================
+// SINCRONIZAR RESULTADOS PENDENTES
+//
+// NOVO (V7).
+//
+// Esta é a correção do bug principal: busca o placar
+// de jogos já realizados que saíram da janela
+// hoje/amanhã antes de terem o resultado capturado.
+//
+// Processa em lote pequeno e respeita rate limit,
+// aguardando um intervalo entre chamadas individuais.
+// ==================================================
+
+export async function sincronizarResultadosPendentes() {
+
+    console.log(
+        "=============================================="
+    );
+
+    console.log(
+        "🔎 SINCRONIZAÇÃO DE RESULTADOS PENDENTES"
+    );
+
+    console.log(
+        "=============================================="
+    );
+
+
+    if (
+        !apiDisponivel()
+    ) {
+
+        return {
+
+            sucesso:
+                false,
+
+            total:
+                0,
+
+            erros:
+                0,
+
+            mensagem:
+                "API indisponível"
+
+        };
+
+    }
+
+
+    const pendentes =
+        await buscarJogosPendentesDeResultadoBanco();
+
+
+    if (
+        !pendentes.length
+    ) {
+
+        console.log(
+            "✅ Nenhum jogo pendente de resultado"
+        );
+
+        return {
+
+            sucesso:
+                true,
+
+            total:
+                0,
+
+            atualizados:
+                0,
+
+            erros:
+                0
+
+        };
+
+    }
+
+
+    console.log(
+
+        `🔎 ${pendentes.length} jogos pendentes ` +
+        `de resultado (últimos ${DIAS_MAXIMOS_BUSCA_RESULTADO} dias)`
+
+    );
+
+
+    let atualizados = 0;
+    let semResultadoAinda = 0;
+    let erros = 0;
+
+
+    for (
+
+        let indice = 0;
+        indice < pendentes.length;
+        indice++
+
+    ) {
+
+        const jogo =
+            pendentes[indice];
+
+
+        try {
+
+            const resultado =
+                await buscarResultadoPorApiId(
+                    jogo.api_id
+                );
+
+
+            if (
+                !resultado
+            ) {
+
+                erros++;
+
+            }
+
+            else if (
+                !resultado.possui_resultado
+            ) {
+
+                semResultadoAinda++;
+
+                console.log(
+
+                    `⏳ Ainda sem placar: ` +
+                    `${jogo.time_casa} x ${jogo.time_fora} ` +
+                    `(status: ${resultado.status || "?"})`
+
+                );
+
+            }
+
+            else {
+
+                const salvo =
+                    await salvarResultadoJogo(
+                        jogo.id,
+                        resultado
+                    );
+
+
+                if (
+                    salvo
+                ) {
+
+                    atualizados++;
+
+                    console.log(
+
+                        `✅ Resultado capturado: ` +
+                        `${jogo.time_casa} ${resultado.gols_casa} x ` +
+                        `${resultado.gols_fora} ${jogo.time_fora}`
+
+                    );
+
+                }
+                else {
+
+                    erros++;
+
+                }
+
+            }
+
+        }
+
+        catch (error) {
+
+            erros++;
+
+            console.error(
+
+                `❌ Erro processando resultado pendente ` +
+                `(api_id ${jogo.api_id}):`,
+                error.message
+
+            );
+
+        }
+
+
+        // ======================================
+        // RESPEITAR RATE LIMIT
+        //
+        // Só aguarda se ainda houver próximo item.
+        // ======================================
+
+        if (
+            indice <
+            pendentes.length - 1
+        ) {
+
+            await aguardar(
+                INTERVALO_ENTRE_CHAMADAS_MS
+            );
+
+        }
+
+    }
+
+
+    console.log(
+
+        `🔎 Resultados pendentes processados: ` +
+        `${atualizados} atualizados, ` +
+        `${semResultadoAinda} ainda sem placar, ` +
+        `${erros} erros`
+
+    );
+
+
+    return {
+
+        sucesso:
+            true,
+
+        total:
+            pendentes.length,
+
+        atualizados,
+
+        semResultadoAinda,
+
+        erros
+
+    };
+
+}
+
+
+// ==================================================
 // LIMPAR JOGOS ANTIGOS
 //
 // NÃO apaga jogos do banco.
@@ -1562,7 +2217,7 @@ export async function sincronizarTudo() {
     );
 
     console.log(
-        "🚀 BETVISION AI v6"
+        "🚀 BETVISION AI v7"
     );
 
     console.log(
@@ -1584,6 +2239,15 @@ export async function sincronizarTudo() {
 
     const jogos =
         await sincronizarJogos();
+
+
+    // ======================================================
+    // NOVO (V7): backfill de resultados que ficaram para
+    // trás da janela hoje/amanhã antes de serem capturados.
+    // ======================================================
+
+    const resultadosPendentes =
+        await sincronizarResultadosPendentes();
 
 
     const limpeza =
@@ -1609,6 +2273,8 @@ export async function sincronizarTudo() {
 
         jogos,
 
+        resultadosPendentes,
+
         limpeza,
 
         tempo
@@ -1627,7 +2293,7 @@ export async function sincronizarTudo() {
 export async function iniciarSincronizacao() {
 
     console.log(
-        "🚀 Iniciando serviço de sincronização v6..."
+        "🚀 Iniciando serviço de sincronização v7..."
     );
 
 
@@ -1682,7 +2348,9 @@ export async function iniciarSincronizacao() {
 // 21:00
 //
 // Isso mantém os jogos de hoje/amanhã
-// atualizados ao longo do dia.
+// atualizados ao longo do dia, e agora também
+// busca resultados pendentes de jogos que já
+// saíram dessa janela (ver sincronizarTudo()).
 // ==================================================
 
 export function ativarAgendamento() {
@@ -1698,7 +2366,7 @@ export function ativarAgendamento() {
             );
 
             console.log(
-                "⏰ SINCRONIZAÇÃO AUTOMÁTICA v6"
+                "⏰ SINCRONIZAÇÃO AUTOMÁTICA v7"
             );
 
             console.log(
@@ -1741,7 +2409,7 @@ export function ativarAgendamento() {
 
 
     console.log(
-        "⏰ Agendamento v6 ativo: 03:00 / 09:00 / 15:00 / 21:00"
+        "⏰ Agendamento v7 ativo: 03:00 / 09:00 / 15:00 / 21:00"
     );
 
 }
@@ -1760,6 +2428,8 @@ export default {
     buscarJogosAPI,
 
     sincronizarJogos,
+
+    sincronizarResultadosPendentes,
 
     limparJogosAntigos,
 
