@@ -2,31 +2,23 @@
 // BETVISION AI
 // routes/analises.js
 //
-// VERSÃO 9.0 CORRIGIDA
+// VERSÃO 9.0 - CORRIGIDA
 //
-// ROTAS DE ANÁLISES IA
+// PRINCIPAIS CORREÇÕES:
 //
-// REGRAS:
-//
-// - TIMEZONE America/Sao_Paulo
-// - ANÁLISES SOMENTE DE HOJE
-// - JOGOS NÃO SÃO CRIADOS AQUI
-// - RESULTADOS NÃO SÃO FICTÍCIOS
-// - API ID vem de jogos
-// - JOGO ID vem de jogos
-// - Compatível com tabela analises atual
-// - Compatível com probabilidades em objeto
-// - Compatível com golsEsperados em objeto
-// - Remove duplicadas
-// - Normaliza datas
-//
-// ROTAS:
-//
-// GET  /api/analises
-// GET  /api/analises/hoje
-// GET  /api/analises/:id
-// POST /api/analises
-// POST /api/analises/prever
+// - America/Sao_Paulo
+// - SOMENTE JOGOS DE HOJE em /api/analises
+// - /api/analises/hoje
+// - Normalização segura de datas
+// - Não grava colunas inexistentes em ANALISES
+// - api_id e jogo_id são obtidos através de JOGOS
+// - Evita duplicação
+// - Compatível com ANALISES atual
+// - Proteção contra erro 53000 do NeonDB
+// - Falha de banco não derruba a aplicação
+// - Mantém POST /
+// - Mantém POST /prever
+// - Mantém GET /:id
 //
 // ==========================================================
 
@@ -34,6 +26,7 @@ import express from "express";
 
 import {
     analisarMercado,
+    gerarAnaliseIA,
     gerarAnaliseInteligente
 } from "../services/inteligenciaService.js";
 
@@ -91,30 +84,16 @@ function obterDataHojeBrasil() {
 
 function normalizarDataBrasil(valor) {
 
-    if (
-        valor === undefined ||
-        valor === null ||
-        valor === ""
-    ) {
-
+    if (!valor) {
         return null;
     }
-
 
     try {
 
         if (
-            valor instanceof Date
+            valor instanceof Date &&
+            !Number.isNaN(valor.getTime())
         ) {
-
-            if (
-                Number.isNaN(
-                    valor.getTime()
-                )
-            ) {
-
-                return null;
-            }
 
             return new Intl.DateTimeFormat(
                 "en-CA",
@@ -138,33 +117,29 @@ function normalizarDataBrasil(valor) {
 
 
         // YYYY-MM-DD
-
-        const iso =
+        const matchISO =
             texto.match(
                 /^(\d{4})-(\d{2})-(\d{2})/
             );
 
-
-        if (iso) {
+        if (matchISO) {
 
             return (
-                `${iso[1]}-${iso[2]}-${iso[3]}`
+                `${matchISO[1]}-${matchISO[2]}-${matchISO[3]}`
             );
         }
 
 
         // DD/MM/YYYY
-
-        const br =
+        const matchBR =
             texto.match(
                 /^(\d{2})\/(\d{2})\/(\d{4})/
             );
 
-
-        if (br) {
+        if (matchBR) {
 
             return (
-                `${br[3]}-${br[2]}-${br[1]}`
+                `${matchBR[3]}-${matchBR[2]}-${matchBR[1]}`
             );
         }
 
@@ -174,9 +149,7 @@ function normalizarDataBrasil(valor) {
 
 
         if (
-            Number.isNaN(
-                data.getTime()
-            )
+            Number.isNaN(data.getTime())
         ) {
 
             return null;
@@ -215,7 +188,6 @@ function extrairDataJogo(jogo) {
         return null;
     }
 
-
     const campos = [
 
         jogo.data_jogo,
@@ -248,19 +220,13 @@ function extrairDataJogo(jogo) {
         jogo.jogo?.datetime,
 
         jogo.jogo?.fixture?.date
-
     ];
 
 
-    for (
-        const campo of campos
-    ) {
+    for (const campo of campos) {
 
         const data =
-            normalizarDataBrasil(
-                campo
-            );
-
+            normalizarDataBrasil(campo);
 
         if (data) {
             return data;
@@ -273,7 +239,7 @@ function extrairDataJogo(jogo) {
 
 
 // ==========================================================
-// EXTRAIR DATA DA ANÁLISE
+// DATA DA ANÁLISE
 // ==========================================================
 
 function obterDataAnalise(analise) {
@@ -296,6 +262,8 @@ function obterDataAnalise(analise) {
         analise.date,
         analise.datetime,
 
+        analise.fixture?.date,
+
         analise.jogo?.data_jogo,
         analise.jogo?.dataJogo,
         analise.jogo?.jogo_data,
@@ -307,21 +275,14 @@ function obterDataAnalise(analise) {
         analise.jogo?.date,
         analise.jogo?.datetime,
 
-        analise.fixture?.date,
         analise.jogo?.fixture?.date
-
     ];
 
 
-    for (
-        const campo of campos
-    ) {
+    for (const campo of campos) {
 
         const data =
-            normalizarDataBrasil(
-                campo
-            );
-
+            normalizarDataBrasil(campo);
 
         if (data) {
             return data;
@@ -334,51 +295,19 @@ function obterDataAnalise(analise) {
 
 
 // ==========================================================
-// FILTRAR SOMENTE HOJE
-// ==========================================================
-
-function filtrarSomenteHoje(lista) {
-
-    if (!Array.isArray(lista)) {
-        return [];
-    }
-
-
-    const hoje =
-        obterDataHojeBrasil();
-
-
-    return lista.filter(
-        analise => {
-
-            const data =
-                obterDataAnalise(
-                    analise
-                );
-
-
-            return data === hoje;
-        }
-    );
-}
-
-
-// ==========================================================
 // API ID
 // ==========================================================
 
 function obterApiId(analise) {
 
     return (
-
-        analise?.jogo_api_id ??
         analise?.api_id ??
         analise?.apiId ??
+        analise?.jogo_api_id ??
         analise?.jogo_apiId ??
         analise?.jogo?.api_id ??
         analise?.jogo?.apiId ??
         null
-
     );
 }
 
@@ -390,25 +319,22 @@ function obterApiId(analise) {
 function obterJogoId(analise) {
 
     return (
-
         analise?.jogo_id ??
         analise?.jogoId ??
         analise?.jogo?.jogo_id ??
         analise?.jogo?.jogoId ??
         null
-
     );
 }
 
 
 // ==========================================================
-// TIME CASA
+// CASA
 // ==========================================================
 
 function obterCasa(analise) {
 
     return (
-
         analise?.time_casa ??
         analise?.casa ??
         analise?.home_team ??
@@ -418,19 +344,17 @@ function obterCasa(analise) {
         analise?.jogo?.home_team ??
         analise?.jogo?.homeTeam ??
         "Casa"
-
     );
 }
 
 
 // ==========================================================
-// TIME FORA
+// FORA
 // ==========================================================
 
 function obterFora(analise) {
 
     return (
-
         analise?.time_fora ??
         analise?.fora ??
         analise?.away_team ??
@@ -440,7 +364,6 @@ function obterFora(analise) {
         analise?.jogo?.away_team ??
         analise?.jogo?.awayTeam ??
         "Fora"
-
     );
 }
 
@@ -456,13 +379,10 @@ function removerDuplicadas(lista) {
     }
 
 
-    const mapa =
-        new Map();
+    const mapa = new Map();
 
 
-    for (
-        const analise of lista
-    ) {
+    for (const analise of lista) {
 
         if (!analise) {
             continue;
@@ -470,20 +390,14 @@ function removerDuplicadas(lista) {
 
 
         const apiId =
-            obterApiId(
-                analise
-            );
-
+            obterApiId(analise);
 
         const jogoId =
-            obterJogoId(
-                analise
-            );
-
+            obterJogoId(analise);
 
         const id =
-            analise.analise_id ??
             analise.id ??
+            analise.analise_id ??
             null;
 
 
@@ -517,15 +431,13 @@ function removerDuplicadas(lista) {
         } else {
 
             chave =
-                `${obterCasa(analise)}|` +
-                `${obterFora(analise)}`;
-
+                `${String(obterCasa(analise)).trim().toLowerCase()}|` +
+                `${String(obterFora(analise)).trim().toLowerCase()}|` +
+                `${obterDataAnalise(analise)}`;
         }
 
 
-        if (
-            !mapa.has(chave)
-        ) {
+        if (!mapa.has(chave)) {
 
             mapa.set(
                 chave,
@@ -542,7 +454,7 @@ function removerDuplicadas(lista) {
 
 
 // ==========================================================
-// DATA PARA ORDENAÇÃO
+// DATA ORDENAÇÃO
 // ==========================================================
 
 function obterDataOrdenacao(analise) {
@@ -550,24 +462,28 @@ function obterDataOrdenacao(analise) {
     const campos = [
 
         analise?.data_jogo,
+        analise?.dataJogo,
         analise?.jogo_data,
+
         analise?.data,
+        analise?.inicio,
+        analise?.kickoff,
+
+        analise?.date,
+        analise?.datetime,
 
         analise?.jogo?.data_jogo,
         analise?.jogo?.data,
 
+        analise?.jogo?.inicio,
+        analise?.jogo?.kickoff,
+
         analise?.jogo?.date,
-        analise?.date,
-
-        analise?.datetime,
         analise?.jogo?.datetime
-
     ];
 
 
-    for (
-        const campo of campos
-    ) {
+    for (const campo of campos) {
 
         if (!campo) {
             continue;
@@ -579,9 +495,7 @@ function obterDataOrdenacao(analise) {
 
 
         if (
-            !Number.isNaN(
-                timestamp
-            )
+            !Number.isNaN(timestamp)
         ) {
 
             return timestamp;
@@ -602,10 +516,7 @@ function ordenarAnalises(lista) {
     return [
         ...lista
     ].sort(
-        (
-            a,
-            b
-        ) =>
+        (a, b) =>
             obterDataOrdenacao(a) -
             obterDataOrdenacao(b)
     );
@@ -618,26 +529,26 @@ function ordenarAnalises(lista) {
 
 function prepararListaAnalises(dados) {
 
-    const lista =
-        Array.isArray(dados)
-            ? dados
-            : [];
+    if (!Array.isArray(dados)) {
+        return [];
+    }
+
+
+    const hoje =
+        obterDataHojeBrasil();
 
 
     const somenteHoje =
-        filtrarSomenteHoje(
-            lista
-        );
-
-
-    const semDuplicadas =
-        removerDuplicadas(
-            somenteHoje
+        dados.filter(
+            analise =>
+                obterDataAnalise(analise) === hoje
         );
 
 
     return ordenarAnalises(
-        semDuplicadas
+        removerDuplicadas(
+            somenteHoje
+        )
     );
 }
 
@@ -660,30 +571,17 @@ function normalizarJogoRecebido(body) {
         body;
 
 
-    // ======================================================
-    // STRING
-    // ======================================================
-
     if (
         typeof jogo === "string"
     ) {
 
-        const texto =
-            jogo.trim();
-
-
-        if (!texto) {
+        if (!jogo.trim()) {
             return null;
         }
 
-
-        return texto;
+        return jogo.trim();
     }
 
-
-    // ======================================================
-    // OBJETO
-    // ======================================================
 
     if (
         jogo &&
@@ -708,25 +606,17 @@ function normalizarJogoRecebido(body) {
             jogo.fixture?.teams?.away?.name;
 
 
-        if (
-            casa &&
-            fora
-        ) {
+        if (casa && fora) {
 
             return {
 
                 ...jogo,
 
                 time_casa:
-                    String(
-                        casa
-                    ).trim(),
+                    String(casa).trim(),
 
                 time_fora:
-                    String(
-                        fora
-                    ).trim()
-
+                    String(fora).trim()
             };
         }
 
@@ -744,10 +634,7 @@ function normalizarJogoRecebido(body) {
                 ...jogo,
 
                 jogo:
-                    String(
-                        nome
-                    ).trim()
-
+                    String(nome).trim()
             };
         }
     }
@@ -761,10 +648,7 @@ function normalizarJogoRecebido(body) {
 // EXTRAIR API ID
 // ==========================================================
 
-function extrairApiId(
-    resultado,
-    jogo
-) {
+function extrairApiId(resultado, jogo) {
 
     return (
 
@@ -781,7 +665,6 @@ function extrairApiId(
         jogo?.id ??
 
         null
-
     );
 }
 
@@ -790,10 +673,7 @@ function extrairApiId(
 // EXTRAIR JOGO ID
 // ==========================================================
 
-function extrairJogoId(
-    resultado,
-    jogo
-) {
+function extrairJogoId(resultado, jogo) {
 
     return (
 
@@ -805,27 +685,20 @@ function extrairJogoId(
 
         jogo?.jogo_id ??
         jogo?.jogoId ??
-
         jogo?.id ??
 
         null
-
     );
 }
 
 
 // ==========================================================
-// EXTRAIR NOME DO JOGO
+// NOME DO JOGO
 // ==========================================================
 
-function extrairNomeJogo(
-    resultado,
-    jogo
-) {
+function extrairNomeJogo(resultado, jogo) {
 
-    if (
-        resultado?.jogo?.nome
-    ) {
+    if (resultado?.jogo?.nome) {
 
         return String(
             resultado.jogo.nome
@@ -833,9 +706,7 @@ function extrairNomeJogo(
     }
 
 
-    if (
-        resultado?.jogo?.jogo
-    ) {
+    if (resultado?.jogo?.jogo) {
 
         return String(
             resultado.jogo.jogo
@@ -843,9 +714,7 @@ function extrairNomeJogo(
     }
 
 
-    if (
-        typeof jogo === "string"
-    ) {
+    if (typeof jogo === "string") {
 
         return jogo.trim();
     }
@@ -876,7 +745,7 @@ function extrairNomeJogo(
 
 
 // ==========================================================
-// EXTRAIR DATA PARA BANCO
+// EXTRAIR DATA
 // ==========================================================
 
 function extrairDataJogoParaBanco(
@@ -889,17 +758,13 @@ function extrairDataJogoParaBanco(
             resultado?.jogo
         );
 
-
     if (dataResultado) {
         return dataResultado;
     }
 
 
     const dataJogo =
-        extrairDataJogo(
-            jogo
-        );
-
+        extrairDataJogo(jogo);
 
     if (dataJogo) {
         return dataJogo;
@@ -918,19 +783,13 @@ function extrairDataJogoParaBanco(
 
         resultado?.date,
         resultado?.datetime
-
     ];
 
 
-    for (
-        const campo of campos
-    ) {
+    for (const campo of campos) {
 
         const data =
-            normalizarDataBrasil(
-                campo
-            );
-
+            normalizarDataBrasil(campo);
 
         if (data) {
             return data;
@@ -943,7 +802,7 @@ function extrairDataJogoParaBanco(
 
 
 // ==========================================================
-// EXTRAIR CONFIANÇA
+// CONFIANÇA
 // ==========================================================
 
 function extrairConfianca(resultado) {
@@ -956,30 +815,23 @@ function extrairConfianca(resultado) {
         null;
 
 
-    if (
-        typeof valor === "number"
-    ) {
-
+    if (typeof valor === "number") {
         return valor;
     }
 
 
-    if (
-        typeof valor === "string"
-    ) {
+    if (typeof valor === "string") {
 
         const numero =
             Number(
                 valor
                     .replace("%", "")
                     .replace(",", ".")
+                    .trim()
             );
 
 
-        if (
-            Number.isFinite(numero)
-        ) {
-
+        if (Number.isFinite(numero)) {
             return numero;
         }
     }
@@ -990,7 +842,59 @@ function extrairConfianca(resultado) {
 
 
 // ==========================================================
+// PREPARAR JSON
+// ==========================================================
+
+function prepararJson(valor) {
+
+    if (
+        valor === undefined ||
+        valor === null
+    ) {
+        return null;
+    }
+
+
+    if (
+        typeof valor === "object"
+    ) {
+
+        try {
+
+            return JSON.stringify(
+                valor
+            );
+
+        } catch {
+
+            return null;
+        }
+    }
+
+
+    return String(valor);
+}
+
+
+// ==========================================================
 // PREPARAR ANÁLISE PARA BANCO
+//
+// ATENÇÃO:
+//
+// A tabela ANALISES atual possui:
+//
+// id
+// jogo
+// probabilidade_casa
+// probabilidade_empate
+// probabilidade_fora
+// gols_esperados
+// placar_previsto
+// value_bet
+//
+// NÃO enviamos api_id, jogo_id,
+// data_jogo, confianca ou algoritmo
+// para salvarAnalise().
 // ==========================================================
 
 function prepararAnaliseParaBanco(
@@ -1003,8 +907,8 @@ function prepararAnaliseParaBanco(
         resultado.sucesso === false
     ) {
 
-        console.log(
-            "⚠️ Resultado não possui dados válidos."
+        console.warn(
+            "⚠️ Resultado sem sucesso."
         );
 
         return null;
@@ -1013,13 +917,11 @@ function prepararAnaliseParaBanco(
 
     const probabilidades =
         resultado.probabilidades ||
-        resultado.probability ||
         {};
 
 
     const gols =
         resultado.golsEsperados ||
-        resultado.gols_esperados ||
         {};
 
 
@@ -1028,24 +930,13 @@ function prepararAnaliseParaBanco(
             resultado.valueBets
         )
             ? resultado.valueBets
-            : (
-                Array.isArray(
-                    resultado.value_bets
-                )
-                    ? resultado.value_bets
-                    : []
-            );
+            : resultado.valueBets
+                ? [resultado.valueBets]
+                : [];
 
 
-    const apiId =
-        extrairApiId(
-            resultado,
-            jogo
-        );
-
-
-    const jogoId =
-        extrairJogoId(
+    const nomeJogo =
+        extrairNomeJogo(
             resultado,
             jogo
         );
@@ -1058,105 +949,8 @@ function prepararAnaliseParaBanco(
         );
 
 
-    const nomeJogo =
-        extrairNomeJogo(
-            resultado,
-            jogo
-        );
-
-
-    const probabilidadeCasa =
-        probabilidades.casa ??
-        probabilidades.home ??
-        resultado.probabilidade_casa ??
-        resultado.probabilidadeCasa ??
-        null;
-
-
-    const probabilidadeEmpate =
-        probabilidades.empate ??
-        probabilidades.draw ??
-        resultado.probabilidade_empate ??
-        resultado.probabilidadeEmpate ??
-        null;
-
-
-    const probabilidadeFora =
-        probabilidades.fora ??
-        probabilidades.away ??
-        resultado.probabilidade_fora ??
-        resultado.probabilidadeFora ??
-        null;
-
-
-    let golsEsperados = null;
-
-
-    if (
-        gols &&
-        typeof gols === "object"
-    ) {
-
-        if (
-            gols.total !== undefined &&
-            gols.total !== null
-        ) {
-
-            golsEsperados =
-                Number(
-                    gols.total
-                );
-
-        } else {
-
-            const casa =
-                Number(
-                    gols.casa ??
-                    gols.home ??
-                    0
-                );
-
-
-            const fora =
-                Number(
-                    gols.fora ??
-                    gols.away ??
-                    0
-                );
-
-
-            if (
-                Number.isFinite(casa) &&
-                Number.isFinite(fora)
-            ) {
-
-                golsEsperados =
-                    casa + fora;
-            }
-        }
-
-    } else {
-
-        const numero =
-            Number(gols);
-
-
-        if (
-            Number.isFinite(numero)
-        ) {
-
-            golsEsperados =
-                numero;
-        }
-    }
-
-
     console.log(
-        "=========================================="
-    );
-
-    console.log(
-        "💾 PREPARANDO ANÁLISE PARA BANCO"
+        "💾 PREPARANDO ANÁLISE"
     );
 
     console.log(
@@ -1164,103 +958,77 @@ function prepararAnaliseParaBanco(
     );
 
     console.log(
-        `🆔 API ID: ${apiId ?? "NULL"}`
+        `📅 Data: ${dataJogo ?? "NULL"}`
     );
 
-    console.log(
-        `🆔 Jogo ID: ${jogoId ?? "NULL"}`
-    );
 
-    console.log(
-        `📅 Data jogo: ${dataJogo ?? "NULL"}`
-    );
+    let golsTotal =
+        gols.total;
 
-    console.log(
-        `🏠 Prob. casa: ${probabilidadeCasa ?? "NULL"}`
-    );
 
-    console.log(
-        `🤝 Prob. empate: ${probabilidadeEmpate ?? "NULL"}`
-    );
+    if (
+        golsTotal === undefined ||
+        golsTotal === null
+    ) {
 
-    console.log(
-        `✈️ Prob. fora: ${probabilidadeFora ?? "NULL"}`
-    );
+        const casa =
+            Number(gols.casa) || 0;
 
-    console.log(
-        `⚽ Gols esperados: ${golsEsperados ?? "NULL"}`
-    );
+        const fora =
+            Number(gols.fora) || 0;
 
-    console.log(
-        "=========================================="
-    );
+        golsTotal =
+            casa + fora;
+    }
+
+
+    const golsNumero =
+        Number(golsTotal);
 
 
     return {
 
-        api_id:
-            apiId,
-
-        jogo_id:
-            jogoId,
-
         jogo:
             nomeJogo,
 
-        data_jogo:
-            dataJogo,
-
         probabilidade_casa:
-            probabilidadeCasa,
+            probabilidades.casa ?? null,
 
         probabilidade_empate:
-            probabilidadeEmpate,
+            probabilidades.empate ?? null,
 
         probabilidade_fora:
-            probabilidadeFora,
+            probabilidades.fora ?? null,
 
         gols_esperados:
-            golsEsperados,
+            Number.isFinite(golsNumero)
+                ? golsNumero
+                : null,
 
         placar_previsto:
-            resultado.placarPrevisto ??
-            resultado.placar_previsto ??
-            null,
-
-        value_bet:
-            valueBets,
-
-        confianca:
-            extrairConfianca(
-                resultado
+            prepararJson(
+                resultado.placarPrevisto
             ),
 
-        algoritmo:
-            resultado.algoritmo ??
-            "BetVision AI Motor Estatístico v9.0"
-
+        value_bet:
+            valueBets
     };
 }
 
 
 // ==========================================================
 // GET /api/analises
-//
-// SOMENTE HOJE
 // ==========================================================
 
 router.get(
     "/",
-    async (
-        req,
-        res
-    ) => {
+    async (req, res) => {
+
+        const hoje =
+            obterDataHojeBrasil();
+
 
         try {
-
-            const hoje =
-                obterDataHojeBrasil();
-
 
             console.log(
                 "=========================================="
@@ -1283,15 +1051,6 @@ router.get(
                 await listarAnalisesHoje();
 
 
-            console.log(
-                `📦 Banco: ${
-                    Array.isArray(dados)
-                        ? dados.length
-                        : 0
-                } registros`
-            );
-
-
             const lista =
                 prepararListaAnalises(
                     dados
@@ -1305,17 +1064,14 @@ router.get(
 
             return res.json({
 
-                sucesso:
-                    true,
+                sucesso: true,
 
-                data:
-                    hoje,
+                data: hoje,
 
                 timezone:
                     TIMEZONE,
 
-                somenteHoje:
-                    true,
+                somenteHoje: true,
 
                 total:
                     lista.length,
@@ -1328,37 +1084,32 @@ router.get(
         } catch (erro) {
 
             console.error(
-                "❌ Erro listar análises:",
-                erro
+                "❌ Erro /api/analises:",
+                erro.message
             );
 
 
-            return res
-                .status(500)
-                .json({
+            return res.status(200).json({
 
-                    sucesso:
-                        false,
+                sucesso: false,
 
-                    data:
-                        obterDataHojeBrasil(),
+                bancoIndisponivel: true,
 
-                    timezone:
-                        TIMEZONE,
+                data: hoje,
 
-                    somenteHoje:
-                        true,
+                timezone:
+                    TIMEZONE,
 
-                    total:
-                        0,
+                somenteHoje: true,
 
-                    dados: [],
+                total: 0,
 
-                    erro:
-                        erro.message ||
-                        "Erro ao listar análises"
+                dados: [],
 
-                });
+                erro:
+                    erro.message ||
+                    "Banco temporariamente indisponível"
+            });
         }
     }
 );
@@ -1370,16 +1121,13 @@ router.get(
 
 router.get(
     "/hoje",
-    async (
-        req,
-        res
-    ) => {
+    async (req, res) => {
+
+        const hoje =
+            obterDataHojeBrasil();
+
 
         try {
-
-            const hoje =
-                obterDataHojeBrasil();
-
 
             const dados =
                 await listarAnalisesHoje();
@@ -1393,17 +1141,14 @@ router.get(
 
             return res.json({
 
-                sucesso:
-                    true,
+                sucesso: true,
 
-                data:
-                    hoje,
+                data: hoje,
 
                 timezone:
                     TIMEZONE,
 
-                somenteHoje:
-                    true,
+                somenteHoje: true,
 
                 total:
                     lista.length,
@@ -1416,37 +1161,31 @@ router.get(
         } catch (erro) {
 
             console.error(
-                "❌ Erro análises hoje:",
-                erro
+                "❌ Erro /api/analises/hoje:",
+                erro.message
             );
 
 
-            return res
-                .status(500)
-                .json({
+            return res.status(200).json({
 
-                    sucesso:
-                        false,
+                sucesso: false,
 
-                    data:
-                        obterDataHojeBrasil(),
+                bancoIndisponivel: true,
 
-                    timezone:
-                        TIMEZONE,
+                data: hoje,
 
-                    somenteHoje:
-                        true,
+                timezone:
+                    TIMEZONE,
 
-                    total:
-                        0,
+                somenteHoje: true,
 
-                    dados: [],
+                total: 0,
 
-                    erro:
-                        erro.message ||
-                        "Erro análises hoje"
+                dados: [],
 
-                });
+                erro:
+                    erro.message
+            });
         }
     }
 );
@@ -1458,16 +1197,12 @@ router.get(
 
 router.post(
     "/",
-    async (
-        req,
-        res
-    ) => {
+    async (req, res) => {
 
         try {
 
             const body =
-                req.body ||
-                {};
+                req.body || {};
 
 
             const jogo =
@@ -1477,32 +1212,29 @@ router.post(
 
 
             const dados =
-                body.dados ||
-                {};
+                body.dados || {};
 
 
             if (!jogo) {
 
-                return res
-                    .status(400)
-                    .json({
+                return res.status(400).json({
 
-                        sucesso:
-                            false,
+                    sucesso: false,
 
-                        erro:
-                            "Jogo obrigatório"
-
-                    });
+                    erro:
+                        "Jogo obrigatório"
+                });
             }
 
 
+            const nome =
+                typeof jogo === "string"
+                    ? jogo
+                    : `${jogo.time_casa} x ${jogo.time_fora}`;
+
+
             console.log(
-                `🤖 Analisando jogo: ${
-                    typeof jogo === "string"
-                        ? jogo
-                        : `${jogo.time_casa} x ${jogo.time_fora}`
-                }`
+                `🤖 Analisando jogo: ${nome}`
             );
 
 
@@ -1513,9 +1245,9 @@ router.post(
                 );
 
 
-            // ==================================================
+            // ------------------------------------------------
             // SALVAR
-            // ==================================================
+            // ------------------------------------------------
 
             try {
 
@@ -1526,9 +1258,7 @@ router.post(
                     );
 
 
-                if (
-                    paraSalvar
-                ) {
+                if (paraSalvar) {
 
                     const salva =
                         await salvarAnalise(
@@ -1542,17 +1272,13 @@ router.post(
                             salva.id;
 
                         resultado.data_jogo =
-                            paraSalvar.data_jogo;
-
-                        resultado.api_id =
-                            paraSalvar.api_id;
-
-                        resultado.jogo_id =
-                            paraSalvar.jogo_id;
-
+                            extrairDataJogoParaBanco(
+                                resultado,
+                                jogo
+                            );
 
                         console.log(
-                            `✅ Análise salva/recuperada: ID ${salva.id}`
+                            `✅ Análise salva: ID ${salva.id}`
                         );
                     }
                 }
@@ -1560,9 +1286,11 @@ router.post(
             } catch (erroBanco) {
 
                 console.error(
-                    "⚠️ Erro salvando análise:",
-                    erroBanco
+                    "⚠️ Banco não conseguiu salvar análise:",
+                    erroBanco.message
                 );
+
+                // NÃO derruba a análise.
             }
 
 
@@ -1574,22 +1302,18 @@ router.post(
 
             console.error(
                 "❌ Erro análise IA:",
-                erro
+                erro.message
             );
 
 
-            return res
-                .status(500)
-                .json({
+            return res.status(500).json({
 
-                    sucesso:
-                        false,
+                sucesso: false,
 
-                    erro:
-                        erro.message ||
-                        "Erro ao realizar análise IA"
-
-                });
+                erro:
+                    erro.message ||
+                    "Erro ao realizar análise IA"
+            });
         }
     }
 );
@@ -1601,16 +1325,12 @@ router.post(
 
 router.post(
     "/prever",
-    async (
-        req,
-        res
-    ) => {
+    async (req, res) => {
 
         try {
 
             const body =
-                req.body ||
-                {};
+                req.body || {};
 
 
             const jogo =
@@ -1620,23 +1340,18 @@ router.post(
 
 
             const dados =
-                body.dados ||
-                {};
+                body.dados || {};
 
 
             if (!jogo) {
 
-                return res
-                    .status(400)
-                    .json({
+                return res.status(400).json({
 
-                        sucesso:
-                            false,
+                    sucesso: false,
 
-                        erro:
-                            "Jogo obrigatório"
-
-                    });
+                    erro:
+                        "Jogo obrigatório"
+                });
             }
 
 
@@ -1649,34 +1364,28 @@ router.post(
 
             return res.json({
 
-                sucesso:
-                    true,
+                sucesso: true,
 
                 resultado:
                     resultado
-
             });
 
         } catch (erro) {
 
             console.error(
                 "❌ Erro previsão IA:",
-                erro
+                erro.message
             );
 
 
-            return res
-                .status(500)
-                .json({
+            return res.status(500).json({
 
-                    sucesso:
-                        false,
+                sucesso: false,
 
-                    erro:
-                        erro.message ||
-                        "Erro ao gerar análise IA"
-
-                });
+                erro:
+                    erro.message ||
+                    "Erro ao gerar análise IA"
+            });
         }
     }
 );
@@ -1688,10 +1397,7 @@ router.post(
 
 router.get(
     "/:id",
-    async (
-        req,
-        res
-    ) => {
+    async (req, res) => {
 
         try {
 
@@ -1706,17 +1412,13 @@ router.get(
                 id <= 0
             ) {
 
-                return res
-                    .status(400)
-                    .json({
+                return res.status(400).json({
 
-                        sucesso:
-                            false,
+                    sucesso: false,
 
-                        erro:
-                            "ID da análise inválido"
-
-                    });
+                    erro:
+                        "ID da análise inválido"
+                });
             }
 
 
@@ -1728,50 +1430,43 @@ router.get(
 
             if (!analise) {
 
-                return res
-                    .status(404)
-                    .json({
+                return res.status(404).json({
 
-                        sucesso:
-                            false,
+                    sucesso: false,
 
-                        erro:
-                            "Análise não encontrada"
-
-                    });
+                    erro:
+                        "Análise não encontrada"
+                });
             }
 
 
             return res.json({
 
-                sucesso:
-                    true,
+                sucesso: true,
 
                 dados:
                     analise
-
             });
 
         } catch (erro) {
 
             console.error(
-                "❌ Erro buscando análise:",
-                erro
+                "❌ Erro análise por ID:",
+                erro.message
             );
 
 
-            return res
-                .status(500)
-                .json({
+            return res.status(200).json({
 
-                    sucesso:
-                        false,
+                sucesso: false,
 
-                    erro:
-                        erro.message ||
-                        "Erro ao buscar análise"
+                bancoIndisponivel: true,
 
-                });
+                dados: null,
+
+                erro:
+                    erro.message
+            });
         }
     }
 );
