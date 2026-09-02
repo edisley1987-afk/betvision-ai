@@ -2,28 +2,19 @@
 // BETVISION AI
 // services/bancoService.js
 //
-// VERSÃO 11.0
+// VERSÃO 12.0
 //
 // PostgreSQL / NeonDB
 //
-// CORREÇÕES:
-//
-// - PostgreSQL compatível
-// - NeonDB
-// - TIMEZONE America/Sao_Paulo
-// - Jogos HOJE + AMANHÃ
-// - Análises SOMENTE HOJE
-// - H2H REAL
-// - Histórico REAL
-// - Não cria jogos fictícios
-// - Não cria resultados fictícios
-// - Tabela analises atual preservada
-// - api_id vem de jogos
-// - jogo_id vem de jogos
-// - Dashboard não depende de dashboard_status
-// - Probabilidades compatíveis com objeto
-// - Value Bets protegidas contra erro
-// - Consultas protegidas
+// CORREÇÕES NESTA VERSÃO:
+// - salvarAnalise agora persiste jogo_id (coluna nova)
+// - listarAnalisesHoje / listarAnalisesDisponiveis /
+//   buscarAnalisePorId agora casam por jogo_id primeiro
+//   (chave real), com fallback por nome normalizado
+//   (espaços colapsados) só para registros legados
+// - Corrige INNER JOIN frágil por string que zerava o
+//   dashboard quando o nome do jogo tinha qualquer
+//   diferença de formatação
 // ==================================================
 
 import {
@@ -443,21 +434,6 @@ export async function inserirTime(
 
 
 // ==================================================
-// CONDIÇÃO DE DATA
-//
-// Funciona para timestamp/timestamptz
-// mantendo America/Sao_Paulo.
-//
-// ==================================================
-
-const EXPRESSAO_DATA_BRASIL = `
-    (
-        data_jogo AT TIME ZONE $1
-    )::date
-`;
-
-
-// ==================================================
 // JOGOS DE HOJE
 // ==================================================
 
@@ -708,6 +684,77 @@ export async function buscarJogoPorApiId(
         resultado.rows[0] ||
         null
     );
+}
+
+
+// ==================================================
+// BUSCAR JOGO POR NOMES (CASA/FORA)
+//
+// NOVO: usado para resolver jogo_id quando quem está
+// salvando a análise só tem os nomes dos times (ex:
+// routes/inteligencia.js), evitando cair sempre no
+// fallback por string.
+// ==================================================
+
+export async function buscarJogoPorNomes(
+    timeCasa,
+    timeFora
+) {
+
+    if (
+        !timeCasa ||
+        !timeFora
+    ) {
+
+        return null;
+    }
+
+
+    try {
+
+        const resultado =
+            await query(
+                `
+                SELECT *
+                FROM jogos
+
+                WHERE
+
+                    LOWER(TRIM(time_casa))
+                    =
+                    LOWER(TRIM($1::text))
+
+                    AND
+
+                    LOWER(TRIM(time_fora))
+                    =
+                    LOWER(TRIM($2::text))
+
+                ORDER BY data_jogo DESC
+
+                LIMIT 1
+                `,
+                [
+                    timeCasa,
+                    timeFora
+                ]
+            );
+
+
+        return (
+            resultado.rows[0] ||
+            null
+        );
+
+    } catch (erro) {
+
+        console.error(
+            "❌ Erro buscar jogo por nomes:",
+            erro
+        );
+
+        return null;
+    }
 }
 
 
@@ -976,7 +1023,68 @@ export async function buscarAnalisePorNome(
 
 
 // ==================================================
+// BUSCAR ANÁLISE POR JOGO_ID
+//
+// NOVO
+// ==================================================
+
+export async function buscarAnalisePorJogoId(
+    jogo_id
+) {
+
+    const jogoId =
+        normalizarId(
+            jogo_id
+        );
+
+
+    if (!jogoId) {
+        return null;
+    }
+
+
+    try {
+
+        const resultado =
+            await query(
+                `
+                SELECT *
+                FROM analises
+
+                WHERE jogo_id = $1::integer
+
+                ORDER BY id DESC
+
+                LIMIT 1
+                `,
+                [
+                    jogoId
+                ]
+            );
+
+
+        return (
+            resultado.rows[0] ||
+            null
+        );
+
+    } catch (erro) {
+
+        console.error(
+            "❌ Erro análise por jogo_id:",
+            erro
+        );
+
+        throw erro;
+    }
+}
+
+
+// ==================================================
 // BUSCAR ANÁLISE POR ID
+//
+// ATUALIZADO: casa por jogo_id primeiro, cai pra nome
+// normalizado (espaços colapsados) só como fallback.
 // ==================================================
 
 export async function buscarAnalisePorId(
@@ -1001,7 +1109,7 @@ export async function buscarAnalisePorId(
 
                     a.*,
 
-                    j.id AS jogo_id,
+                    j.id AS jogo_id_resolvido,
 
                     j.api_id AS jogo_api_id,
 
@@ -1025,15 +1133,31 @@ export async function buscarAnalisePorId(
 
                 LEFT JOIN jogos j
 
-                    ON LOWER(TRIM(a.jogo))
-                    =
-                    LOWER(
-                        TRIM(
-                            COALESCE(j.time_casa, '')
-                            ||
-                            ' x '
-                            ||
-                            COALESCE(j.time_fora, '')
+                    ON
+
+                    (
+                        a.jogo_id IS NOT NULL
+                        AND j.id = a.jogo_id
+                    )
+
+                    OR
+
+                    (
+                        a.jogo_id IS NULL
+
+                        AND
+
+                        LOWER(TRIM(a.jogo))
+                        =
+                        LOWER(
+                            TRIM(
+                                regexp_replace(
+                                    COALESCE(j.time_casa, '')
+                                    || ' x ' ||
+                                    COALESCE(j.time_fora, ''),
+                                    '\\s+', ' ', 'g'
+                                )
+                            )
                         )
                     )
 
@@ -1066,6 +1190,10 @@ export async function buscarAnalisePorId(
 
 // ==================================================
 // LISTAR ANÁLISES DE HOJE
+//
+// ATUALIZADO: casa por jogo_id primeiro (chave real),
+// cai pra nome normalizado (espaços colapsados) só
+// como fallback para registros legados sem jogo_id.
 // ==================================================
 
 export async function listarAnalisesHoje() {
@@ -1102,6 +1230,8 @@ export async function listarAnalisesHoje() {
 
                     a.jogo,
 
+                    a.jogo_id,
+
                     a.probabilidade_casa,
 
                     a.probabilidade_empate,
@@ -1114,7 +1244,7 @@ export async function listarAnalisesHoje() {
 
                     a.value_bet,
 
-                    j.id AS jogo_id,
+                    j.id AS jogo_id_resolvido,
 
                     j.api_id AS jogo_api_id,
 
@@ -1140,15 +1270,29 @@ export async function listarAnalisesHoje() {
 
                     ON
 
-                    LOWER(TRIM(a.jogo))
-                    =
-                    LOWER(
-                        TRIM(
-                            COALESCE(j.time_casa, '')
-                            ||
-                            ' x '
-                            ||
-                            COALESCE(j.time_fora, '')
+                    (
+                        a.jogo_id IS NOT NULL
+                        AND j.id = a.jogo_id
+                    )
+
+                    OR
+
+                    (
+                        a.jogo_id IS NULL
+
+                        AND
+
+                        LOWER(TRIM(a.jogo))
+                        =
+                        LOWER(
+                            TRIM(
+                                regexp_replace(
+                                    COALESCE(j.time_casa, '')
+                                    || ' x ' ||
+                                    COALESCE(j.time_fora, ''),
+                                    '\\s+', ' ', 'g'
+                                )
+                            )
                         )
                     )
 
@@ -1232,17 +1376,9 @@ export async function listarAnalises() {
 // ==================================================
 // SALVAR ANÁLISE
 //
-// TABELA ATUAL:
-//
-// id
-// jogo
-// probabilidade_casa
-// probabilidade_empate
-// probabilidade_fora
-// gols_esperados
-// placar_previsto
-// value_bet
-//
+// ATUALIZADO: agora persiste jogo_id (nova coluna).
+// Verifica duplicidade por jogo_id primeiro (mais
+// confiável); cai pro nome só se jogo_id não vier.
 // ==================================================
 
 export async function salvarAnalise(
@@ -1273,6 +1409,16 @@ export async function salvarAnalise(
             "Nome do jogo obrigatório"
         );
     }
+
+
+    // ==================================================
+    // JOGO_ID
+    // ==================================================
+
+    const jogoId =
+        normalizarId(
+            analise.jogo_id
+        );
 
 
     // ==================================================
@@ -1442,12 +1588,19 @@ export async function salvarAnalise(
 
     // ==================================================
     // VERIFICAR EXISTENTE
+    //
+    // Prioriza jogo_id (chave real); cai pro nome
+    // apenas se jogo_id não estiver disponível.
     // ==================================================
 
     const existente =
-        await buscarAnalisePorNome(
-            nomeJogo
-        );
+        jogoId
+            ? await buscarAnalisePorJogoId(
+                jogoId
+            )
+            : await buscarAnalisePorNome(
+                nomeJogo
+            );
 
 
     if (existente) {
@@ -1472,6 +1625,7 @@ export async function salvarAnalise(
                 INSERT INTO analises
                 (
                     jogo,
+                    jogo_id,
                     probabilidade_casa,
                     probabilidade_empate,
                     probabilidade_fora,
@@ -1483,12 +1637,13 @@ export async function salvarAnalise(
                 VALUES
                 (
                     $1::text,
-                    $2::numeric,
+                    $2::integer,
                     $3::numeric,
                     $4::numeric,
                     $5::numeric,
-                    $6::text,
-                    $7::boolean
+                    $6::numeric,
+                    $7::text,
+                    $8::boolean
                 )
 
                 RETURNING *
@@ -1496,6 +1651,8 @@ export async function salvarAnalise(
                 [
 
                     nomeJogo,
+
+                    jogoId,
 
                     probabilidadeCasa,
 
@@ -1529,7 +1686,7 @@ export async function salvarAnalise(
             );
 
             console.log(
-                `🆔 ID: ${salva.id}`
+                `🆔 ID: ${salva.id} | jogo_id: ${salva.jogo_id ?? "NULL"}`
             );
 
             console.log(
@@ -1573,6 +1730,8 @@ export async function salvarAnalise(
 
 // ==================================================
 // ANÁLISES HOJE + AMANHÃ
+//
+// ATUALIZADO: mesmo JOIN por jogo_id + fallback.
 // ==================================================
 
 export async function listarAnalisesDisponiveis() {
@@ -1588,6 +1747,8 @@ export async function listarAnalisesDisponiveis() {
 
                     a.jogo,
 
+                    a.jogo_id,
+
                     a.probabilidade_casa,
 
                     a.probabilidade_empate,
@@ -1600,7 +1761,7 @@ export async function listarAnalisesDisponiveis() {
 
                     a.value_bet,
 
-                    j.id AS jogo_id,
+                    j.id AS jogo_id_resolvido,
 
                     j.api_id AS jogo_api_id,
 
@@ -1626,15 +1787,29 @@ export async function listarAnalisesDisponiveis() {
 
                     ON
 
-                    LOWER(TRIM(a.jogo))
-                    =
-                    LOWER(
-                        TRIM(
-                            COALESCE(j.time_casa, '')
-                            ||
-                            ' x '
-                            ||
-                            COALESCE(j.time_fora, '')
+                    (
+                        a.jogo_id IS NOT NULL
+                        AND j.id = a.jogo_id
+                    )
+
+                    OR
+
+                    (
+                        a.jogo_id IS NULL
+
+                        AND
+
+                        LOWER(TRIM(a.jogo))
+                        =
+                        LOWER(
+                            TRIM(
+                                regexp_replace(
+                                    COALESCE(j.time_casa, '')
+                                    || ' x ' ||
+                                    COALESCE(j.time_fora, ''),
+                                    '\\s+', ' ', 'g'
+                                )
+                            )
                         )
                     )
 
@@ -1711,7 +1886,7 @@ export async function buscarAnalisePorApiId(
 
                     a.*,
 
-                    j.id AS jogo_id,
+                    j.id AS jogo_id_resolvido,
 
                     j.api_id AS jogo_api_id,
 
@@ -1733,15 +1908,29 @@ export async function buscarAnalisePorApiId(
 
                     ON
 
-                    LOWER(TRIM(a.jogo))
-                    =
-                    LOWER(
-                        TRIM(
-                            COALESCE(j.time_casa, '')
-                            ||
-                            ' x '
-                            ||
-                            COALESCE(j.time_fora, '')
+                    (
+                        a.jogo_id IS NOT NULL
+                        AND j.id = a.jogo_id
+                    )
+
+                    OR
+
+                    (
+                        a.jogo_id IS NULL
+
+                        AND
+
+                        LOWER(TRIM(a.jogo))
+                        =
+                        LOWER(
+                            TRIM(
+                                regexp_replace(
+                                    COALESCE(j.time_casa, '')
+                                    || ' x ' ||
+                                    COALESCE(j.time_fora, ''),
+                                    '\\s+', ' ', 'g'
+                                )
+                            )
                         )
                     )
 
@@ -1989,10 +2178,6 @@ export async function listarValueBetsDisponiveis() {
 
 // ==================================================
 // DASHBOARD
-//
-// Não depende mais obrigatoriamente de
-// dashboard_status.
-//
 // ==================================================
 
 export async function buscarDashboard() {
@@ -2077,15 +2262,31 @@ export async function buscarDashboard() {
 
                         INNER JOIN jogos j
 
-                            ON LOWER(TRIM(a.jogo))
-                            =
-                            LOWER(
-                                TRIM(
-                                    COALESCE(j.time_casa, '')
-                                    ||
-                                    ' x '
-                                    ||
-                                    COALESCE(j.time_fora, '')
+                            ON
+
+                            (
+                                a.jogo_id IS NOT NULL
+                                AND j.id = a.jogo_id
+                            )
+
+                            OR
+
+                            (
+                                a.jogo_id IS NULL
+
+                                AND
+
+                                LOWER(TRIM(a.jogo))
+                                =
+                                LOWER(
+                                    TRIM(
+                                        regexp_replace(
+                                            COALESCE(j.time_casa, '')
+                                            || ' x ' ||
+                                            COALESCE(j.time_fora, ''),
+                                            '\\s+', ' ', 'g'
+                                        )
+                                    )
                                 )
                             )
 
@@ -2270,6 +2471,7 @@ export default {
 
     buscarJogoPorId,
     buscarJogoPorApiId,
+    buscarJogoPorNomes,
 
     buscarHistoricoTime,
     buscarH2H,
@@ -2277,6 +2479,7 @@ export default {
     buscarAnalisePorApiId,
     buscarAnalisePorId,
     buscarAnalisePorNome,
+    buscarAnalisePorJogoId,
 
     salvarAnalise,
 
