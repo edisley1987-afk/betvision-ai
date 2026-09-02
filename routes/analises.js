@@ -2,322 +2,16 @@
 // BETVISION AI
 // routes/analises.js
 //
-// VERSÃO 10.0 - CORRIGIDA
+// VERSÃO 11.0 - CORRIGIDA
 //
 // CORREÇÕES NESTA VERSÃO:
-// - jogo_id, api_id, data_jogo e confianca voltam a ser
-//   enviados para salvarAnalise() (antes eram descartados)
-// - Fallback: análises sem data_jogo NÃO são mais descartadas
-//   do dashboard (schema antigo / registros legados)
-// - Mantém 100% de compatibilidade com banco atual
-// ==========================================================
-
-import express from "express";
-
-import {
-    analisarMercado,
-    gerarAnaliseIA,
-    gerarAnaliseInteligente
-} from "../services/inteligenciaService.js";
-
-import {
-    listarAnalisesHoje,
-    buscarAnalisePorId,
-    salvarAnalise
-} from "../services/bancoService.js";
-
-const router = express.Router();
-
-
-// ==========================================================
-// CONFIGURAÇÃO
-// ==========================================================
-
-const TIMEZONE = "America/Sao_Paulo";
-
-
-// ==========================================================
-// DATA HOJE BRASIL
-// ==========================================================
-
-function obterDataHojeBrasil() {
-
-    try {
-
-        return new Intl.DateTimeFormat(
-            "en-CA",
-            {
-                timeZone: TIMEZONE,
-                year: "numeric",
-                month: "2-digit",
-                day: "2-digit"
-            }
-        ).format(new Date());
-
-    } catch (erro) {
-
-        console.error(
-            "❌ Erro obtendo data Brasil:",
-            erro.message
-        );
-
-        return new Date()
-            .toISOString()
-            .slice(0, 10);
-    }
-}
-
-
-// ==========================================================
-// NORMALIZAR DATA
-// ==========================================================
-
-function normalizarDataBrasil(valor) {
-
-    if (!valor) {
-        return null;
-    }
-
-    try {
-
-        if (
-            valor instanceof Date &&
-            !Number.isNaN(valor.getTime())
-        ) {
-
-            return new Intl.DateTimeFormat(
-                "en-CA",
-                {
-                    timeZone: TIMEZONE,
-                    year: "numeric",
-                    month: "2-digit",
-                    day: "2-digit"
-                }
-            ).format(valor);
-        }
-
-
-        const texto =
-            String(valor).trim();
-
-
-        if (!texto) {
-            return null;
-        }
-
-
-        // YYYY-MM-DD
-        const matchISO =
-            texto.match(
-                /^(\d{4})-(\d{2})-(\d{2})/
-            );
-
-        if (matchISO) {
-
-            return (
-                `${matchISO[1]}-${matchISO[2]}-${matchISO[3]}`
-            );
-        }
-
-
-        // DD/MM/YYYY
-        const matchBR =
-            texto.match(
-                /^(\d{2})\/(\d{2})\/(\d{4})/
-            );
-
-        if (matchBR) {
-
-            return (
-                `${matchBR[3]}-${matchBR[2]}-${matchBR[1]}`
-            );
-        }
-
-
-        const data =
-            new Date(texto);
-
-
-        if (
-            Number.isNaN(data.getTime())
-        ) {
-
-            return null;
-        }
-
-
-        return new Intl.DateTimeFormat(
-            "en-CA",
-            {
-                timeZone: TIMEZONE,
-                year: "numeric",
-                month: "2-digit",
-                day: "2-digit"
-            }
-        ).format(data);
-
-    } catch (erro) {
-
-        console.error(
-            "⚠️ Erro normalizando data:",
-            erro.message
-        );
-
-        return null;
-    }
-}
-
-
-// ==========================================================
-// EXTRAIR DATA DO JOGO
-// ==========================================================
-
-function extrairDataJogo(jogo) {
-
-    if (!jogo) {
-        return null;
-    }
-
-    const campos = [
-
-        jogo.data_jogo,
-        jogo.dataJogo,
-        jogo.jogo_data,
-
-        jogo.data,
-        jogo.inicio,
-        jogo.kickoff,
-
-        jogo.date,
-        jogo.datetime,
-
-        jogo.fixture?.date,
-        jogo.fixture?.data,
-        jogo.fixture?.datetime,
-
-        jogo.match?.date,
-        jogo.match?.datetime,
-
-        jogo.jogo?.data_jogo,
-        jogo.jogo?.dataJogo,
-        jogo.jogo?.jogo_data,
-
-        jogo.jogo?.data,
-        jogo.jogo?.inicio,
-        jogo.jogo?.kickoff,
-
-        jogo.jogo?.date,
-        jogo.jogo?.datetime,
-
-        jogo.jogo?.fixture?.date
-    ];
-
-
-    for (const campo of campos) {
-
-        const data =
-            normalizarDataBrasil(campo);
-
-        if (data) {
-            return data;
-        }
-    }
-
-
-    return null;
-}
-
-
-// ==========================================================
-// DATA DA ANÁLISE
-// ==========================================================
-
-function obterDataAnalise(analise) {
-
-    if (!analise) {
-        return null;
-    }
-
-
-    const campos = [
-
-        analise.data_jogo,
-        analise.dataJogo,
-        analise.jogo_data,
-
-        analise.data,
-        analise.inicio,
-        analise.kickoff,
-
-        analise.date,
-        analise.datetime,
-
-        analise.criado_em,
-        analise.created_at,
-        analise.createdAt,
-
-        analise.fixture?.date,
-
-        analise.jogo?.data_jogo,
-        analise.jogo?.dataJogo,
-        analise.jogo?.jogo_data,
-
-        analise.jogo?.data,
-        analise.jogo?.inicio,
-        analise.jogo?.kickoff,
-
-        analise.jogo?.date,
-        analise.jogo?.datetime,
-
-        analise.jogo?.fixture?.date
-    ];
-
-
-    for (const campo of campos) {
-
-        const data =
-            normalizarDataBrasil(campo);
-
-        if (data) {
-            return data;
-        }
-    }
-
-
-    return null;
-}
-
-
-// ==========================================================
-// API ID
-// ==========================================================
-
-function obterApiId(analise) {
-
-    return (
-        analise?.api_id ??
-        analise?.apiId ??
-        analise?.jogo_api_id ??
-        analise?.jogo_apiId ??
-        analise?.jogo?.api_id ??
-        analise?.jogo?.apiId ??
-        null
-    );
-}
-
-
-// ============================================// ==========================================================
-// BETVISION AI
-// routes/analises.js
-//
-// VERSÃO 10.0 - CORRIGIDA
-//
-// CORREÇÕES NESTA VERSÃO:
-// - jogo_id, api_id, data_jogo e confianca voltam a ser
-//   enviados para salvarAnalise() (antes eram descartados)
-// - Fallback: análises sem data_jogo NÃO são mais descartadas
-//   do dashboard (schema antigo / registros legados)
-// - Mantém 100% de compatibilidade com banco atual
+// - jogo_id, api_id, time_casa, time_fora, data_jogo,
+//   confianca e algoritmo agora são enviados para
+//   salvarAnalise() (schema real já suporta essas colunas)
+// - Fallback: análises sem data_jogo reconhecível não são
+//   mais descartadas do dashboard (schema legado / registros
+//   antigos sem jogo_id)
+// - Mantém 100% de compatibilidade com o schema atual
 // ==========================================================
 
 import express from "express";
@@ -832,16 +526,8 @@ function ordenarAnalises(lista) {
 // ==========================================================
 // PREPARAR LISTA
 //
-// CORREÇÃO PRINCIPAL:
-//
-// Antes, análises sem nenhum campo de data reconhecível
-// eram DESCARTADAS (obterDataAnalise() retornava null,
-// e null !== hoje). Como a tabela ANALISES não estava
-// salvando data_jogo, TODAS as análises somem do dashboard.
-//
-// Agora: analises SEM data são mantidas (tratadas como
-// "de hoje"), e um aviso é logado para você identificar
-// registros legados que precisam de data_jogo preenchida.
+// Análises sem data reconhecível NÃO são mais descartadas
+// silenciosamente (fallback para registros legados).
 // ==========================================================
 
 function prepararListaAnalises(dados) {
@@ -869,8 +555,6 @@ function prepararListaAnalises(dados) {
 
                     semDataCount++;
 
-                    // Fallback: mantém a análise em vez de
-                    // descartá-la (comportamento antigo).
                     return true;
                 }
 
@@ -882,9 +566,7 @@ function prepararListaAnalises(dados) {
     if (semDataCount > 0) {
 
         console.warn(
-            `⚠️ ${semDataCount} análise(s) sem data_jogo reconhecível ` +
-            `(mantidas por fallback). Recomenda-se migrar o schema ` +
-            `e fazer backfill da coluna data_jogo.`
+            `⚠️ ${semDataCount} análise(s) sem data reconhecível (mantidas por fallback).`
         );
     }
 
@@ -1037,6 +719,58 @@ function extrairJogoId(resultado, jogo) {
 
 
 // ==========================================================
+// EXTRAIR TIME CASA
+// ==========================================================
+
+function extrairTimeCasa(resultado, jogo) {
+
+    return (
+
+        resultado?.jogo?.time_casa ??
+        resultado?.time_casa ??
+
+        (typeof jogo === "object"
+            ? (
+                jogo?.time_casa ??
+                jogo?.casa ??
+                jogo?.home_team ??
+                jogo?.homeTeam ??
+                jogo?.fixture?.teams?.home?.name
+            )
+            : null) ??
+
+        null
+    );
+}
+
+
+// ==========================================================
+// EXTRAIR TIME FORA
+// ==========================================================
+
+function extrairTimeFora(resultado, jogo) {
+
+    return (
+
+        resultado?.jogo?.time_fora ??
+        resultado?.time_fora ??
+
+        (typeof jogo === "object"
+            ? (
+                jogo?.time_fora ??
+                jogo?.fora ??
+                jogo?.away_team ??
+                jogo?.awayTeam ??
+                jogo?.fixture?.teams?.away?.name
+            )
+            : null) ??
+
+        null
+    );
+}
+
+
+// ==========================================================
 // NOME DO JOGO
 // ==========================================================
 
@@ -1065,21 +799,17 @@ function extrairNomeJogo(resultado, jogo) {
 
 
     const casa =
-        jogo?.time_casa ??
-        jogo?.casa ??
-        jogo?.home_team ??
-        jogo?.homeTeam ??
-        jogo?.fixture?.teams?.home?.name ??
-        "";
+        extrairTimeCasa(
+            resultado,
+            jogo
+        ) ?? "";
 
 
     const fora =
-        jogo?.time_fora ??
-        jogo?.fora ??
-        jogo?.away_team ??
-        jogo?.awayTeam ??
-        jogo?.fixture?.teams?.away?.name ??
-        "";
+        extrairTimeFora(
+            resultado,
+            jogo
+        ) ?? "";
 
 
     return (
@@ -1142,7 +872,7 @@ function extrairDataJogoParaBanco(
 
 
     // Última tentativa: assume hoje, para nunca deixar
-    // a análise "órfã" de data (evita o bug anterior).
+    // a análise "órfã" de data.
     return obterDataHojeBrasil();
 }
 
@@ -1180,10 +910,27 @@ function extrairConfianca(resultado) {
         if (Number.isFinite(numero)) {
             return numero;
         }
+
+        return valor;
     }
 
 
     return null;
+}
+
+
+// ==========================================================
+// ALGORITMO
+// ==========================================================
+
+function extrairAlgoritmo(resultado) {
+
+    return (
+        resultado?.algoritmo ??
+        resultado?.modelo ??
+        resultado?.model ??
+        null
+    );
 }
 
 
@@ -1225,9 +972,663 @@ function prepararJson(valor) {
 // ==========================================================
 // PREPARAR ANÁLISE PARA BANCO
 //
-// CORREÇÃO PRINCIPAL:
-//
-// Agora envia jogo_id, api_id, data_jogo e confianca junto
-// com os campos que já eram salvos. Isso é essencial para
-// que /api/analises consiga filtrar "análises de hoje"
-//
+// Envia jogo_id, api_id, time_casa, time_fora, confianca
+// e algoritmo — colunas que já existem no schema real da
+// tabela ANALISES (jogo_id, api_id, time_casa, time_fora,
+// favorito, confianca, algoritmo, dados_historicos,
+// resultado, criado_em, atualizado_em, etc.)
+// ==========================================================
+
+function prepararAnaliseParaBanco(
+    resultado,
+    jogo
+) {
+
+    if (
+        !resultado ||
+        resultado.sucesso === false
+    ) {
+
+        console.warn(
+            "⚠️ Resultado sem sucesso."
+        );
+
+        return null;
+    }
+
+
+    const probabilidades =
+        resultado.probabilidades ||
+        {};
+
+
+    const gols =
+        resultado.golsEsperados ||
+        {};
+
+
+    const valueBets =
+        Array.isArray(
+            resultado.valueBets
+        )
+            ? resultado.valueBets
+            : resultado.valueBets
+                ? [resultado.valueBets]
+                : [];
+
+
+    const nomeJogo =
+        extrairNomeJogo(
+            resultado,
+            jogo
+        );
+
+
+    const dataJogo =
+        extrairDataJogoParaBanco(
+            resultado,
+            jogo
+        );
+
+
+    const jogoId =
+        extrairJogoId(
+            resultado,
+            jogo
+        );
+
+
+    const apiId =
+        extrairApiId(
+            resultado,
+            jogo
+        );
+
+
+    const timeCasa =
+        extrairTimeCasa(
+            resultado,
+            jogo
+        );
+
+
+    const timeFora =
+        extrairTimeFora(
+            resultado,
+            jogo
+        );
+
+
+    const confianca =
+        extrairConfianca(
+            resultado
+        );
+
+
+    const algoritmo =
+        extrairAlgoritmo(
+            resultado
+        );
+
+
+    console.log(
+        "💾 PREPARANDO ANÁLISE"
+    );
+
+    console.log(
+        `⚽ Jogo: ${nomeJogo}`
+    );
+
+    console.log(
+        `📅 Data: ${dataJogo ?? "NULL"}`
+    );
+
+    console.log(
+        `🆔 jogo_id: ${jogoId ?? "NULL"} | api_id: ${apiId ?? "NULL"}`
+    );
+
+
+    let golsTotal =
+        gols.total;
+
+
+    if (
+        golsTotal === undefined ||
+        golsTotal === null
+    ) {
+
+        const casa =
+            Number(gols.casa) || 0;
+
+        const fora =
+            Number(gols.fora) || 0;
+
+        golsTotal =
+            casa + fora;
+    }
+
+
+    const golsNumero =
+        Number(golsTotal);
+
+
+    return {
+
+        jogo:
+            nomeJogo,
+
+        jogo_id:
+            jogoId,
+
+        api_id:
+            apiId,
+
+        time_casa:
+            timeCasa,
+
+        time_fora:
+            timeFora,
+
+        confianca:
+            confianca,
+
+        algoritmo:
+            algoritmo,
+
+        data_jogo:
+            dataJogo,
+
+        probabilidade_casa:
+            probabilidades.casa ?? null,
+
+        probabilidade_empate:
+            probabilidades.empate ?? null,
+
+        probabilidade_fora:
+            probabilidades.fora ?? null,
+
+        gols_esperados:
+            Number.isFinite(golsNumero)
+                ? golsNumero
+                : null,
+
+        placar_previsto:
+            prepararJson(
+                resultado.placarPrevisto
+            ),
+
+        value_bet:
+            valueBets
+    };
+}
+
+
+// ==========================================================
+// GET /api/analises
+// ==========================================================
+
+router.get(
+    "/",
+    async (req, res) => {
+
+        const hoje =
+            obterDataHojeBrasil();
+
+
+        try {
+
+            console.log(
+                "=========================================="
+            );
+
+            console.log(
+                "🤖 BUSCANDO ANÁLISES IA"
+            );
+
+            console.log(
+                `📅 Data Brasil: ${hoje}`
+            );
+
+            console.log(
+                `🌎 Fuso: ${TIMEZONE}`
+            );
+
+
+            const dados =
+                await listarAnalisesHoje();
+
+
+            console.log(
+                `🗃️ ${Array.isArray(dados) ? dados.length : 0} registro(s) retornados do banco`
+            );
+
+
+            const lista =
+                prepararListaAnalises(
+                    dados
+                );
+
+
+            console.log(
+                `🤖 ${lista.length} análises válidas para hoje`
+            );
+
+
+            return res.json({
+
+                sucesso: true,
+
+                data: hoje,
+
+                timezone:
+                    TIMEZONE,
+
+                somenteHoje: true,
+
+                total:
+                    lista.length,
+
+                dados:
+                    lista
+
+            });
+
+        } catch (erro) {
+
+            console.error(
+                "❌ Erro /api/analises:",
+                erro.message
+            );
+
+
+            return res.status(200).json({
+
+                sucesso: false,
+
+                bancoIndisponivel: true,
+
+                data: hoje,
+
+                timezone:
+                    TIMEZONE,
+
+                somenteHoje: true,
+
+                total: 0,
+
+                dados: [],
+
+                erro:
+                    erro.message ||
+                    "Banco temporariamente indisponível"
+            });
+        }
+    }
+);
+
+
+// ==========================================================
+// GET /api/analises/hoje
+// ==========================================================
+
+router.get(
+    "/hoje",
+    async (req, res) => {
+
+        const hoje =
+            obterDataHojeBrasil();
+
+
+        try {
+
+            const dados =
+                await listarAnalisesHoje();
+
+
+            const lista =
+                prepararListaAnalises(
+                    dados
+                );
+
+
+            return res.json({
+
+                sucesso: true,
+
+                data: hoje,
+
+                timezone:
+                    TIMEZONE,
+
+                somenteHoje: true,
+
+                total:
+                    lista.length,
+
+                dados:
+                    lista
+
+            });
+
+        } catch (erro) {
+
+            console.error(
+                "❌ Erro /api/analises/hoje:",
+                erro.message
+            );
+
+
+            return res.status(200).json({
+
+                sucesso: false,
+
+                bancoIndisponivel: true,
+
+                data: hoje,
+
+                timezone:
+                    TIMEZONE,
+
+                somenteHoje: true,
+
+                total: 0,
+
+                dados: [],
+
+                erro:
+                    erro.message
+            });
+        }
+    }
+);
+
+
+// ==========================================================
+// POST /api/analises
+// ==========================================================
+
+router.post(
+    "/",
+    async (req, res) => {
+
+        try {
+
+            const body =
+                req.body || {};
+
+
+            const jogo =
+                normalizarJogoRecebido(
+                    body
+                );
+
+
+            const dados =
+                body.dados || {};
+
+
+            if (!jogo) {
+
+                return res.status(400).json({
+
+                    sucesso: false,
+
+                    erro:
+                        "Jogo obrigatório"
+                });
+            }
+
+
+            const nome =
+                typeof jogo === "string"
+                    ? jogo
+                    : `${jogo.time_casa} x ${jogo.time_fora}`;
+
+
+            console.log(
+                `🤖 Analisando jogo: ${nome}`
+            );
+
+
+            const resultado =
+                await analisarMercado(
+                    jogo,
+                    dados
+                );
+
+
+            // ------------------------------------------------
+            // SALVAR
+            // ------------------------------------------------
+
+            try {
+
+                const paraSalvar =
+                    prepararAnaliseParaBanco(
+                        resultado,
+                        jogo
+                    );
+
+
+                if (paraSalvar) {
+
+                    const salva =
+                        await salvarAnalise(
+                            paraSalvar
+                        );
+
+
+                    if (salva) {
+
+                        resultado.id =
+                            salva.id;
+
+                        resultado.data_jogo =
+                            paraSalvar.data_jogo;
+
+                        resultado.jogo_id =
+                            paraSalvar.jogo_id;
+
+                        resultado.api_id =
+                            paraSalvar.api_id;
+
+                        console.log(
+                            `✅ Análise salva: ID ${salva.id}`
+                        );
+                    }
+                }
+
+            } catch (erroBanco) {
+
+                console.error(
+                    "⚠️ Banco não conseguiu salvar análise:",
+                    erroBanco.message
+                );
+
+                // NÃO derruba a análise.
+            }
+
+
+            return res.json(
+                resultado
+            );
+
+        } catch (erro) {
+
+            console.error(
+                "❌ Erro análise IA:",
+                erro.message
+            );
+
+
+            return res.status(500).json({
+
+                sucesso: false,
+
+                erro:
+                    erro.message ||
+                    "Erro ao realizar análise IA"
+            });
+        }
+    }
+);
+
+
+// ==========================================================
+// POST /api/analises/prever
+// ==========================================================
+
+router.post(
+    "/prever",
+    async (req, res) => {
+
+        try {
+
+            const body =
+                req.body || {};
+
+
+            const jogo =
+                normalizarJogoRecebido(
+                    body
+                );
+
+
+            const dados =
+                body.dados || {};
+
+
+            if (!jogo) {
+
+                return res.status(400).json({
+
+                    sucesso: false,
+
+                    erro:
+                        "Jogo obrigatório"
+                });
+            }
+
+
+            const resultado =
+                await gerarAnaliseInteligente(
+                    jogo,
+                    dados
+                );
+
+
+            return res.json({
+
+                sucesso: true,
+
+                resultado:
+                    resultado
+            });
+
+        } catch (erro) {
+
+            console.error(
+                "❌ Erro previsão IA:",
+                erro.message
+            );
+
+
+            return res.status(500).json({
+
+                sucesso: false,
+
+                erro:
+                    erro.message ||
+                    "Erro ao gerar análise IA"
+            });
+        }
+    }
+);
+
+
+// ==========================================================
+// GET /api/analises/:id
+// ==========================================================
+
+router.get(
+    "/:id",
+    async (req, res) => {
+
+        try {
+
+            const id =
+                Number(
+                    req.params.id
+                );
+
+
+            if (
+                !Number.isInteger(id) ||
+                id <= 0
+            ) {
+
+                return res.status(400).json({
+
+                    sucesso: false,
+
+                    erro:
+                        "ID da análise inválido"
+                });
+            }
+
+
+            const analise =
+                await buscarAnalisePorId(
+                    id
+                );
+
+
+            if (!analise) {
+
+                return res.status(404).json({
+
+                    sucesso: false,
+
+                    erro:
+                        "Análise não encontrada"
+                });
+            }
+
+
+            return res.json({
+
+                sucesso: true,
+
+                dados:
+                    analise
+            });
+
+        } catch (erro) {
+
+            console.error(
+                "❌ Erro análise por ID:",
+                erro.message
+            );
+
+
+            return res.status(200).json({
+
+                sucesso: false,
+
+                bancoIndisponivel: true,
+
+                dados: null,
+
+                erro:
+                    erro.message
+            });
+        }
+    }
+);
+
+
+// ==========================================================
+// EXPORT
+// ==========================================================
+
+export default router;
