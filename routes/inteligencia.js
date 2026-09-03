@@ -2,13 +2,21 @@
 // BETVISION AI
 // routes/inteligencia.js
 //
-// VERSÃO 2.0 - CORRIGIDA
+// VERSÃO 2.1 - CORRIGIDA
 //
-// CORREÇÃO PRINCIPAL:
+// CORREÇÕES NESTA VERSÃO:
 // - POST /analisar agora SALVA a análise no banco (antes
 //   só retornava o resultado sem persistir nada)
-// - Usa a mesma lógica de jogo_id/api_id já validada em
-//   routes/analises.js, evitando o bug de JOIN por string
+// - Usa jogo_id/api_id para JOIN, mesma lógica validada
+//   em routes/analises.js
+// - Extratores ajustados ao formato real de
+//   ai/analiseJogo.js (v6.1):
+//   - resultado.jogo = { id, casa, fora } — SEM campo "nome"
+//   - resultado.valueBet = { encontrada, melhor, oportunidades }
+//     (objeto, NÃO array/boolean — bug corrigido: antes
+//     Boolean(objeto) era sempre true, mesmo com
+//     encontrada: false)
+//   - resultado.confianca = string "Alta"/"Média"/"Baixa"
 // ==========================================================
 
 import express from "express";
@@ -99,8 +107,10 @@ function normalizarId(valor) {
 // ==========================================================
 // NORMALIZAR JOGO RECEBIDO
 //
-// Aceita tanto { jogo: {...} } quanto o objeto direto no
-// body, igual routes/analises.js.
+// Aceita { jogo: {...} } ou o objeto direto no body.
+// Preserva o body original (req.body) intacto para
+// passar pra analisarJogo(), que tem seu próprio parser
+// (normalizarJogo) mais flexível ainda.
 // ==========================================================
 
 function normalizarJogoRecebido(body) {
@@ -139,26 +149,24 @@ function normalizarJogoRecebido(body) {
         const casa =
             jogo.time_casa ??
             jogo.casa ??
+            jogo.timeCasa ??
             jogo.home_team ??
             jogo.homeTeam ??
             jogo.home ??
-            jogo.fixture?.teams?.home?.name ??
             null;
 
 
         const fora =
             jogo.time_fora ??
             jogo.fora ??
+            jogo.timeFora ??
             jogo.away_team ??
             jogo.awayTeam ??
             jogo.away ??
-            jogo.fixture?.teams?.away?.name ??
             null;
 
 
         return {
-
-            ...jogo,
 
             time_casa:
                 casa
@@ -192,183 +200,43 @@ function normalizarJogoRecebido(body) {
 
 
 // ==========================================================
-// EXTRAIR PROBABILIDADES
+// EXTRAIR NOME DO JOGO
 //
-// Tolerante a diferentes formatos de retorno de
-// ai/analiseJogo.js. Ajustar aqui se o shape real for
-// diferente do assumido.
+// Prioriza resultado.jogo.casa/fora (nomes já resolvidos
+// pelo motor, com fallback "Casa"/"Fora" quando ausentes),
+// depois os nomes que o cliente enviou.
 // ==========================================================
 
-function extrairProbabilidades(resultado) {
-
-    const p =
-        resultado?.probabilidades ??
-        resultado?.probabilities ??
-        {};
-
-
-    return {
-
-        casa:
-            p.casa ??
-            p.home ??
-            p.vitoriaCasa ??
-            null,
-
-        empate:
-            p.empate ??
-            p.draw ??
-            null,
-
-        fora:
-            p.fora ??
-            p.away ??
-            p.vitoriaFora ??
-            null
-    };
-}
-
-
-// ==========================================================
-// EXTRAIR GOLS ESPERADOS
-// ==========================================================
-
-function extrairGolsEsperados(resultado) {
-
-    const g =
-        resultado?.golsEsperados ??
-        resultado?.expectedGoals ??
-        resultado?.xg ??
-        {};
-
-
-    if (typeof g === "number") {
-
-        return g;
-    }
-
-
-    if (
-        g.total !== undefined &&
-        g.total !== null
-    ) {
-
-        return Number(g.total);
-    }
-
+function extrairNomeJogo(resultado, jogoNormalizado) {
 
     const casa =
-        Number(g.casa ?? g.home ?? 0);
+        resultado?.jogo?.casa ??
+        jogoNormalizado?.time_casa ??
+        "Casa";
+
 
     const fora =
-        Number(g.fora ?? g.away ?? 0);
+        resultado?.jogo?.fora ??
+        jogoNormalizado?.time_fora ??
+        "Fora";
 
 
-    return casa + fora;
-}
-
-
-// ==========================================================
-// EXTRAIR PLACAR PREVISTO
-// ==========================================================
-
-function extrairPlacarPrevisto(resultado) {
-
-    const placar =
-        resultado?.placarPrevisto ??
-        resultado?.predictedScore ??
-        resultado?.placar ??
-        null;
-
-
-    if (!placar) {
-        return null;
-    }
-
-
-    if (typeof placar === "string") {
-        return placar;
-    }
-
-
-    try {
-
-        return JSON.stringify(placar);
-
-    } catch {
-
-        return null;
-    }
-}
-
-
-// ==========================================================
-// EXTRAIR CONFIANÇA
-// ==========================================================
-
-function extrairConfianca(resultado) {
-
-    const valor =
-        resultado?.confianca?.percentual ??
-        resultado?.confianca?.valor ??
-        resultado?.confianca ??
-        resultado?.confidence ??
-        null;
-
-
-    if (
-        valor === null ||
-        valor === undefined
-    ) {
-
-        return null;
-    }
-
-
-    return String(valor);
-}
-
-
-// ==========================================================
-// EXTRAIR ALGORITMO
-// ==========================================================
-
-function extrairAlgoritmo(resultado) {
-
-    return (
-        resultado?.algoritmo ??
-        resultado?.modelo ??
-        resultado?.model ??
-        "ai/analiseJogo.js"
-    );
+    return `${casa} x ${fora}`.trim();
 }
 
 
 // ==========================================================
 // EXTRAIR VALUE BET
+//
+// resultado.valueBet é OBJETO: { encontrada, melhor,
+// oportunidades }. NÃO é array nem boolean.
 // ==========================================================
 
 function extrairValueBet(resultado) {
 
-    const valor =
-        resultado?.valueBets ??
-        resultado?.valueBet ??
-        false;
-
-
-    if (Array.isArray(valor)) {
-
-        return valor.length > 0;
-    }
-
-
-    if (typeof valor === "boolean") {
-
-        return valor;
-    }
-
-
-    return Boolean(valor);
+    return Boolean(
+        resultado?.valueBet?.encontrada
+    );
 }
 
 
@@ -378,86 +246,80 @@ function extrairValueBet(resultado) {
 
 function prepararAnaliseParaBanco(
     resultado,
-    jogo
+    jogoNormalizado
 ) {
 
-    const nomeJogo =
-        resultado?.jogo?.nome ??
-        (
-            jogo.time_casa && jogo.time_fora
-                ? `${jogo.time_casa} x ${jogo.time_fora}`
-                : jogo.jogo
-        );
-
-
-    if (!nomeJogo) {
+    if (!resultado) {
 
         console.warn(
-            "⚠️ Não foi possível determinar o nome do jogo para salvar."
+            "⚠️ [inteligencia] Resultado vazio, nada para salvar."
         );
 
         return null;
     }
 
 
-    const probabilidades =
-        extrairProbabilidades(
-            resultado
+    const nomeJogo =
+        extrairNomeJogo(
+            resultado,
+            jogoNormalizado
         );
 
 
     return {
 
         jogo:
-            String(nomeJogo).trim(),
+            nomeJogo,
 
         jogo_id:
-            jogo.jogo_id ??
+            jogoNormalizado?.jogo_id ??
+            resultado?.jogo?.id ??
             null,
 
         api_id:
-            jogo.api_id ??
+            jogoNormalizado?.api_id ??
             null,
 
         time_casa:
-            jogo.time_casa ??
+            resultado?.jogo?.casa ??
+            jogoNormalizado?.time_casa ??
             null,
 
         time_fora:
-            jogo.time_fora ??
+            resultado?.jogo?.fora ??
+            jogoNormalizado?.time_fora ??
             null,
 
         data_jogo:
             obterDataHojeBrasil(),
 
         confianca:
-            extrairConfianca(
-                resultado
-            ),
+            resultado?.confianca ??
+            null,
 
         algoritmo:
-            extrairAlgoritmo(
-                resultado
-            ),
+            resultado?.algoritmo ??
+            null,
 
         probabilidade_casa:
-            probabilidades.casa,
+            resultado?.probabilidades?.casa ??
+            null,
 
         probabilidade_empate:
-            probabilidades.empate,
+            resultado?.probabilidades?.empate ??
+            null,
 
         probabilidade_fora:
-            probabilidades.fora,
+            resultado?.probabilidades?.fora ??
+            null,
 
         gols_esperados:
-            extrairGolsEsperados(
-                resultado
-            ),
+            resultado?.golsEsperados?.total ??
+            null,
 
         placar_previsto:
-            extrairPlacarPrevisto(
-                resultado
-            ),
+            resultado?.placarPrevisto ??
+            null,
 
         value_bet:
             extrairValueBet(
@@ -477,17 +339,17 @@ router.post(
 
         try {
 
-            const jogo =
+            const jogoNormalizado =
                 normalizarJogoRecebido(
                     req.body
                 );
 
 
             if (
-                !jogo ||
+                !jogoNormalizado ||
                 (
-                    !jogo.time_casa &&
-                    !jogo.jogo
+                    !jogoNormalizado.time_casa &&
+                    !jogoNormalizado.jogo
                 )
             ) {
 
@@ -502,12 +364,18 @@ router.post(
 
 
             console.log(
-                `🤖 [inteligencia] Analisando: ${jogo.time_casa ?? jogo.jogo} x ${jogo.time_fora ?? ""}`
+                `🤖 [inteligencia] Analisando: ${jogoNormalizado.time_casa ?? "?"} x ${jogoNormalizado.time_fora ?? "?"}`
             );
 
 
+            // analisarJogo() tem seu próprio parser interno
+            // (normalizarJogo), então passamos req.body direto
+            // pra não perder nenhum campo (estatísticas, odds).
             const resultado =
                 analisarJogo(
+                    req.body?.jogo ??
+                    req.body?.partida ??
+                    req.body?.match ??
                     req.body
                 );
 
@@ -521,7 +389,7 @@ router.post(
                 const paraSalvar =
                     prepararAnaliseParaBanco(
                         resultado,
-                        jogo
+                        jogoNormalizado
                     );
 
 
@@ -548,12 +416,6 @@ router.post(
                             `✅ [inteligencia] Análise salva: ID ${salva.id}`
                         );
                     }
-
-                } else {
-
-                    console.warn(
-                        "⚠️ [inteligencia] Análise não pôde ser preparada para salvar (sem nome de jogo)."
-                    );
                 }
 
             } catch (erroBanco) {
