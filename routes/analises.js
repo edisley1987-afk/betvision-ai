@@ -2,7 +2,7 @@
 // BETVISION AI
 // routes/analises.js
 //
-// VERSÃO 11.0 - CORRIGIDA
+// VERSÃO 11.0 - CORRIGIDA E COMPLETA
 //
 // CORREÇÕES NESTA VERSÃO:
 // - jogo_id, api_id, time_casa, time_fora, data_jogo,
@@ -417,8 +417,11 @@ function removerDuplicadas(lista) {
                 `jogo:${jogoId}`;
 
         } else if (id) {
+            
             chave = `id:${id}`;
+            
         } else {
+            
             chave = `temp:${Math.random()}`;
         }
 
@@ -483,6 +486,4 @@ router.get("/:id", async (req, res) => {
     try {
 
         const { id } = req.params;
-        const analise = await buscarAnalisePorId(id);
-
-        if (!analise) {
+Use o código com cuidado.const analise = await buscarAnalisePorId(id);if (!analise) {return res.status(404).json({sucesso: false,erro: "Análise não encontrada."});}return res.json({sucesso: true,analise: {...analise,jogo_id: obterJogoId(analise),api_id: obterApiId(analise),time_casa: obterCasa(analise),time_fora: obterFora(analise),data_jogo: obterDataAnalise(analise)}});} catch (erro) {console.error("❌ Erro na rota /:id:", erro.message);return res.status(500).json({sucesso: false,erro: "Erro interno ao buscar análise por ID."});}});// ==========================================================// ENDPOINT: GERAR NOVA ANÁLISE (IA)// ==========================================================router.post("/gerar", async (req, res) => {try {const { jogo } = req.body;if (!jogo) {return res.status(400).json({sucesso: false,erro: "Dados do jogo são obrigatórios."});}const mercado = await analisarMercado(jogo);const resultadoIA = await gerarAnaliseIA(jogo, mercado);const analiseInteligente = await gerarAnaliseInteligente(jogo, resultadoIA);const dataJogo = extrairDataJogo(jogo) ?? obterDataHojeBrasil();const jogoId = obterJogoId(jogo);const apiId = obterApiId(jogo);const casa = obterCasa(jogo);const fora = obterFora(jogo);const novaAnalise = {...analiseInteligente,jogo_id: jogoId,api_id: apiId,time_casa: casa,time_fora: fora,data_jogo: dataJogo,confianca: analiseInteligente.confianca ?? analiseInteligente.assertividade ?? 50,algoritmo: analiseInteligente.algoritmo ?? "BetVision-AI-v11"};const analiseSalva = await salvarAnalise(novaAnalise);return res.status(201).json({sucesso: true,analise: analiseSalva ?? novaAnalise});} catch (erro) {console.error("❌ Erro na rota /gerar:", erro.message);return res.status(500).json({sucesso: false,erro: "Erro interno ao gerar análise de mercado."});}});export default router;
