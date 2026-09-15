@@ -99,8 +99,7 @@ function normalizarDataBrasil(valor) {
         }
 
 
-        const texto =
-            String(valor).trim();
+        const texto = String(valor).trim();
 
 
         if (!texto) {
@@ -108,7 +107,10 @@ function normalizarDataBrasil(valor) {
         }
 
 
+        // ==================================================
         // YYYY-MM-DD
+        // ==================================================
+
         const matchISO =
             texto.match(
                 /^(\d{4})-(\d{2})-(\d{2})/
@@ -122,7 +124,10 @@ function normalizarDataBrasil(valor) {
         }
 
 
+        // ==================================================
         // DD/MM/YYYY
+        // ==================================================
+
         const matchBR =
             texto.match(
                 /^(\d{2})\/(\d{2})\/(\d{4})/
@@ -136,8 +141,11 @@ function normalizarDataBrasil(valor) {
         }
 
 
-        const data =
-            new Date(texto);
+        // ==================================================
+        // OUTROS FORMATOS
+        // ==================================================
+
+        const data = new Date(texto);
 
 
         if (
@@ -417,18 +425,22 @@ function removerDuplicadas(lista) {
                 `jogo:${jogoId}`;
 
         } else if (id) {
-            
-            chave = `id:${id}`;
-            
+
+            chave =
+                `id:${id}`;
+
         } else {
-            
-            chave = `temp:${Math.random()}`;
+
+            chave =
+                `temp:${Math.random()}`;
         }
+
 
         if (!mapa.has(chave)) {
             mapa.set(chave, analise);
         }
     }
+
 
     return Array.from(mapa.values());
 }
@@ -442,36 +454,72 @@ router.get("/hoje", async (req, res) => {
 
     try {
 
-        const dataHoje = obterDataHojeBrasil();
-        const analisesBanco = await listarAnalisesHoje(dataHoje) ?? [];
+        const dataHoje =
+            obterDataHojeBrasil();
 
-        const analisesProcessadas = analisesBanco.map(analise => {
-            return {
-                ...analise,
-                jogo_id: obterJogoId(analise),
-                api_id: obterApiId(analise),
-                time_casa: obterCasa(analise),
-                time_fora: obterFora(analise),
-                data_jogo: obterDataAnalise(analise) ?? dataHoje
-            };
-        });
+        const analisesBanco =
+            await listarAnalisesHoje(dataHoje) ?? [];
 
-        const analisesFiltradas = removerDuplicadas(analisesProcessadas);
+
+        const analisesProcessadas =
+            analisesBanco.map(analise => {
+
+                return {
+
+                    ...analise,
+
+                    jogo_id:
+                        obterJogoId(analise),
+
+                    api_id:
+                        obterApiId(analise),
+
+                    time_casa:
+                        obterCasa(analise),
+
+                    time_fora:
+                        obterFora(analise),
+
+                    data_jogo:
+                        obterDataAnalise(analise) ??
+                        dataHoje
+                };
+            });
+
+
+        const analisesFiltradas =
+            removerDuplicadas(
+                analisesProcessadas
+            );
+
 
         return res.json({
+
             sucesso: true,
+
             data: dataHoje,
-            total: analisesFiltradas.length,
-            analises: analisesFiltradas
+
+            total:
+                analisesFiltradas.length,
+
+            analises:
+                analisesFiltradas
         });
 
     } catch (erro) {
 
-        console.error("❌ Erro na rota /hoje:", erro.message);
-        
+        console.error(
+            "❌ Erro na rota /hoje:",
+            erro.message
+        );
+
+
         return res.status(500).json({
+
             sucesso: false,
-            erro: "Erro interno ao listar análises de hoje."
+
+            erro:
+                "Erro interno ao listar análises de hoje."
         });
     }
 });
@@ -485,5 +533,227 @@ router.get("/:id", async (req, res) => {
 
     try {
 
-        const { id } = req.params;
-Use o código com cuidado.const analise = await buscarAnalisePorId(id);if (!analise) {return res.status(404).json({sucesso: false,erro: "Análise não encontrada."});}return res.json({sucesso: true,analise: {...analise,jogo_id: obterJogoId(analise),api_id: obterApiId(analise),time_casa: obterCasa(analise),time_fora: obterFora(analise),data_jogo: obterDataAnalise(analise)}});} catch (erro) {console.error("❌ Erro na rota /:id:", erro.message);return res.status(500).json({sucesso: false,erro: "Erro interno ao buscar análise por ID."});}});// ==========================================================// ENDPOINT: GERAR NOVA ANÁLISE (IA)// ==========================================================router.post("/gerar", async (req, res) => {try {const { jogo } = req.body;if (!jogo) {return res.status(400).json({sucesso: false,erro: "Dados do jogo são obrigatórios."});}const mercado = await analisarMercado(jogo);const resultadoIA = await gerarAnaliseIA(jogo, mercado);const analiseInteligente = await gerarAnaliseInteligente(jogo, resultadoIA);const dataJogo = extrairDataJogo(jogo) ?? obterDataHojeBrasil();const jogoId = obterJogoId(jogo);const apiId = obterApiId(jogo);const casa = obterCasa(jogo);const fora = obterFora(jogo);const novaAnalise = {...analiseInteligente,jogo_id: jogoId,api_id: apiId,time_casa: casa,time_fora: fora,data_jogo: dataJogo,confianca: analiseInteligente.confianca ?? analiseInteligente.assertividade ?? 50,algoritmo: analiseInteligente.algoritmo ?? "BetVision-AI-v11"};const analiseSalva = await salvarAnalise(novaAnalise);return res.status(201).json({sucesso: true,analise: analiseSalva ?? novaAnalise});} catch (erro) {console.error("❌ Erro na rota /gerar:", erro.message);return res.status(500).json({sucesso: false,erro: "Erro interno ao gerar análise de mercado."});}});export default router;
+        const { id } =
+            req.params;
+
+
+        const analise =
+            await buscarAnalisePorId(id);
+
+
+        if (!analise) {
+
+            return res.status(404).json({
+
+                sucesso: false,
+
+                erro:
+                    "Análise não encontrada."
+            });
+        }
+
+
+        return res.json({
+
+            sucesso: true,
+
+            analise: {
+
+                ...analise,
+
+                jogo_id:
+                    obterJogoId(analise),
+
+                api_id:
+                    obterApiId(analise),
+
+                time_casa:
+                    obterCasa(analise),
+
+                time_fora:
+                    obterFora(analise),
+
+                data_jogo:
+                    obterDataAnalise(analise)
+            }
+        });
+
+    } catch (erro) {
+
+        console.error(
+            "❌ Erro na rota /:id:",
+            erro.message
+        );
+
+
+        return res.status(500).json({
+
+            sucesso: false,
+
+            erro:
+                "Erro interno ao buscar análise por ID."
+        });
+    }
+});
+
+
+// ==========================================================
+// ENDPOINT: GERAR NOVA ANÁLISE (IA)
+// ==========================================================
+
+router.post("/gerar", async (req, res) => {
+
+    try {
+
+        const { jogo } =
+            req.body;
+
+
+        if (!jogo) {
+
+            return res.status(400).json({
+
+                sucesso: false,
+
+                erro:
+                    "Dados do jogo são obrigatórios."
+            });
+        }
+
+
+        // ==================================================
+        // ANALISAR MERCADO
+        // ==================================================
+
+        const mercado =
+            await analisarMercado(jogo);
+
+
+        // ==================================================
+        // GERAR ANÁLISE IA
+        // ==================================================
+
+        const resultadoIA =
+            await gerarAnaliseIA(
+                jogo,
+                mercado
+            );
+
+
+        // ==================================================
+        // GERAR ANÁLISE INTELIGENTE
+        // ==================================================
+
+        const analiseInteligente =
+            await gerarAnaliseInteligente(
+                jogo,
+                resultadoIA
+            );
+
+
+        // ==================================================
+        // DADOS DO JOGO
+        // ==================================================
+
+        const dataJogo =
+            extrairDataJogo(jogo) ??
+            obterDataHojeBrasil();
+
+
+        const jogoId =
+            obterJogoId(jogo);
+
+
+        const apiId =
+            obterApiId(jogo);
+
+
+        const casa =
+            obterCasa(jogo);
+
+
+        const fora =
+            obterFora(jogo);
+
+
+        // ==================================================
+        // MONTAR NOVA ANÁLISE
+        // ==================================================
+
+        const novaAnalise = {
+
+            ...analiseInteligente,
+
+            jogo_id:
+                jogoId,
+
+            api_id:
+                apiId,
+
+            time_casa:
+                casa,
+
+            time_fora:
+                fora,
+
+            data_jogo:
+                dataJogo,
+
+            confianca:
+                analiseInteligente.confianca ??
+                analiseInteligente.assertividade ??
+                50,
+
+            algoritmo:
+                analiseInteligente.algoritmo ??
+                "BetVision-AI-v11"
+        };
+
+
+        // ==================================================
+        // SALVAR NO BANCO
+        // ==================================================
+
+        const analiseSalva =
+            await salvarAnalise(
+                novaAnalise
+            );
+
+
+        // ==================================================
+        // RESPOSTA
+        // ==================================================
+
+        return res.status(201).json({
+
+            sucesso: true,
+
+            analise:
+                analiseSalva ??
+                novaAnalise
+        });
+
+    } catch (erro) {
+
+        console.error(
+            "❌ Erro na rota /gerar:",
+            erro.message
+        );
+
+
+        return res.status(500).json({
+
+            sucesso: false,
+
+            erro:
+                "Erro interno ao gerar análise de mercado."
+        });
+    }
+});
+
+
+// ==========================================================
+// EXPORTAR ROUTER
+// ==========================================================
+
+export default router;
