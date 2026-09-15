@@ -2,21 +2,24 @@
 // BETVISION AI
 // services/inteligenciaService.js
 //
-// MOTOR ESTATÍSTICO v9.0
+// MOTOR ESTATÍSTICO v10.0
 //
-// CORREÇÕES v9:
+// CORREÇÕES v10:
 //
 // - histórico real PostgreSQL
 // - H2H real PostgreSQL
-// - normalização forte de nomes
-// - suporta diferenças de acentos
-// - suporta diferenças de pontuação
+// - correção dos parâmetros SQL
+// - correção do LIMIT parametrizado
+// - exclusão correta do próprio api_id
 // - somente jogos anteriores ao jogo analisado
-// - ignora o próprio jogo pelo api_id
 // - somente jogos com placar válido
+// - normalização forte de nomes
+// - remove acentos
+// - remove pontuação
+// - diferencia maiúsculas/minúsculas
 // - evita histórico fictício
 // - 0 jogos = 0 estatísticas reais
-// - fallback estatístico somente dentro do modelo
+// - fallback neutro somente dentro do modelo
 // - Poisson
 // - 1X2
 // - gols esperados
@@ -25,15 +28,19 @@
 // - ambas marcam
 // - value bet
 // - confiança ajustada pela qualidade dos dados
+// - qualidade dos dados
+// - diagnóstico de histórico descartado
 // - America/Sao_Paulo
 // - gerarAnaliseIA mantida
 // - gerarAnaliseInteligente mantida
+// - listarAnalises mantida
 //
 // ==========================================================
 
 import {
     query
 } from "../database/database.js";
+
 
 // ==========================================================
 // CONFIGURAÇÃO
@@ -140,16 +147,6 @@ function texto(
 
 // ==========================================================
 // NORMALIZAR NOME DE EQUIPE
-//
-// Exemplo:
-//
-// "Sporting Clube de Portugal"
-// "SPORTING CLUBE DE PORTUGAL"
-// "Sporting Clube de Portugal "
-//
-// tornam-se comparáveis.
-//
-// Também remove acentos e caracteres especiais.
 // ==========================================================
 
 function normalizarNomeEquipe(
@@ -172,10 +169,9 @@ function normalizarNomeEquipe(
 
 
 // ==========================================================
-// EXPRESSÃO SQL PARA NORMALIZAR NOMES
+// SQL PARA NORMALIZAÇÃO DE NOMES
 //
 // Não depende da extensão unaccent.
-//
 // ==========================================================
 
 const SQL_NORMALIZAR_NOME = `
@@ -231,7 +227,7 @@ function obterDataHojeBrasil() {
 
 
 // ==========================================================
-// NORMALIZAR DATA PARA SQL
+// NORMALIZAR DATA DO JOGO
 // ==========================================================
 
 function normalizarDataJogo(
@@ -255,19 +251,20 @@ function normalizarDataJogo(
 
     ];
 
+
     for (
         const valor
         of candidatos
     ) {
 
         if (!valor) {
-
             continue;
-
         }
+
 
         const data =
             new Date(valor);
+
 
         if (
             !Number.isNaN(
@@ -280,6 +277,7 @@ function normalizarDataJogo(
         }
 
     }
+
 
     return null;
 
@@ -311,6 +309,7 @@ function extrairEquipes(
                 jogo.fixture?.teams?.home?.name
             );
 
+
         const fora =
             texto(
                 jogo.time_fora ??
@@ -322,6 +321,7 @@ function extrairEquipes(
                 jogo.equipeFora ??
                 jogo.fixture?.teams?.away?.name
             );
+
 
         if (
             casa &&
@@ -335,12 +335,14 @@ function extrairEquipes(
 
         }
 
+
         const nome =
             texto(
                 jogo.jogo ??
                 jogo.nome ??
                 jogo.name
             );
+
 
         if (nome) {
 
@@ -370,6 +372,7 @@ function separarJogo(
 
     const valor =
         texto(jogo);
+
 
     if (!valor) {
 
@@ -414,10 +417,12 @@ function separarJogo(
                     separador
                 );
 
+
             const casa =
                 texto(
                     partes.shift()
                 );
+
 
             const fora =
                 texto(
@@ -425,6 +430,7 @@ function separarJogo(
                         separador
                     )
                 );
+
 
             return {
                 casa,
@@ -462,6 +468,7 @@ function montarNomeJogo(
 
     }
 
+
     return (
         casa ||
         fora ||
@@ -487,8 +494,10 @@ function fatorial(
 
     }
 
+
     let resultado =
         1;
+
 
     for (
         let i = 2;
@@ -499,6 +508,7 @@ function fatorial(
         resultado *= i;
 
     }
+
 
     return resultado;
 
@@ -513,8 +523,10 @@ function poisson(
     const k =
         Number(gols);
 
+
     const media =
         numero(lambda);
+
 
     if (
         !Number.isInteger(k) ||
@@ -525,6 +537,7 @@ function poisson(
         return 0;
 
     }
+
 
     return (
         Math.exp(-media) *
@@ -552,6 +565,7 @@ function calcularMedia(
 
     }
 
+
     const lista =
         valores
             .map(
@@ -563,6 +577,7 @@ function calcularMedia(
                     Number.isFinite(valor)
             );
 
+
     if (
         lista.length === 0
     ) {
@@ -570,6 +585,7 @@ function calcularMedia(
         return 0;
 
     }
+
 
     return (
         lista.reduce(
@@ -588,246 +604,7 @@ function calcularMedia(
 
 
 // ==========================================================
-// HISTÓRICO DA EQUIPE
-//
-// Somente partidas:
-// - anteriores ao jogo
-// - com data válida
-// - com gols válidos
-// - preferencialmente finalizadas
-//
-// Também exclui o próprio api_id.
-// ==========================================================
-
-async function buscarHistoricoEquipe(
-    nomeEquipe,
-    dataJogo = null,
-    apiIdAtual = null
-) {
-
-    if (!nomeEquipe) {
-
-        return [];
-
-    }
-
-
-    try {
-
-        const expressaoCasa =
-            SQL_NORMALIZAR_NOME
-                .replace(
-                    "%COLUNA%",
-                    "time_casa"
-                );
-
-        const expressaoFora =
-            SQL_NORMALIZAR_NOME
-                .replace(
-                    "%COLUNA%",
-                    "time_fora"
-                );
-
-
-        const parametros = [
-            nomeEquipe,
-            LIMITE_HISTORICO
-        ];
-
-
-        let condicaoData = `
-            data_jogo IS NOT NULL
-        `;
-
-
-        if (
-            dataJogo
-        ) {
-
-            parametros.splice(
-                1,
-                0,
-                dataJogo
-            );
-
-            condicaoData = `
-                data_jogo IS NOT NULL
-                AND data_jogo < $2
-            `;
-
-        }
-        else {
-
-            condicaoData = `
-                data_jogo IS NOT NULL
-                AND data_jogo < CURRENT_TIMESTAMP
-            `;
-
-        }
-
-
-        let parametroLimite;
-
-        if (
-            dataJogo
-        ) {
-
-            parametroLimite =
-                "$3";
-
-        }
-        else {
-
-            parametroLimite =
-                "$2";
-
-        }
-
-
-        const condicaoApiId =
-            apiIdAtual
-                ? `
-                    AND (
-                        api_id IS NULL
-                        OR api_id <> $${parametros.length + 1}
-                    )
-                `
-                : "";
-
-
-        if (
-            apiIdAtual
-        ) {
-
-            parametros.push(
-                apiIdAtual
-            );
-
-        }
-
-
-        const sql = `
-
-            SELECT
-
-                id,
-                api_id,
-
-                time_casa,
-                time_fora,
-
-                gols_casa,
-                gols_fora,
-
-                data_jogo,
-                status
-
-            FROM jogos
-
-            WHERE
-
-                (
-
-                    ${expressaoCasa}
-                    =
-                    regexp_replace(
-
-                        translate(
-
-                            lower(
-                                trim($1)
-                            ),
-
-                            'áàãâäéèêëíìîïóòõôöúùûüçñ',
-                            'aaaaaeeeeiiiiooooouuuucn'
-
-                        ),
-
-                        '[^a-z0-9]',
-                        '',
-                        'g'
-
-                    )
-
-                    OR
-
-                    ${expressaoFora}
-                    =
-                    regexp_replace(
-
-                        translate(
-
-                            lower(
-                                trim($1)
-                            ),
-
-                            'áàãâäéèêëíìîïóòõôöúùûüçñ',
-                            'aaaaaeeeeiiiiooooouuuucn'
-
-                        ),
-
-                        '[^a-z0-9]',
-                        '',
-                        'g'
-
-                    )
-
-                )
-
-                AND
-
-                ${condicaoData}
-
-                ${condicaoApiId}
-
-                AND gols_casa IS NOT NULL
-                AND gols_fora IS NOT NULL
-
-            ORDER BY
-                data_jogo DESC
-
-            LIMIT ${parametroLimite}
-
-        `;
-
-
-        const resultado =
-            await query(
-                sql,
-                parametros
-            );
-
-
-        const linhas =
-            resultado?.rows || [];
-
-
-        console.log(
-            `📚 Banco retornou ${linhas.length} ` +
-            `registros para ${nomeEquipe}`
-        );
-
-
-        return linhas;
-
-    }
-
-    catch (erro) {
-
-        console.error(
-            `❌ Erro histórico ${nomeEquipe}:`,
-            erro.message
-        );
-
-        return [];
-
-    }
-
-}
-
-
-// ==========================================================
-// VALIDAR HISTÓRICO
+// VALIDAR JOGO HISTÓRICO
 // ==========================================================
 
 function jogoHistoricoValido(
@@ -835,9 +612,7 @@ function jogoHistoricoValido(
 ) {
 
     if (!jogo) {
-
         return false;
-
     }
 
 
@@ -845,6 +620,7 @@ function jogoHistoricoValido(
         Number(
             jogo.gols_casa
         );
+
 
     const golsFora =
         Number(
@@ -881,6 +657,37 @@ function jogoHistoricoValido(
     }
 
 
+    const data =
+        new Date(
+            jogo.data_jogo
+        );
+
+
+    if (
+        Number.isNaN(
+            data.getTime()
+        )
+    ) {
+
+        return false;
+
+    }
+
+
+    if (
+        !texto(
+            jogo.time_casa
+        ) ||
+        !texto(
+            jogo.time_fora
+        )
+    ) {
+
+        return false;
+
+    }
+
+
     return true;
 
 }
@@ -888,6 +695,8 @@ function jogoHistoricoValido(
 
 // ==========================================================
 // FILTRAR HISTÓRICO VÁLIDO
+//
+// Também mostra diagnóstico quando um registro é descartado.
 // ==========================================================
 
 function filtrarHistoricoValido(
@@ -904,318 +713,317 @@ function filtrarHistoricoValido(
 
 
     return historico.filter(
-        jogo =>
-            jogoHistoricoValido(
-                jogo
-            )
+        (
+            jogo,
+            indice
+        ) => {
+
+            const valido =
+                jogoHistoricoValido(
+                    jogo
+                );
+
+
+            if (
+                !valido
+            ) {
+
+                console.log(
+                    "❌ HISTÓRICO DESCARTADO:",
+                    {
+                        indice,
+
+                        id:
+                            jogo?.id,
+
+                        api_id:
+                            jogo?.api_id,
+
+                        time_casa:
+                            jogo?.time_casa,
+
+                        time_fora:
+                            jogo?.time_fora,
+
+                        gols_casa:
+                            jogo?.gols_casa,
+
+                        gols_fora:
+                            jogo?.gols_fora,
+
+                        data_jogo:
+                            jogo?.data_jogo,
+
+                        status:
+                            jogo?.status
+                    }
+                );
+
+            }
+
+
+            return valido;
+
+        }
     );
 
 }
 
 
 // ==========================================================
-// ESTATÍSTICAS DA EQUIPE
+// HISTÓRICO DA EQUIPE
 //
-// IMPORTANTE:
+// CORREÇÃO IMPORTANTE:
+// Os parâmetros SQL agora são montados corretamente.
 //
-// Se não houver histórico,
-// não inventa 50% nem 1 gol.
+// Antes existia possibilidade de:
+// LIMIT $3
+// enquanto o terceiro parâmetro era o api_id.
 //
-// Retorna ZERO.
-//
+// Agora o LIMIT é sempre o último parâmetro correto.
 // ==========================================================
 
-function calcularEstatisticasEquipe(
-    historico,
-    equipe
+async function buscarHistoricoEquipe(
+    nomeEquipe,
+    dataJogo = null,
+    apiIdAtual = null
 ) {
 
-    const jogos =
-        filtrarHistoricoValido(
-            historico
-        );
+    if (!nomeEquipe) {
 
-
-    if (
-        jogos.length === 0
-    ) {
-
-        return {
-
-            jogos: 0,
-
-            golsMarcados: 0,
-
-            golsSofridos: 0,
-
-            vitorias: 0,
-
-            empates: 0,
-
-            derrotas: 0,
-
-            aproveitamento: 0,
-
-            forma: 0
-
-        };
+        return [];
 
     }
 
 
-    const golsMarcados = [];
-    const golsSofridos = [];
+    try {
 
-    let vitorias = 0;
-    let empates = 0;
-    let derrotas = 0;
-
-
-    const nomeEquipe =
-        normalizarNomeEquipe(
-            equipe
-        );
+        const expressaoCasa =
+            SQL_NORMALIZAR_NOME
+                .replace(
+                    "%COLUNA%",
+                    "time_casa"
+                );
 
 
-    for (
-        const jogo
-        of jogos
-    ) {
-
-        const casa =
-            texto(
-                jogo.time_casa
-            );
-
-        const fora =
-            texto(
-                jogo.time_fora
-            );
+        const expressaoFora =
+            SQL_NORMALIZAR_NOME
+                .replace(
+                    "%COLUNA%",
+                    "time_fora"
+                );
 
 
-        const golsCasa =
-            numero(
-                jogo.gols_casa
-            );
-
-        const golsFora =
-            numero(
-                jogo.gols_fora
-            );
-
-
-        const equipeEhCasa =
+        const nomeNormalizado =
             normalizarNomeEquipe(
-                casa
-            )
-            ===
-            nomeEquipe;
+                nomeEquipe
+            );
+
+
+        const parametros = [
+            nomeEquipe
+        ];
+
+
+        let proximoParametro =
+            2;
+
+
+        let condicaoData = `
+            data_jogo IS NOT NULL
+            AND data_jogo < CURRENT_TIMESTAMP
+        `;
 
 
         if (
-            equipeEhCasa
+            dataJogo
         ) {
 
-            golsMarcados.push(
-                golsCasa
-            );
-
-            golsSofridos.push(
-                golsFora
+            parametros.push(
+                dataJogo
             );
 
 
-            if (
-                golsCasa > golsFora
-            ) {
-
-                vitorias++;
-
-            }
-            else if (
-                golsCasa === golsFora
-            ) {
-
-                empates++;
-
-            }
-            else {
-
-                derrotas++;
-
-            }
-
-        }
-        else {
-
-            golsMarcados.push(
-                golsFora
-            );
-
-            golsSofridos.push(
-                golsCasa
-            );
+            condicaoData = `
+                data_jogo IS NOT NULL
+                AND data_jogo < $${proximoParametro}
+            `;
 
 
-            if (
-                golsFora > golsCasa
-            ) {
-
-                vitorias++;
-
-            }
-            else if (
-                golsFora === golsCasa
-            ) {
-
-                empates++;
-
-            }
-            else {
-
-                derrotas++;
-
-            }
+            proximoParametro++;
 
         }
 
-    }
 
-
-    const totalJogos =
-        jogos.length;
-
-
-    const aproveitamento =
-        (
-            vitorias * 3 +
-            empates
-        )
-        /
-        (
-            totalJogos * 3
-        );
-
-
-    const pontosForma = [];
-
-
-    for (
-        const jogo
-        of jogos
-    ) {
-
-        const equipeEhCasa =
-            normalizarNomeEquipe(
-                jogo.time_casa
-            )
-            ===
-            nomeEquipe;
-
-
-        const gc =
-            numero(
-                jogo.gols_casa
-            );
-
-        const gf =
-            numero(
-                jogo.gols_fora
-            );
-
-
-        let pontos = 0;
+        let condicaoApiId =
+            "";
 
 
         if (
-            equipeEhCasa
+            apiIdAtual !== null &&
+            apiIdAtual !== undefined &&
+            apiIdAtual !== ""
         ) {
 
-            if (
-                gc > gf
-            ) {
+            parametros.push(
+                apiIdAtual
+            );
 
-                pontos = 1;
 
-            }
-            else if (
-                gc === gf
-            ) {
+            condicaoApiId = `
+                AND (
+                    api_id IS NULL
+                    OR api_id <> $${proximoParametro}
+                )
+            `;
 
-                pontos = 0.5;
 
-            }
-
-        }
-        else {
-
-            if (
-                gf > gc
-            ) {
-
-                pontos = 1;
-
-            }
-            else if (
-                gf === gc
-            ) {
-
-                pontos = 0.5;
-
-            }
+            proximoParametro++;
 
         }
 
 
-        pontosForma.push(
-            pontos
+        const parametroLimite =
+            proximoParametro;
+
+
+        parametros.push(
+            LIMITE_HISTORICO
         );
+
+
+        const sql = `
+
+            SELECT
+
+                id,
+                api_id,
+
+                time_casa,
+                time_fora,
+
+                gols_casa,
+                gols_fora,
+
+                data_jogo,
+                status
+
+            FROM jogos
+
+            WHERE
+
+                (
+
+                    ${expressaoCasa}
+
+                    =
+
+                    regexp_replace(
+
+                        translate(
+
+                            lower(
+                                trim($1)
+                            ),
+
+                            'áàãâäéèêëíìîïóòõôöúùûüçñ',
+                            'aaaaaeeeeiiiiooooouuuucn'
+
+                        ),
+
+                        '[^a-z0-9]',
+                        '',
+                        'g'
+
+                    )
+
+                    OR
+
+                    ${expressaoFora}
+
+                    =
+
+                    regexp_replace(
+
+                        translate(
+
+                            lower(
+                                trim($1)
+                            ),
+
+                            'áàãâäéèêëíìîïóòõôöúùûüçñ',
+                            'aaaaaeeeeiiiiooooouuuucn'
+
+                        ),
+
+                        '[^a-z0-9]',
+                        '',
+                        'g'
+
+                    )
+
+                )
+
+                AND ${condicaoData}
+
+                ${condicaoApiId}
+
+                AND gols_casa IS NOT NULL
+                AND gols_fora IS NOT NULL
+
+            ORDER BY
+                data_jogo DESC
+
+            LIMIT $${parametroLimite}
+
+        `;
+
+
+        const resultado =
+            await query(
+                sql,
+                parametros
+            );
+
+
+        const linhas =
+            resultado?.rows || [];
+
+
+        console.log(
+            `📚 Banco retornou ${linhas.length} ` +
+            `registros para ${nomeEquipe}`
+        );
+
+
+        if (
+            linhas.length > 0
+        ) {
+
+            console.log(
+                `🔎 Histórico encontrado para ` +
+                `${nomeEquipe} ` +
+                `(normalizado: ${nomeNormalizado})`
+            );
+
+        }
+
+
+        return linhas;
 
     }
 
+    catch (erro) {
 
-    return {
+        console.error(
+            `❌ Erro histórico ${nomeEquipe}:`,
+            erro.message
+        );
 
-        jogos:
-            totalJogos,
 
-        golsMarcados:
-            arredondar(
-                calcularMedia(
-                    golsMarcados
-                ),
-                3
-            ),
+        return [];
 
-        golsSofridos:
-            arredondar(
-                calcularMedia(
-                    golsSofridos
-                ),
-                3
-            ),
-
-        vitorias,
-
-        empates,
-
-        derrotas,
-
-        aproveitamento:
-            arredondar(
-                aproveitamento,
-                4
-            ),
-
-        forma:
-            arredondar(
-                calcularMedia(
-                    pontosForma
-                ),
-                4
-            )
-
-    };
+    }
 
 }
 
@@ -1223,7 +1031,8 @@ function calcularEstatisticasEquipe(
 // ==========================================================
 // H2H
 //
-// Agora usa nomes normalizados.
+// Busca os confrontos entre as duas equipes,
+// independentemente de quem foi mandante.
 // ==========================================================
 
 async function buscarH2H(
@@ -1252,6 +1061,7 @@ async function buscarH2H(
                     "time_casa"
                 );
 
+
         const expressaoFora =
             SQL_NORMALIZAR_NOME
                 .replace(
@@ -1260,13 +1070,20 @@ async function buscarH2H(
                 );
 
 
-        let parametros = [
+        const parametros = [
             casa,
             fora
         ];
 
 
-        let condicaoData;
+        let proximoParametro =
+            3;
+
+
+        let condicaoData = `
+            AND data_jogo IS NOT NULL
+            AND data_jogo < CURRENT_TIMESTAMP
+        `;
 
 
         if (
@@ -1277,18 +1094,14 @@ async function buscarH2H(
                 dataJogo
             );
 
-            condicaoData = `
-                AND data_jogo IS NOT NULL
-                AND data_jogo < $3
-            `;
-
-        }
-        else {
 
             condicaoData = `
                 AND data_jogo IS NOT NULL
-                AND data_jogo < CURRENT_TIMESTAMP
+                AND data_jogo < $${proximoParametro}
             `;
+
+
+            proximoParametro++;
 
         }
 
@@ -1298,25 +1111,31 @@ async function buscarH2H(
 
 
         if (
-            apiIdAtual
+            apiIdAtual !== null &&
+            apiIdAtual !== undefined &&
+            apiIdAtual !== ""
         ) {
 
             parametros.push(
                 apiIdAtual
             );
 
+
             condicaoApiId = `
                 AND (
                     api_id IS NULL
-                    OR api_id <> $${parametros.length}
+                    OR api_id <> $${proximoParametro}
                 )
             `;
+
+
+            proximoParametro++;
 
         }
 
 
-        const limiteParametro =
-            parametros.length + 1;
+        const parametroLimite =
+            proximoParametro;
 
 
         parametros.push(
@@ -1439,7 +1258,7 @@ async function buscarH2H(
                                     trim($1)
                                 ),
 
-                                'áàãâäéèêëíìîïóòõôöúùûüçñ',
+                                'áàãâäéèëíìîïóòõôöúùûüçñ',
                                 'aaaaaeeeeiiiiooooouuuucn'
 
                             ),
@@ -1464,7 +1283,7 @@ async function buscarH2H(
             ORDER BY
                 data_jogo DESC
 
-            LIMIT $${limiteParametro}
+            LIMIT $${parametroLimite}
 
         `;
 
@@ -1486,9 +1305,18 @@ async function buscarH2H(
         );
 
 
-        return filtrarHistoricoValido(
-            linhas
+        const validos =
+            filtrarHistoricoValido(
+                linhas
+            );
+
+
+        console.log(
+            `⚔️ H2H válido: ${validos.length} confrontos`
         );
+
+
+        return validos;
 
     }
 
@@ -1499,9 +1327,324 @@ async function buscarH2H(
             erro.message
         );
 
+
         return [];
 
     }
+
+}
+
+
+// ==========================================================
+// ESTATÍSTICAS DA EQUIPE
+//
+// IMPORTANTE:
+//
+// Nenhum histórico:
+// retorna ZERO.
+//
+// Nunca inventa 50% de forma.
+// Nunca inventa 1 gol.
+// ==========================================================
+
+function calcularEstatisticasEquipe(
+    historico,
+    equipe
+) {
+
+    const jogos =
+        filtrarHistoricoValido(
+            historico
+        );
+
+
+    if (
+        jogos.length === 0
+    ) {
+
+        return {
+
+            jogos: 0,
+
+            golsMarcados: 0,
+
+            golsSofridos: 0,
+
+            vitorias: 0,
+
+            empates: 0,
+
+            derrotas: 0,
+
+            aproveitamento: 0,
+
+            forma: 0
+
+        };
+
+    }
+
+
+    const golsMarcados = [];
+    const golsSofridos = [];
+
+
+    let vitorias = 0;
+    let empates = 0;
+    let derrotas = 0;
+
+
+    const nomeEquipe =
+        normalizarNomeEquipe(
+            equipe
+        );
+
+
+    for (
+        const jogo
+        of jogos
+    ) {
+
+        const casa =
+            texto(
+                jogo.time_casa
+            );
+
+
+        const fora =
+            texto(
+                jogo.time_fora
+            );
+
+
+        const golsCasa =
+            numero(
+                jogo.gols_casa
+            );
+
+
+        const golsFora =
+            numero(
+                jogo.gols_fora
+            );
+
+
+        const equipeEhCasa =
+            normalizarNomeEquipe(
+                casa
+            )
+            ===
+            nomeEquipe;
+
+
+        if (
+            equipeEhCasa
+        ) {
+
+            golsMarcados.push(
+                golsCasa
+            );
+
+
+            golsSofridos.push(
+                golsFora
+            );
+
+
+            if (
+                golsCasa > golsFora
+            ) {
+
+                vitorias++;
+
+            }
+            else if (
+                golsCasa === golsFora
+            ) {
+
+                empates++;
+
+            }
+            else {
+
+                derrotas++;
+
+            }
+
+        }
+        else {
+
+            golsMarcados.push(
+                golsFora
+            );
+
+
+            golsSofridos.push(
+                golsCasa
+            );
+
+
+            if (
+                golsFora > golsCasa
+            ) {
+
+                vitorias++;
+
+            }
+            else if (
+                golsFora === golsCasa
+            ) {
+
+                empates++;
+
+            }
+            else {
+
+                derrotas++;
+
+            }
+
+        }
+
+    }
+
+
+    const totalJogos =
+        jogos.length;
+
+
+    const aproveitamento =
+        (
+            vitorias * 3 +
+            empates
+        )
+        /
+        (
+            totalJogos * 3
+        );
+
+
+    const pontosForma = [];
+
+
+    for (
+        const jogo
+        of jogos
+    ) {
+
+        const equipeEhCasa =
+            normalizarNomeEquipe(
+                jogo.time_casa
+            )
+            ===
+            nomeEquipe;
+
+
+        const gc =
+            numero(
+                jogo.gols_casa
+            );
+
+
+        const gf =
+            numero(
+                jogo.gols_fora
+            );
+
+
+        let pontos =
+            0;
+
+
+        if (
+            equipeEhCasa
+        ) {
+
+            if (
+                gc > gf
+            ) {
+
+                pontos = 1;
+
+            }
+            else if (
+                gc === gf
+            ) {
+
+                pontos = 0.5;
+
+            }
+
+        }
+        else {
+
+            if (
+                gf > gc
+            ) {
+
+                pontos = 1;
+
+            }
+            else if (
+                gf === gc
+            ) {
+
+                pontos = 0.5;
+
+            }
+
+        }
+
+
+        pontosForma.push(
+            pontos
+        );
+
+    }
+
+
+    return {
+
+        jogos:
+            totalJogos,
+
+        golsMarcados:
+            arredondar(
+                calcularMedia(
+                    golsMarcados
+                ),
+                3
+            ),
+
+        golsSofridos:
+            arredondar(
+                calcularMedia(
+                    golsSofridos
+                ),
+                3
+            ),
+
+        vitorias,
+
+        empates,
+
+        derrotas,
+
+        aproveitamento:
+            arredondar(
+                aproveitamento,
+                4
+            ),
+
+        forma:
+            arredondar(
+                calcularMedia(
+                    pontosForma
+                ),
+                4
+            )
+
+    };
 
 }
 
@@ -1537,6 +1680,12 @@ function calcularEstatisticasH2H(
         );
 
 
+    const nomeForaAtual =
+        normalizarNomeEquipe(
+            fora
+        );
+
+
     for (
         const jogo
         of jogos
@@ -1548,10 +1697,17 @@ function calcularEstatisticasH2H(
             );
 
 
+        const nomeFora =
+            normalizarNomeEquipe(
+                jogo.time_fora
+            );
+
+
         const gc =
             numero(
                 jogo.gols_casa
             );
+
 
         const gf =
             numero(
@@ -1559,66 +1715,70 @@ function calcularEstatisticasH2H(
             );
 
 
-        const casaFoiMandante =
-            nomeCasa
-            ===
-            nomeCasaAtual;
+        let golsDoMandanteAtual;
+        let golsDoVisitanteAtual;
 
 
         if (
-            casaFoiMandante
+            nomeCasa === nomeCasaAtual &&
+            nomeFora === nomeForaAtual
         ) {
 
-            golsCasa.push(gc);
-            golsFora.push(gf);
+            golsDoMandanteAtual =
+                gc;
 
+            golsDoVisitanteAtual =
+                gf;
 
-            if (
-                gc > gf
-            ) {
+        }
+        else if (
+            nomeCasa === nomeForaAtual &&
+            nomeFora === nomeCasaAtual
+        ) {
 
-                vitoriasCasa++;
+            golsDoMandanteAtual =
+                gf;
 
-            }
-            else if (
-                gc === gf
-            ) {
-
-                empates++;
-
-            }
-            else {
-
-                vitoriasFora++;
-
-            }
+            golsDoVisitanteAtual =
+                gc;
 
         }
         else {
 
-            golsCasa.push(gf);
-            golsFora.push(gc);
+            continue;
+
+        }
 
 
-            if (
-                gf > gc
-            ) {
+        golsCasa.push(
+            golsDoMandanteAtual
+        );
 
-                vitoriasCasa++;
 
-            }
-            else if (
-                gf === gc
-            ) {
+        golsFora.push(
+            golsDoVisitanteAtual
+        );
 
-                empates++;
 
-            }
-            else {
+        if (
+            golsDoMandanteAtual >
+            golsDoVisitanteAtual
+        ) {
 
-                vitoriasFora++;
+            vitoriasCasa++;
 
-            }
+        }
+        else if (
+            golsDoMandanteAtual ===
+            golsDoVisitanteAtual
+        ) {
+
+            empates++;
+
+        }
+        else {
+
+            vitoriasFora++;
 
         }
 
@@ -1628,7 +1788,7 @@ function calcularEstatisticasH2H(
     return {
 
         jogos:
-            jogos.length,
+            golsCasa.length,
 
         casaVitorias:
             vitoriasCasa,
@@ -1662,10 +1822,11 @@ function calcularEstatisticasH2H(
 // ==========================================================
 // FORÇA OFENSIVA
 //
-// O histórico continua sendo zero quando não existe.
+// ATENÇÃO:
 //
-// O fallback 1.0 é utilizado SOMENTE pelo modelo,
-// nunca nas estatísticas apresentadas.
+// O fallback 1.0 é usado somente pelo modelo.
+//
+// A estatística exibida continua ZERO quando não há dados.
 // ==========================================================
 
 function calcularForcaOfensiva(
@@ -1733,15 +1894,18 @@ function calcularGolsEsperados(
             casa
         );
 
+
     const defesaCasa =
         calcularForcaDefensiva(
             casa
         );
 
+
     const ataqueFora =
         calcularForcaOfensiva(
             fora
         );
+
 
     const defesaFora =
         calcularForcaDefensiva(
@@ -1769,7 +1933,8 @@ function calcularGolsEsperados(
 
     // ======================================================
     // H2H
-    // Somente se houver pelo menos 3 confrontos reais.
+    //
+    // Somente quando houver pelo menos 3 confrontos reais.
     // ======================================================
 
     if (
@@ -1781,6 +1946,7 @@ function calcularGolsEsperados(
             numero(
                 h2h.golsCasa
             );
+
 
         const mediaH2HFora =
             numero(
@@ -1817,6 +1983,7 @@ function calcularGolsEsperados(
     lambdaCasa *=
         1.10;
 
+
     lambdaFora *=
         0.95;
 
@@ -1827,6 +1994,7 @@ function calcularGolsEsperados(
             0.20,
             4.50
         );
+
 
     lambdaFora =
         limitar(
@@ -1981,6 +2149,7 @@ function calcularProbabilidadesResultado(
                     golsCasa
                 );
 
+
             const probFora =
                 poisson(
                     gf,
@@ -2072,6 +2241,7 @@ function preverPlacar(
     let melhorPlacar =
         "0x0";
 
+
     let maiorProbabilidade =
         0;
 
@@ -2107,6 +2277,7 @@ function preverPlacar(
 
                 maiorProbabilidade =
                     prob;
+
 
                 melhorPlacar =
                     `${gc}x${gf}`;
@@ -2150,6 +2321,7 @@ function calcularAmbasMarcam(
             golsCasa
         );
 
+
     const foraNaoMarca =
         poisson(
             0,
@@ -2179,7 +2351,8 @@ function calcularAmbasMarcam(
 // ==========================================================
 // CONFIANÇA
 //
-// Agora a confiança é reduzida quando não existe histórico.
+// A confiança nunca pode ser ALTA quando a amostra
+// histórica é inferior ao mínimo configurado.
 // ==========================================================
 
 function calcularConfianca(
@@ -2215,6 +2388,7 @@ function calcularConfianca(
 
     const maior =
         valores[0] || 0;
+
 
     const segundo =
         valores[1] || 0;
@@ -2299,8 +2473,8 @@ function calcularConfianca(
 
 
     // ======================================================
-    // SEM HISTÓRICO SUFICIENTE:
-    // nunca classificar como Alta.
+    // Sem histórico suficiente:
+    // nunca permitir confiança alta.
     // ======================================================
 
     if (
@@ -2520,6 +2694,110 @@ function extrairOdds(
 
 
 // ==========================================================
+// QUALIDADE DOS DADOS
+// ==========================================================
+
+function calcularQualidadeDados(
+    amostra,
+    h2hJogos
+) {
+
+    if (
+        amostra >= 5 &&
+        h2hJogos >= 3
+    ) {
+
+        return "Excelente";
+
+    }
+
+
+    if (
+        amostra >= 5
+    ) {
+
+        return "Boa";
+
+    }
+
+
+    if (
+        amostra >= 3
+    ) {
+
+        return "Moderada";
+
+    }
+
+
+    return "Limitada";
+
+}
+
+
+// ==========================================================
+// AVISO DE HISTÓRICO
+// ==========================================================
+
+function calcularAvisoHistorico(
+    casa,
+    fora,
+    estatisticasCasa,
+    estatisticasFora,
+    h2h
+) {
+
+    const avisos = [];
+
+
+    if (
+        estatisticasCasa.jogos === 0
+    ) {
+
+        avisos.push(
+            `Nenhum histórico válido encontrado para ${casa}.`
+        );
+
+    }
+
+
+    if (
+        estatisticasFora.jogos === 0
+    ) {
+
+        avisos.push(
+            `Nenhum histórico válido encontrado para ${fora}.`
+        );
+
+    }
+
+
+    if (
+        h2h.jogos === 0
+    ) {
+
+        avisos.push(
+            "Nenhum confronto H2H válido encontrado."
+        );
+
+    }
+
+
+    if (
+        avisos.length === 0
+    ) {
+
+        return null;
+
+    }
+
+
+    return avisos.join(" ");
+
+}
+
+
+// ==========================================================
 // ANÁLISE PRINCIPAL
 // ==========================================================
 
@@ -2570,21 +2848,26 @@ export async function analisarMercado(
         "=================================================="
     );
 
+
     console.log(
         `📊 BUSCANDO HISTÓRICO REAL: ${nomeJogo}`
     );
+
 
     console.log(
         `📅 Data Brasil: ${obterDataHojeBrasil()}`
     );
 
+
     console.log(
         `🌎 Fuso: ${TIMEZONE}`
     );
 
+
     console.log(
         `🆔 API ID atual: ${apiIdAtual || "não informado"}`
     );
+
 
     if (
         dataJogo
@@ -2595,6 +2878,14 @@ export async function analisarMercado(
         );
 
     }
+    else {
+
+        console.log(
+            "⚠️ Data do jogo não identificada"
+        );
+
+    }
+
 
     console.log(
         "=================================================="
@@ -2649,13 +2940,15 @@ export async function analisarMercado(
 
     console.log(
         `📊 ${equipes.casa}: ` +
-        `${historicoCasaValido.length} jogos históricos válidos`
+        `${historicoCasaValido.length} ` +
+        `jogos históricos válidos`
     );
 
 
     console.log(
         `📊 ${equipes.fora}: ` +
-        `${historicoForaValido.length} jogos históricos válidos`
+        `${historicoForaValido.length} ` +
+        `jogos históricos válidos`
     );
 
 
@@ -2739,6 +3032,17 @@ export async function analisarMercado(
 
 
     // ======================================================
+    // AMOSTRA
+    // ======================================================
+
+    const amostra =
+        Math.min(
+            estatisticasCasa.jogos,
+            estatisticasFora.jogos
+        );
+
+
+    // ======================================================
     // GOLS ESPERADOS
     // ======================================================
 
@@ -2793,11 +3097,13 @@ export async function analisarMercado(
             gols.total
         );
 
+
     const over25 =
         probabilidadeOver(
             2.5,
             gols.total
         );
+
 
     const over35 =
         probabilidadeOver(
@@ -2805,11 +3111,13 @@ export async function analisarMercado(
             gols.total
         );
 
+
     const under15 =
         probabilidadeUnder(
             1.5,
             gols.total
         );
+
 
     const under25 =
         probabilidadeUnder(
@@ -2817,21 +3125,11 @@ export async function analisarMercado(
             gols.total
         );
 
+
     const under35 =
         probabilidadeUnder(
             3.5,
             gols.total
-        );
-
-
-    // ======================================================
-    // AMOSTRA
-    // ======================================================
-
-    const amostra =
-        Math.min(
-            estatisticasCasa.jogos,
-            estatisticasFora.jogos
         );
 
 
@@ -2903,8 +3201,7 @@ export async function analisarMercado(
 
             probabilidade:
                 arredondar(
-                    probabilidades.casa *
-                    100,
+                    probabilidades.casa * 100,
                     2
                 ),
 
@@ -2939,8 +3236,7 @@ export async function analisarMercado(
 
             probabilidade:
                 arredondar(
-                    probabilidades.empate *
-                    100,
+                    probabilidades.empate * 100,
                     2
                 ),
 
@@ -2975,8 +3271,7 @@ export async function analisarMercado(
 
             probabilidade:
                 arredondar(
-                    probabilidades.fora *
-                    100,
+                    probabilidades.fora * 100,
                     2
                 ),
 
@@ -2998,43 +3293,33 @@ export async function analisarMercado(
     // QUALIDADE DOS DADOS
     // ======================================================
 
-    let qualidadeDados =
-        "Limitada";
-
-
-    if (
-        amostra >= 5 &&
-        h2h.jogos >= 3
-    ) {
-
-        qualidadeDados =
-            "Excelente";
-
-    }
-    else if (
-        amostra >= 5
-    ) {
-
-        qualidadeDados =
-            "Boa";
-
-    }
-    else if (
-        amostra >= 3
-    ) {
-
-        qualidadeDados =
-            "Moderada";
-
-    }
+    const qualidadeDados =
+        calcularQualidadeDados(
+            amostra,
+            h2h.jogos
+        );
 
 
     // ======================================================
-    // AVISO DE HISTÓRICO
+    // AVISO HISTÓRICO
     // ======================================================
 
-    let avisoHistorico =
-        null;
+    const avisoHistorico =
+        calcularAvisoHistorico(
+            equipes.casa,
+            equipes.fora,
+            estatisticasCasa,
+            estatisticasFora,
+            h2h
+        );
+
+
+    // ======================================================
+    // TIPO DE MODELO
+    // ======================================================
+
+    let baseModelo =
+        "Histórico real";
 
 
     if (
@@ -3042,26 +3327,80 @@ export async function analisarMercado(
         estatisticasFora.jogos === 0
     ) {
 
-        avisoHistorico =
-            "Nenhum histórico válido encontrado para os dois times.";
+        baseModelo =
+            "Fallback estatístico neutro";
 
     }
     else if (
-        estatisticasCasa.jogos === 0
-    ) {
-
-        avisoHistorico =
-            `Nenhum histórico válido encontrado para ${equipes.casa}.`;
-
-    }
-    else if (
+        estatisticasCasa.jogos === 0 ||
         estatisticasFora.jogos === 0
     ) {
 
-        avisoHistorico =
-            `Nenhum histórico válido encontrado para ${equipes.fora}.`;
+        baseModelo =
+            "Histórico parcial + fallback neutro";
 
     }
+
+
+    // ======================================================
+    // LOG FINAL
+    // ======================================================
+
+    console.log(
+        "=================================================="
+    );
+
+
+    console.log(
+        `📊 RESULTADO FINAL: ${nomeJogo}`
+    );
+
+
+    console.log(
+        `📚 Histórico casa: ${estatisticasCasa.jogos}`
+    );
+
+
+    console.log(
+        `📚 Histórico fora: ${estatisticasFora.jogos}`
+    );
+
+
+    console.log(
+        `⚔️ H2H: ${h2h.jogos}`
+    );
+
+
+    console.log(
+        `🧠 Base do modelo: ${baseModelo}`
+    );
+
+
+    console.log(
+        `📈 Qualidade dos dados: ${qualidadeDados}`
+    );
+
+
+    console.log(
+        `🎯 Confiança: ${confianca.percentual}% ` +
+        `(${confianca.nivel})`
+    );
+
+
+    console.log(
+        `⚽ Gols esperados: ` +
+        `${gols.casa} x ${gols.fora}`
+    );
+
+
+    console.log(
+        `🔮 Placar provável: ${placar.placar}`
+    );
+
+
+    console.log(
+        "=================================================="
+    );
 
 
     // ======================================================
@@ -3074,7 +3413,7 @@ export async function analisarMercado(
             true,
 
         algoritmo:
-            "BetVision AI Motor Estatístico v9.0",
+            "BetVision AI Motor Estatístico v10.0",
 
         jogo: {
 
@@ -3093,37 +3432,71 @@ export async function analisarMercado(
             data_jogo:
                 jogo?.data_jogo ??
                 jogo?.dataJogo ??
+                jogo?.date ??
                 null
 
         },
 
+
         dataAnalise:
             new Date(),
+
+
+        // ====================================================
+        // MODELO
+        // ====================================================
+
+        modelo: {
+
+            base:
+                baseModelo,
+
+            possuiHistoricoCasa:
+                estatisticasCasa.jogos > 0,
+
+            possuiHistoricoFora:
+                estatisticasFora.jogos > 0,
+
+            possuiH2H:
+                h2h.jogos > 0,
+
+            amostra:
+
+                amostra
+
+        },
+
+
+        // ====================================================
+        // PROBABILIDADES
+        // ====================================================
 
         probabilidades: {
 
             casa:
                 arredondar(
-                    probabilidades.casa *
-                    100,
+                    probabilidades.casa * 100,
                     2
                 ),
 
             empate:
                 arredondar(
-                    probabilidades.empate *
-                    100,
+                    probabilidades.empate * 100,
                     2
                 ),
 
             fora:
                 arredondar(
-                    probabilidades.fora *
-                    100,
+                    probabilidades.fora * 100,
                     2
                 )
 
         },
+
+
+        // ====================================================
+        // GOLS
+        // ====================================================
 
         golsEsperados: {
 
@@ -3138,64 +3511,72 @@ export async function analisarMercado(
 
         },
 
+
+        // ====================================================
+        // PLACAR
+        // ====================================================
+
         placarPrevisto:
             placar.placar,
 
         probabilidadePlacar:
             placar.probabilidade,
 
+
+        // ====================================================
+        // MERCADOS
+        // ====================================================
+
         mercados: {
 
             over15:
                 arredondar(
-                    over15 *
-                    100,
+                    over15 * 100,
                     2
                 ),
 
             over25:
                 arredondar(
-                    over25 *
-                    100,
+                    over25 * 100,
                     2
                 ),
 
             over35:
                 arredondar(
-                    over35 *
-                    100,
+                    over35 * 100,
                     2
                 ),
 
             under15:
                 arredondar(
-                    under15 *
-                    100,
+                    under15 * 100,
                     2
                 ),
 
             under25:
                 arredondar(
-                    under25 *
-                    100,
+                    under25 * 100,
                     2
                 ),
 
             under35:
                 arredondar(
-                    under35 *
-                    100,
+                    under35 * 100,
                     2
                 ),
 
             ambasMarcam:
                 arredondar(
-                    ambasMarcam *
-                    100,
+                    ambasMarcam * 100,
                     2
                 )
 
         },
+
+
+        // ====================================================
+        // ESTATÍSTICAS
+        // ====================================================
 
         estatisticas: {
 
@@ -3211,13 +3592,38 @@ export async function analisarMercado(
 
         },
 
+
+        // ====================================================
+        // ODDS
+        // ====================================================
+
         odds,
+
+
+        // ====================================================
+        // VALUE BETS
+        // ====================================================
 
         valueBets,
 
+
+        // ====================================================
+        // CONFIANÇA
+        // ====================================================
+
         confianca,
 
+
+        // ====================================================
+        // QUALIDADE
+        // ====================================================
+
         qualidadeDados,
+
+
+        // ====================================================
+        // AVISO
+        // ====================================================
 
         avisoHistorico
 
@@ -3275,6 +3681,7 @@ export async function gerarAnaliseInteligente(
 // LISTAR ANÁLISES
 //
 // SOMENTE HOJE + AMANHÃ
+// FUSO: America/Sao_Paulo
 // ==========================================================
 
 export async function listarAnalises() {
@@ -3285,6 +3692,7 @@ export async function listarAnalises() {
             await query(
 
                 `
+
                 SELECT *
 
                 FROM analises
@@ -3321,6 +3729,7 @@ export async function listarAnalises() {
                     data_jogo ASC
 
                 LIMIT 100
+
                 `,
 
                 [
@@ -3331,7 +3740,7 @@ export async function listarAnalises() {
 
 
         return (
-            resultado.rows ||
+            resultado?.rows ||
             []
         );
 
@@ -3343,6 +3752,7 @@ export async function listarAnalises() {
             "❌ Erro listar análises:",
             erro.message
         );
+
 
         return [];
 
